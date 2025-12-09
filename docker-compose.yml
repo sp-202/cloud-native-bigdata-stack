@@ -1,0 +1,196 @@
+version: '3.8'
+
+services:
+  spark-master:
+    build: ./spark
+    container_name: spark-master
+    hostname: spark-master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    volumes:
+      - ./spark/conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./data/spark-events:/opt/spark/spark-events
+      - spark-home:/opt/spark
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    networks:
+      - databricks-net
+
+  spark-worker:
+    build: ./spark
+    container_name: spark-worker
+    hostname: spark-worker
+    depends_on:
+      - spark-master
+    ports:
+      - "8081:8081"
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    volumes:
+      - ./spark/conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    networks:
+      - databricks-net
+
+  minio:
+    image: minio/minio
+    container_name: minio
+    hostname: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - ./data/minio:/data
+    networks:
+      - databricks-net
+
+  minio-create-buckets:
+    image: minio/mc
+    container_name: minio-create-buckets
+    depends_on:
+      - minio
+    volumes:
+      - ./minio/create-buckets.sh:/create-buckets.sh
+    entrypoint: /bin/sh
+    command: -c "chmod +x /create-buckets.sh && /create-buckets.sh"
+    networks:
+      - databricks-net
+
+  hive-metastore-postgresql:
+    image: postgres:13
+    container_name: hive-metastore-postgresql
+    hostname: hive-metastore-postgresql
+    environment:
+      - POSTGRES_DB=metastore
+      - POSTGRES_USER=hive
+      - POSTGRES_PASSWORD=hive
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks:
+      - databricks-net
+
+  hive-metastore:
+    build: ./hive
+    container_name: hive-metastore
+    hostname: hive-metastore
+    depends_on:
+      - hive-metastore-postgresql
+      - minio
+    ports:
+      - "9083:9083"
+    environment:
+      - SERVICE_NAME=metastore
+      - DB_DRIVER=postgres
+      - SKIP_SCHEMA_INIT=true
+    volumes:
+      - ./hive/conf/hive-site.xml:/opt/hive/conf/hive-site.xml
+    entrypoint: ["/bin/bash"]
+    command: ["-c", "/opt/hive/bin/hive --service metastore"]
+    networks:
+      - databricks-net
+
+  airflow-webserver:
+    image: apache/airflow:2.7.1
+    container_name: airflow-webserver
+    hostname: airflow-webserver
+    depends_on:
+      - airflow-scheduler
+    ports:
+      - "8083:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - AIRFLOW__CORE__LOAD_EXAMPLES=True
+      - _AIRFLOW_DB_UPGRADE=true
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    command: webserver
+    networks:
+      - databricks-net
+
+  airflow-scheduler:
+    image: apache/airflow:2.7.1
+    container_name: airflow-scheduler
+    hostname: airflow-scheduler
+    depends_on:
+      - airflow-postgres
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - AIRFLOW__CORE__LOAD_EXAMPLES=True
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    command: scheduler
+    networks:
+      - databricks-net
+
+  airflow-postgres:
+    image: postgres:13
+    container_name: airflow-postgres
+    hostname: airflow-postgres
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    volumes:
+      - ./data/airflow-postgres:/var/lib/postgresql/data
+    networks:
+      - databricks-net
+
+  zeppelin:
+    image: apache/zeppelin:0.12.0
+    container_name: zeppelin
+    hostname: zeppelin
+    depends_on:
+      - spark-master
+    ports:
+      - "8082:8080"
+      - "4040:4040"  # Spark UI
+    environment:
+      - ZEPPELIN_ADDR=0.0.0.0
+      - SPARK_MASTER=spark://spark-master:7077
+      - ZEPPELIN_SPARK_ENABLESUPPORTEDVERSIONCHECK=false
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+    volumes:
+      - ./data/zeppelin/notebook:/opt/zeppelin/notebook
+      - ./data/zeppelin/conf:/opt/zeppelin/conf
+      - ./spark/conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./data/spark-events:/opt/spark/spark-events
+      - ./spark/jars:/opt/spark/custom-jars
+      - spark-home:/opt/spark
+    networks:
+      - databricks-net
+
+networks:
+  databricks-net:
+    driver: bridge
+
+volumes:
+  spark-home:

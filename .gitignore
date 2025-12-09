@@ -1,0 +1,14 @@
+# Data directories (should not be in git)
+data/
+superset_bak/
+
+# Python
+__pycache__/
+*.pyc
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store

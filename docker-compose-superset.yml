@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7
+    container_name: superset-redis
+    restart: unless-stopped
+    networks:
+      - databricks-net
+
+  superset-db:
+    image: postgres:15
+    container_name: superset-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: superset_password
+    volumes:
+      - superset_db_data:/var/lib/postgresql/data
+    networks:
+      - databricks-net
+
+  superset:
+    image: apache/superset:latest
+    container_name: superset
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    depends_on:
+      - redis
+      - superset-db
+    environment:
+      SUPERSET_SECRET_KEY: 'your_secure_random_key_here_change_this_in_prod'
+      SQLALCHEMY_DATABASE_URI: postgresql://superset:superset_password@superset-db:5432/superset
+      REDIS_HOST: superset-redis
+      REDIS_PORT: 6379
+      SUPERSET_ENV: production
+      SUPERSET_LOAD_EXAMPLES: 'no'
+      CYPRESS_CONFIG: 'false'
+    networks:
+      - databricks-net
+
+  superset-init:
+    image: apache/superset:latest
+    container_name: superset-init
+    depends_on:
+      - superset-db
+      - redis
+    command: >
+      sh -c "
+      superset fab create-admin --username admin --firstname Superset --lastname Admin --email admin@superset.com --password admin &&
+      superset db upgrade &&
+      superset init &&
+      echo 'Init complete'
+      "
+    environment:
+      SUPERSET_SECRET_KEY: 'your_secure_random_key_here_change_this_in_prod'
+      SQLALCHEMY_DATABASE_URI: postgresql://superset:superset_password@superset-db:5432/superset
+      REDIS_HOST: superset-redis
+      REDIS_PORT: 6379
+      SUPERSET_ENV: production
+    networks:
+      - databricks-net
+
+  superset-worker:
+    image: apache/superset:latest
+    container_name: superset-worker
+    command: ["/app/docker/docker-bootstrap.sh", "worker"]
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - superset-db
+    environment:
+      SUPERSET_SECRET_KEY: 'your_secure_random_key_here_change_this_in_prod'
+      SQLALCHEMY_DATABASE_URI: postgresql://superset:superset_password@superset-db:5432/superset
+      REDIS_HOST: superset-redis
+      REDIS_PORT: 6379
+      SUPERSET_ENV: production
+    networks:
+      - databricks-net
+
+  superset-worker-beat:
+    image: apache/superset:latest
+    container_name: superset-worker-beat
+    command: ["/app/docker/docker-bootstrap.sh", "beat"]
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - superset-db
+    environment:
+      SUPERSET_SECRET_KEY: 'your_secure_random_key_here_change_this_in_prod'
+      SQLALCHEMY_DATABASE_URI: postgresql://superset:superset_password@superset-db:5432/superset
+      REDIS_HOST: superset-redis
+      REDIS_PORT: 6379
+      SUPERSET_ENV: production
+    networks:
+      - databricks-net
+
+networks:
+  databricks-net:
+    name: pipe-line_databricks-net
+    external: true
+
+volumes:
+  superset_db_data:
