@@ -1,0 +1,15 @@
+hive-server  | 2025-12-10 09:46:02: Starting HiveServer2
+hive-server  | SLF4J: Class path contains multiple SLF4J bindings.
+hive-server  | SLF4J: Found binding in [jar:file:/opt/hive/lib/log4j-slf4j-impl-2.17.1.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+hive-server  | SLF4J: Found binding in [jar:file:/opt/hadoop/share/hadoop/common/lib/slf4j-log4j12-1.7.25.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+hive-server  | SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+hive-server  | SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+hive-server  | 2025-12-10T09:46:03,995 DEBUG [main] session.SessionState: SessionState user: null
+hive-server  | Hive Session ID = 1eb6507d-1c1e-4935-a657-308fc6508e24
+hive-server  | 2025-12-10T09:46:03,997  INFO [main] SessionState: Hive Session ID = 1eb6507d-1c1e-4935-a657-308fc6508e24
+hive-server  | 2025-12-10T09:46:04,298 DEBUG [main] core.Tracer: sampler.classes = ; loaded no samplers
+hive-server  | 2025-12-10T09:46:04,301 DEBUG [main] core.Tracer: span.receiver.classes = ; loaded no span receivers
+hive-server  | 2025-12-10T09:46:04,483 DEBUG [main] nativeio.NativeIO: Initialized cache for IDs to User/Group mapping with a  cache timeout of 14400 seconds.
+hive-server  | 2025-12-10T09:46:04,483 DEBUG [main] nativeio.NativeIO: Got UserName hive for ID 1000 from the native implementation
+hive-server  | 2025-12-10T09:46:04,484 DEBUG [main] nativeio.NativeIO: Got GroupName hive for ID 1000 from the native implementation
+hive-server  | 2025-12-10T09:46:04,484 DEBUG [main] exec.Utilities: HDFS dir: /tmp/hive with schema null, permission: rwxr-xr-x
