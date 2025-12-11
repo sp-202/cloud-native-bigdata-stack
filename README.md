@@ -236,6 +236,3 @@ When contributing:
 3. Test all services
 4. Submit a pull request
 
-## License
-
-[Your License Here]
