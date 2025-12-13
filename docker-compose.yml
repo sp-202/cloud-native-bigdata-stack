@@ -33,8 +33,8 @@ services:
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=1G
-      - SPARK_WORKER_CORES=1
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=4
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
       - SPARK_RPC_ENCRYPTION_ENABLED=no
       - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
@@ -136,8 +136,12 @@ services:
       --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
       --conf spark.driver.extraClassPath=/opt/spark/jars/postgresql-42.6.0.jar
       --conf spark.executor.extraClassPath=/opt/spark/jars/postgresql-42.6.0.jar
+      --conf spark.driver.extraJavaOptions="-Djava.net.preferIPv4Stack=true"
+      --conf spark.executor.extraJavaOptions="-Djava.net.preferIPv4Stack=true"
+      --conf spark.cores.max=1
       --conf spark.hadoop.hive.server2.thrift.port=10000
       --conf spark.hadoop.hive.server2.thrift.bind.host=0.0.0.0
+      --hiveconf hive.server2.thrift.bind.host=0.0.0.0
       --conf spark.hadoop.hive.server2.transport.mode=binary
     volumes:
       - ./hive/conf/hive-site-hs2.xml:/opt/spark/conf/hive-site.xml
