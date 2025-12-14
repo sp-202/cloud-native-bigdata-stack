@@ -99,10 +99,13 @@ services:
       - SERVICE_NAME=metastore
       - DB_DRIVER=postgres
       - SKIP_SCHEMA_INIT=true
+    entrypoint:
+      - "/bin/bash"
+      - "-c"
     volumes:
       - ./hive/conf/hive-site.xml:/opt/hive/conf/hive-site.xml
-    entrypoint: ["/bin/bash"]
-    command: ["-c", "/opt/hive/bin/hive --service metastore"]
+    command:
+      - "/opt/hive/bin/schematool -dbType postgres -validate || /opt/hive/bin/schematool -dbType postgres -initSchema; /opt/hive/bin/hive --service metastore"
     networks:
       - databricks-net
 
@@ -209,6 +212,7 @@ services:
     image: apache/zeppelin:0.12.0
     container_name: zeppelin
     hostname: zeppelin
+    user: root
     depends_on:
       - spark-master
     ports:
@@ -217,12 +221,12 @@ services:
     environment:
       - ZEPPELIN_ADDR=0.0.0.0
       - SPARK_MASTER=spark://spark-master:7077
+      - SPARK_HOME=/opt/spark
       - ZEPPELIN_SPARK_ENABLESUPPORTEDVERSIONCHECK=false
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
     volumes:
       - ./data/zeppelin/notebook:/opt/zeppelin/notebook
-      - ./data/zeppelin/conf:/opt/zeppelin/conf
       - ./spark/conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
       - ./data/spark-events:/opt/spark/spark-events
       - ./spark/jars:/opt/spark/custom-jars
