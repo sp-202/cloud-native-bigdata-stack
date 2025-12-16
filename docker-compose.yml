@@ -146,6 +146,8 @@ services:
       --conf spark.hadoop.hive.server2.thrift.bind.host=0.0.0.0
       --hiveconf hive.server2.thrift.bind.host=0.0.0.0
       --conf spark.hadoop.hive.server2.transport.mode=binary
+      --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
+      --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
     volumes:
       - ./hive/conf/hive-site-hs2.xml:/opt/spark/conf/hive-site.xml
     networks:
