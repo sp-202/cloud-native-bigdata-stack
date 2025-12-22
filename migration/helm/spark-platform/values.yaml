@@ -1,0 +1,135 @@
+# Global configuration
+global:
+  minio:
+    accessKey: minioadmin
+    secretKey: minioadmin
+    endpoint: "http://spark-platform-minio:9000"
+  postgresql:
+    host: "spark-platform-postgresql"
+    port: 5432
+    user: postgres
+    password: password 
+  spark:
+    image: "spark:latest" # Your custom local image
+    imagePullPolicy: Never
+    # Environment variables to inject into Driver and Executor
+    env:
+      SAMPLE_ENV: "value"
+    # Content of spark-defaults.conf
+    sparkDefaults: |
+      spark.eventLog.enabled           true
+      spark.eventLog.dir               s3a://spark-events/
+      spark.history.fs.logDirectory    s3a://spark-events/
+      spark.hadoop.fs.s3a.endpoint     http://spark-platform-minio:9000
+      spark.hadoop.fs.s3a.access.key   minioadmin
+      spark.hadoop.fs.s3a.secret.key   minioadmin
+      spark.hadoop.fs.s3a.path.style.access true
+      spark.hadoop.fs.s3a.impl         org.apache.hadoop.fs.s3a.S3AFileSystem
+      spark.sql.extensions             io.delta.sql.DeltaSparkSessionExtension
+      spark.sql.catalog.spark_catalog  org.apache.spark.sql.delta.catalog.DeltaCatalog
+      
+      # Resource Management (Fits 16 Cores / 32GB RAM)
+      spark.types.of.executor          k8s
+      spark.master                     k8s://https://kubernetes.default.svc
+      spark.kubernetes.container.image spark:latest
+      
+      # Dynamic Allocation (Auto-scale workers)
+      spark.dynamicAllocation.enabled  true
+      spark.dynamicAllocation.shuffleTracking.enabled true
+      spark.dynamicAllocation.minExecutors 0
+      spark.dynamicAllocation.maxExecutors 5
+      spark.dynamicAllocation.executorIdleTimeout 60s
+      
+      # Executor Specs (Total Max: 5 * 2C = 10 Cores, 5 * 4G = 20GB)
+      spark.executor.instances         1 # Initial
+      spark.executor.cores             2
+      spark.executor.memory            4g
+      spark.driver.memory              2g
+
+
+# Subchart configurations
+serviceAccount:
+  create: true
+  name: spark
+
+postgresql:
+  enabled: true
+  fullnameOverride: spark-platform-postgresql
+  image:
+    repository: postgres
+    tag: 13
+  postgresqlPassword: password
+  postgresqlDatabase: metastore
+  service:
+    port: 5432
+
+minio:
+  enabled: true
+  fullnameOverride: spark-platform-minio
+  image:
+    repository: minio/minio
+    tag: latest
+  accessKey: minioadmin
+  secretKey: minioadmin
+  service:
+    port: 9000
+    consolePort: 9001
+
+hive-metastore:
+  enabled: true
+  image:
+    repository: hive
+    tag: latest
+    pullPolicy: Never # Use local image
+  service:
+    port: 9083
+  postgres:
+    dbName: metastore
+    user: hive
+    password: hive
+
+hive-server:
+  enabled: true
+  image:
+    repository: spark
+    tag: latest
+    pullPolicy: Never # Use local image
+  service:
+    thriftPort: 10000
+    webUiPort: 10002
+
+zeppelin:
+  enabled: true
+  image:
+    repository: apache/zeppelin
+    tag: 0.12.0
+  service:
+    port: 8080
+
+code-server:
+  enabled: true
+  image:
+    repository: codercom/code-server
+    tag: latest
+  password: admin
+  service:
+    port: 8080
+
+airflow:
+  enabled: true
+  fullnameOverride: spark-platform-airflow
+  executor: KubernetesExecutor # Or LocalExecutor
+  images:
+    airflow:
+      repository: apache/airflow
+      tag: 2.7.1
+  data:
+    metadataSecretName: airflow-metadata-secret
+  postgresql:
+    enabled: false # We use our own shared postgres
+  externalDatabase:
+    type: postgres
+    host: spark-platform-postgresql
+    user: airflow
+    password: airflow
+    database: airflow

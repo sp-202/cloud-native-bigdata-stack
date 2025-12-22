@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-hive-config
+  labels:
+    app: hive-metastore
+data:
+  hive-site.xml: |
+    <configuration>
+        <property>
+            <name>javax.jdo.option.ConnectionURL</name>
+            <value>jdbc:postgresql://{{ .Values.global.postgresql.host }}:{{ .Values.global.postgresql.port }}/{{ .Values.postgres.dbName }}</value>
+        </property>
+        <property>
+            <name>javax.jdo.option.ConnectionDriverName</name>
+            <value>org.postgresql.Driver</value>
+        </property>
+        <property>
+            <name>javax.jdo.option.ConnectionUserName</name>
+            <value>{{ .Values.postgres.user }}</value>
+        </property>
+        <property>
+            <name>javax.jdo.option.ConnectionPassword</name>
+            <value>{{ .Values.postgres.password }}</value>
+        </property>
+        <property>
+            <name>hive.metastore.warehouse.dir</name>
+            <value>s3a://warehouse/</value>
+        </property>
+        <property>
+            <name>fs.s3a.endpoint</name>
+            <value>{{ .Values.global.minio.endpoint }}</value>
+        </property>
+        <property>
+            <name>fs.s3a.access.key</name>
+            <value>{{ .Values.global.minio.accessKey }}</value>
+        </property>
+        <property>
+            <name>fs.s3a.secret.key</name>
+            <value>{{ .Values.global.minio.secretKey }}</value>
+        </property>
+        <property>
+            <name>fs.s3a.path.style.access</name>
+            <value>true</value>
+        </property>
+        <property>
+            <name>fs.s3a.impl</name>
+            <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+        </property>
+        <property>
+             <name>hive.metastore.schema.verification</name>
+             <value>false</value>
+        </property>
+    </configuration>

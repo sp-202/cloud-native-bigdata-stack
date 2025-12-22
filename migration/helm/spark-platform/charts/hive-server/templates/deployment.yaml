@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-hive-server
+  labels:
+    app: hive-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hive-server
+  template:
+    metadata:
+      labels:
+        app: hive-server
+    spec:
+      containers:
+        - name: hive-server
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 10000
+            - containerPort: 10002
+          env:
+            - name: SPARK_DRIVER_MEMORY
+              value: 1g
+            - name: SPARK_EXECUTOR_MEMORY
+              value: 1g
+          command:
+            - /bin/bash
+            - -c
+            - |
+              # Construct Environment Variable arguments
+              SPARK_ENV_ARGS=""
+              {{- range $key, $val := .Values.global.spark.env }}
+              SPARK_ENV_ARGS="$SPARK_ENV_ARGS --conf spark.kubernetes.driverEnv.{{ $key }}={{ $val }}"
+              SPARK_ENV_ARGS="$SPARK_ENV_ARGS --conf spark.executorEnv.{{ $key }}={{ $val }}"
+              {{- end }}
+
+              /opt/spark/bin/spark-submit \
+              --master k8s://https://kubernetes.default.svc \
+              --deploy-mode client \
+              --class org.apache.spark.sql.hive.thriftserver.HiveThriftServer2 \
+              --name "HiveThriftServer2" \
+              --conf spark.hive.metastore.uris=thrift://{{ .Release.Name }}-hive-metastore:9083 \
+              --conf spark.sql.warehouse.dir=s3a://warehouse/ \
+              --conf spark.hadoop.fs.s3a.endpoint={{ .Values.global.minio.endpoint }} \
+              --conf spark.hadoop.fs.s3a.access.key={{ .Values.global.minio.accessKey }} \
+              --conf spark.hadoop.fs.s3a.secret.key={{ .Values.global.minio.secretKey }} \
+              --conf spark.hadoop.fs.s3a.path.style.access=true \
+              --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
+              --conf spark.kubernetes.container.image={{ .Values.image.repository }}:{{ .Values.image.tag }} \
+              --properties-file /opt/spark/conf/spark-defaults.conf \
+              $SPARK_ENV_ARGS
+          volumeMounts:
+            - name: spark-defaults
+              mountPath: /opt/spark/conf/spark-defaults.conf
+              subPath: spark-defaults.conf
+      volumes:
+        - name: spark-defaults
+          configMap:
+            name: {{ .Release.Name }}-spark-defaults
+      serviceAccountName: spark

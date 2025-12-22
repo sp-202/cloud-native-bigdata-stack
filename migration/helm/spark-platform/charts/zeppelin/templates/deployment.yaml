@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-zeppelin
+  labels:
+    app: zeppelin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zeppelin
+  template:
+    metadata:
+      labels:
+        app: zeppelin
+    spec:
+      containers:
+        - name: zeppelin
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ZEPPELIN_ADDR
+              value: "0.0.0.0"
+            - name: SPARK_HOME
+              value: /opt/spark
+            - name: SPARK_MASTER
+              value: k8s://https://kubernetes.default.svc
+          volumeMounts:
+            - name: zeppelin-config
+              mountPath: /opt/zeppelin/conf/interpreter.json
+              subPath: interpreter.json
+            - name: spark-defaults
+              mountPath: /opt/spark/conf/spark-defaults.conf
+              subPath: spark-defaults.conf
+      volumes:
+        - name: zeppelin-config
+          configMap:
+            name: {{ .Release.Name }}-zeppelin-config
+        - name: spark-defaults
+          configMap:
+            name: {{ .Release.Name }}-spark-defaults
+      serviceAccountName: spark

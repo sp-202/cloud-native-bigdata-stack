@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.serviceAccount.name }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}-spark
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-spark-role
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}-spark
+rules:
+- apiGroups: [""]
+  resources: ["pods", "configmaps", "services", "persistentvolumeclaims"]
+  verbs: ["create", "get", "watch", "list", "delete", "deletecollection", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-spark-role-binding
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}-spark
+subjects:
+- kind: ServiceAccount
+  name: {{ .Values.serviceAccount.name }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-spark-role
+  apiGroup: rbac.authorization.k8s.io

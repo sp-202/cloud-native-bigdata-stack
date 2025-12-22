@@ -6,8 +6,8 @@ services:
     container_name: spark-master
     hostname: spark-master
     ports:
-      - "8080:8080"
-      - "7077:7077"
+      - "${SPARK_MASTER_WEBUI_PORT}:8080"
+      - "${SPARK_MASTER_PORT}:7077"
     environment:
       - SPARK_MODE=master
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
@@ -29,19 +29,19 @@ services:
     depends_on:
       - spark-master
     ports:
-      - "8081:8081"
+      - "${SPARK_WORKER_WEBUI_PORT}:8081"
     environment:
       - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=2G
-      - SPARK_WORKER_CORES=4
+      - SPARK_MASTER_URL=spark://spark-master:${SPARK_MASTER_PORT}
+      - SPARK_WORKER_MEMORY=${SPARK_WORKER_MEMORY}
+      - SPARK_WORKER_CORES=${SPARK_WORKER_CORES}
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
       - SPARK_RPC_ENCRYPTION_ENABLED=no
       - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
       - SPARK_SSL_ENABLED=no
     volumes:
       - ./spark/conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:${SPARK_MASTER_PORT}
     networks:
       - databricks-net
 
@@ -50,11 +50,11 @@ services:
     container_name: minio
     hostname: minio
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9001"
     volumes:
       - ./data/minio:/data
@@ -74,13 +74,13 @@ services:
       - databricks-net
 
   hive-metastore-postgresql:
-    image: postgres:13
+    image: ${POSTGRES_IMAGE}
     container_name: hive-metastore-postgresql
     hostname: hive-metastore-postgresql
     environment:
-      - POSTGRES_DB=metastore
-      - POSTGRES_USER=hive
-      - POSTGRES_PASSWORD=hive
+      - POSTGRES_DB=${HIVE_METASTORE_DB_NAME}
+      - POSTGRES_USER=${HIVE_METASTORE_DB_USER}
+      - POSTGRES_PASSWORD=${HIVE_METASTORE_DB_PASSWORD}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     networks:
@@ -94,7 +94,7 @@ services:
       - hive-metastore-postgresql
       - minio
     ports:
-      - "9083:9083"
+      - "${HIVE_METASTORE_PORT}:9083"
     environment:
       - SERVICE_NAME=metastore
       - DB_DRIVER=postgres
@@ -118,58 +118,38 @@ services:
       - hive-metastore
       - spark-master
     ports:
-      - "10000:10000"
-      - "10002:10002"
+      - "${HIVE_SERVER_THRIFT_PORT}:10000"
+      - "${HIVE_SERVER_WEBUI_PORT}:10002"
     environment:
-      - SPARK_MASTER=spark://spark-master:7077
-      # Memory settings
+      - SPARK_MASTER=spark://spark-master:${SPARK_MASTER_PORT}
       - SPARK_DRIVER_MEMORY=1g
       - SPARK_EXECUTOR_MEMORY=1g
-    command: >
-      /opt/spark/bin/spark-submit
-      --master spark://spark-master:7077
-      --class org.apache.spark.sql.hive.thriftserver.HiveThriftServer2
-      --name "Thrift JDBC/ODBC Server"
-      --conf spark.hadoop.hive.metastore.uris=thrift://hive-metastore:9083
-      --conf spark.sql.warehouse.dir=s3a://warehouse/
-      --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000
-      --conf spark.hadoop.fs.s3a.access.key=minioadmin
-      --conf spark.hadoop.fs.s3a.secret.key=minioadmin
-      --conf spark.hadoop.fs.s3a.path.style.access=true
-      --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
-      --conf spark.driver.extraClassPath=/opt/spark/jars/postgresql-42.6.0.jar
-      --conf spark.executor.extraClassPath=/opt/spark/jars/postgresql-42.6.0.jar
-      --conf spark.driver.extraJavaOptions="-Djava.net.preferIPv4Stack=true"
-      --conf spark.executor.extraJavaOptions="-Djava.net.preferIPv4Stack=true"
-      --conf spark.cores.max=1
-      --conf spark.hadoop.hive.server2.thrift.port=10000
-      --conf spark.hadoop.hive.server2.thrift.bind.host=0.0.0.0
-      --hiveconf hive.server2.thrift.bind.host=0.0.0.0
-      --conf spark.hadoop.hive.server2.transport.mode=binary
-      --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
-      --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
     volumes:
       - ./hive/conf/hive-site-hs2.xml:/opt/spark/conf/hive-site.xml
+      - ./scripts/start-hive-server.sh:/start-hive-server.sh
+    command: /bin/bash /start-hive-server.sh
     networks:
       databricks-net:
 
   airflow-webserver:
-    image: apache/airflow:2.7.1
+    image: ${AIRFLOW_IMAGE}
     container_name: airflow-webserver
     hostname: airflow-webserver
     depends_on:
       - airflow-scheduler
     ports:
-      - "8083:8080"
+      - "${AIRFLOW_WEB_PORT}:8080"
     environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
-      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - AIRFLOW__CORE__EXECUTOR=${AIRFLOW_EXECUTOR}
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@airflow-postgres/${AIRFLOW_DB_NAME}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
       - AIRFLOW__CORE__LOAD_EXAMPLES=True
       - _AIRFLOW_DB_UPGRADE=true
       - _AIRFLOW_WWW_USER_CREATE=true
-      - _AIRFLOW_WWW_USER_USERNAME=admin
-      - _AIRFLOW_WWW_USER_PASSWORD=admin
+      - _AIRFLOW_WWW_USER_USERNAME=${AIRFLOW_ADMIN_USER}
+      - _AIRFLOW_WWW_USER_PASSWORD=${AIRFLOW_ADMIN_PASSWORD}
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -179,15 +159,15 @@ services:
       - databricks-net
 
   airflow-scheduler:
-    image: apache/airflow:2.7.1
+    image: ${AIRFLOW_IMAGE}
     container_name: airflow-scheduler
     hostname: airflow-scheduler
     depends_on:
       - airflow-postgres
     environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
-      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - AIRFLOW__CORE__EXECUTOR=${AIRFLOW_EXECUTOR}
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@airflow-postgres/${AIRFLOW_DB_NAME}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
       - AIRFLOW__CORE__LOAD_EXAMPLES=True
     volumes:
       - ./airflow/dags:/opt/airflow/dags
@@ -198,35 +178,35 @@ services:
       - databricks-net
 
   airflow-postgres:
-    image: postgres:13
+    image: ${POSTGRES_IMAGE}
     container_name: airflow-postgres
     hostname: airflow-postgres
     environment:
-      - POSTGRES_USER=airflow
-      - POSTGRES_PASSWORD=airflow
-      - POSTGRES_DB=airflow
+      - POSTGRES_USER=${AIRFLOW_DB_USER}
+      - POSTGRES_PASSWORD=${AIRFLOW_DB_PASSWORD}
+      - POSTGRES_DB=${AIRFLOW_DB_NAME}
     volumes:
       - ./data/airflow-postgres:/var/lib/postgresql/data
     networks:
       - databricks-net
 
   zeppelin:
-    image: apache/zeppelin:0.12.0
+    image: ${ZEPPELIN_IMAGE}
     container_name: zeppelin
     hostname: zeppelin
     user: root
     depends_on:
       - spark-master
     ports:
-      - "8082:8080"
+      - "${ZEPPELIN_PORT}:8080"
       - "4040:4040"  # Spark UI
     environment:
-      - ZEPPELIN_ADDR=0.0.0.0
-      - SPARK_MASTER=spark://spark-master:7077
+      - ZEPPELIN_ADDR=${ZEPPELIN_ADDR}
+      - SPARK_MASTER=spark://spark-master:${SPARK_MASTER_PORT}
       - SPARK_HOME=/opt/spark
       - ZEPPELIN_SPARK_ENABLESUPPORTEDVERSIONCHECK=false
-      - AWS_ACCESS_KEY_ID=minioadmin
-      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
     volumes:
       - ./data/zeppelin/notebook:/opt/zeppelin/notebook
       - ./spark/conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
@@ -237,12 +217,12 @@ services:
       - databricks-net
 
   code-server:
-    image: codercom/code-server:latest
+    image: ${CODE_SERVER_IMAGE}
     container_name: code-server
     ports:
-      - "8084:8080"
+      - "${CODE_SERVER_PORT}:8080"
     environment:
-      - PASSWORD=admin
+      - PASSWORD=${CODE_SERVER_PASSWORD}
     volumes:
       - ./:/home/coder/project
       - ./airflow/dags:/home/coder/dags
