@@ -33,4 +33,9 @@ WORKDIR $SPARK_HOME
 # Expose ports
 EXPOSE 8080 8081 7077 4040 18080
 
+# Copy local configurations and jars
+COPY conf/spark-defaults.conf $SPARK_HOME/conf/spark-defaults.conf
+RUN mkdir -p $SPARK_HOME/custom-jars
+COPY jars/* $SPARK_HOME/custom-jars/
+
 CMD ["/bin/bash"]

@@ -96,3 +96,41 @@ All services communicate over a dedicated Docker bridge network (`databricks-net
 Contributions are welcome. Please fork the repository and submit a pull request for any enhancements or bug fixes. Ensure that all changes are tested against the local environment.
 
 
+
+## Docker Images & Configuration
+
+For production and Kubernetes deployment, we use custom Docker images that bake in necessary configurations and dependencies.
+
+### Spark Image (`subhodeep2022/spark-bigdata:spark-3.5.7`)
+- **Base**: `spark/Dockerfile`
+- **Included Config**: `conf/spark-defaults.conf` (pre-configured for MinIO/S3, Hive Metastore, and Delta Lake).
+- **Included Jars**: AWS SDK, Hadoop AWS, Postgres, Delta Lake (in `/opt/spark/jars` and `/opt/spark/custom-jars`).
+- **Runtime Overrides**:
+  - **Kubernetes ConfigMap**: Mount your own `spark-defaults.conf` to `/opt/spark/conf/spark-defaults.conf`.
+  - **Environment Variables**:
+    - `SPARK_MASTER_URL`: URL of the Spark Master.
+    - `SPARK_MODE`: `master` or `worker`.
+    - `SPARK_RPC_AUTHENTICATION_ENABLED`: Default `no`. Set to `yes` if needed (requires keys).
+    - `SPARK_WORKER_MEMORY` / `SPARK_WORKER_CORES`: Resource limits.
+
+### Zeppelin Image (`subhodeep2022/spark-bigdata:zeppelin-0.12.0`)
+- **Base**: `zeppelin/Dockerfile` (builds on `apache/zeppelin:0.12.0`).
+- **Included**: Spark 3.5.7 client, same Jars as Spark image, and same `spark-defaults.conf`.
+- **Runtime Overrides**:
+  - **Spark Connection**: Set `SPARK_MASTER` env var (e.g., `spark://spark-master:7077`).
+  - **Configuration**:
+    - `ZEPPELIN_ADDR`: Default `0.0.0.0`.
+    - `ZEPPELIN_SPARK_ENABLESUPPORTEDVERSIONCHECK`: Default `false` (required for newer Spark versions).
+    - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`: Credentials for MinIO/S3 access.
+
+### Building the Images
+To build and push the images:
+```bash
+# Build Spark
+docker build -t subhodeep2022/spark-bigdata:spark-3.5.7 ./spark
+docker push subhodeep2022/spark-bigdata:spark-3.5.7
+
+# Build Zeppelin (from project root)
+docker build -f zeppelin/Dockerfile -t subhodeep2022/spark-bigdata:zeppelin-0.12.0 .
+docker push subhodeep2022/spark-bigdata:zeppelin-0.12.0
+```
