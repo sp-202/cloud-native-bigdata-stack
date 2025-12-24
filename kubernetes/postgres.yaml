@@ -13,8 +13,11 @@ data:
         CREATE DATABASE metastore OWNER hive;
         CREATE USER airflow WITH PASSWORD 'airflow';
         CREATE DATABASE airflow OWNER airflow;
+        CREATE USER superset WITH PASSWORD 'superset';
+        CREATE DATABASE superset OWNER superset;
         GRANT ALL PRIVILEGES ON DATABASE metastore TO hive;
         GRANT ALL PRIVILEGES ON DATABASE airflow TO airflow;
+        GRANT ALL PRIVILEGES ON DATABASE superset TO superset;
     EOSQL
     echo "Databases created."
 

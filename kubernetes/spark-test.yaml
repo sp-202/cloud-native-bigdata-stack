@@ -6,7 +6,7 @@ metadata:
 spec:
   type: Scala
   mode: cluster
-  image: subhodeep2022/spark-bigdata:spark-3.5.7-fixed
+  image: subhodeep2022/spark-bigdata:spark-3.5.7-fixed-v2
   imagePullPolicy: IfNotPresent
   mainClass: org.apache.spark.examples.SparkPi
   mainApplicationFile: "local:///opt/spark/examples/jars/spark-examples_2.12-3.5.7.jar" 
