@@ -28,6 +28,9 @@ RUN wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoo
     wget https://repo1.maven.org/maven2/io/delta/delta-spark_2.12/3.2.0/delta-spark_2.12-3.2.0.jar && \
     wget https://repo1.maven.org/maven2/io/delta/delta-storage/3.2.0/delta-storage-3.2.0.jar
 
+# Install tini
+RUN apt-get update && apt-get install -y tini && rm -rf /var/lib/apt/lists/*
+
 WORKDIR $SPARK_HOME
 
 # Expose ports
@@ -35,7 +38,7 @@ EXPOSE 8080 8081 7077 4040 18080
 
 # Copy local configurations and jars
 COPY conf/spark-defaults.conf $SPARK_HOME/conf/spark-defaults.conf
-RUN mkdir -p $SPARK_HOME/custom-jars
+RUN mkdir -p $SPARK_HOME/custom-jars && mkdir -p $SPARK_HOME/spark-events
 COPY jars/* $SPARK_HOME/custom-jars/
 
-CMD ["/bin/bash"]
+ENTRYPOINT ["/opt/spark/kubernetes/dockerfiles/spark/entrypoint.sh"]

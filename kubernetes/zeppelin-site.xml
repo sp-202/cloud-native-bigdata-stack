@@ -1,0 +1,177 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+   Licensed to the Apache Software Foundation (ASF) under one or more
+   contributor license agreements.  See the NOTICE file distributed with
+   this work for additional information regarding copyright ownership.
+   The ASF licenses this file to You under the Apache License, Version 2.0
+   (the "License"); you may not use this file except in compliance with
+   the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+
+<configuration>
+
+<!-- Lifecycle Manager Configuration (Auto-Shutdown) -->
+<property>
+  <name>zeppelin.interpreter.lifecyclemanager.class</name>
+  <value>org.apache.zeppelin.interpreter.lifecycle.TimeoutLifecycleManager</value>
+  <description>This enables the TimeoutLifecycleManager to terminate idle interpreters.</description>
+</property>
+
+<property>
+  <name>zeppelin.interpreter.lifecyclemanager.timeout.threshold</name>
+  <value>60000</value>
+  <description>Timeout threshold.
+  TESTING: 60000 (60 seconds)
+  PRODUCTION: 1200000 (20 minutes) - Change this back for production usage!
+  </description>
+</property>
+
+<property>
+  <name>zeppelin.k8s.interpreter.pod.template.file</name>
+  <value>/opt/zeppelin/k8s/interpreter-template.yaml</value>
+  <description>File path of the interpreter pod template.</description>
+</property>
+
+<property>
+  <name>spark.kubernetes.driver.podTemplateFile</name>
+  <value>/opt/zeppelin/k8s/interpreter-template.yaml</value>
+  <description>Driver pod template file.</description>
+</property>
+
+<property>
+  <name>spark.kubernetes.executor.podTemplateFile</name>
+  <value>/opt/zeppelin/k8s/executor-template.yaml</value>
+  <description>Executor pod template file.</description>
+</property>
+
+<property>
+  <name>zeppelin.interpreter.env.AWS_ACCESS_KEY_ID</name>
+  <value>minioadmin</value>
+  <description>AWS Access Key for MinIO</description>
+</property>
+
+<property>
+  <name>zeppelin.interpreter.env.AWS_SECRET_ACCESS_KEY</name>
+  <value>minioadmin</value>
+  <description>AWS Secret Key for MinIO</description>
+</property>
+
+<property>
+  <name>zeppelin.interpreter.lifecyclemanager.timeout.checkinterval</name>
+  <value>60000</value>
+  <description>Check every 1 minute.</description>
+</property>
+
+<!-- Standard Defaults (Preserved from Template) -->
+<property>
+  <name>zeppelin.server.addr</name>
+  <value>0.0.0.0</value>
+  <description>Server address</description>
+</property>
+
+<property>
+  <name>zeppelin.server.port</name>
+  <value>8080</value>
+  <description>Server port.</description>
+</property>
+
+<property>
+  <name>zeppelin.server.ssl.port</name>
+  <value>8443</value>
+  <description>Server ssl port. (used when ssl.enabled is set to true)</description>
+</property>
+
+<property>
+  <name>zeppelin.server.context.path</name>
+  <value>/</value>
+  <description>Context Path of the Web Application</description>
+</property>
+
+<property>
+  <name>zeppelin.war.temp.dir</name>
+  <value>webapps</value>
+  <description>Location of jetty temporary directory</description>
+</property>
+
+<property>
+  <name>zeppelin.notebook.dir</name>
+  <value>notebook</value>
+  <description>path or URI for notebook persistence</description>
+</property>
+
+<property>
+  <name>zeppelin.notebook.homescreen</name>
+  <value></value>
+  <description>id of notebook to be displayed in homescreen. ex) 2A94M5J1Z</description>
+</property>
+<property>
+  <name>zeppelin.notebook.homescreen.hide</name>
+  <value>false</value>
+  <description>hide homescreen notebook from list when this value set to true</description>
+</property>
+
+<property>
+  <name>zeppelin.notebook.s3.bucket</name>
+  <value>zeppelin</value>
+  <description>bucket name for notebook storage</description>
+</property>
+
+<property>
+  <name>zeppelin.notebook.s3.user</name>
+  <value>user</value>
+  <description>user name for notebook storage</description>
+</property>
+
+<property>
+  <name>zeppelin.notebook.s3.endpoint</name>
+  <value>s3.amazonaws.com</value>
+  <description>endpoint for s3 bucket</description>
+</property>
+
+<property>
+  <name>zeppelin.notebook.s3.kmsKeyID</name>
+  <value></value>
+  <description>AWS KMS Key ID to use for encrypting data in S3 (optional)</description>
+</property>
+
+<property>
+  <name>zeppelin.notebook.s3.kmsKeyRegion</name>
+  <value></value>
+  <description>AWS KMS Key Region to use for encrypting data in S3 (optional)</description>
+</property>
+
+<!-- Important for K8s Mode -->
+<property>
+  <name>zeppelin.run.mode</name>
+  <value>k8s</value>
+  <description>'auto|local|k8s|docker'</description>
+</property>
+
+<property>
+  <name>zeppelin.k8s.portforward</name>
+  <value>false</value>
+  <description>Port forward to interpreter rpc port.</description>
+</property>
+
+<property>
+  <name>zeppelin.k8s.container.image</name>
+  <value>subhodeep2022/spark-bigdata:zeppelin-0.12.0</value>
+  <description>Docker image for interpreters (default)</description>
+</property>
+
+<property>
+  <name>zeppelin.k8s.spark.container.image</name>
+  <value>subhodeep2022/spark-bigdata:spark-3.5.7-fixed-v2</value>
+  <description>Docker image for Spark executors</description>
+</property>
+
+</configuration>

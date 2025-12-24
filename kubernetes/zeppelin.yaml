@@ -1,0 +1,181 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zeppelin
+  namespace: default
+  labels:
+    app: zeppelin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zeppelin
+  template:
+    metadata:
+      labels:
+        app: zeppelin
+    spec:
+      # Init Container: Copies Spark binaries to /spark to standardise paths
+      # regardless of the underlying image structure (/opt/spark vs /spark).
+      initContainers:
+      - name: spark-home-init
+        image: subhodeep2022/spark-bigdata:spark-3.5.7-fixed-v2
+        command: ["sh", "-c", "cp -r /opt/spark/* /spark/"]
+        volumeMounts:
+        - name: spark-home
+          mountPath: /spark
+      
+      containers:
+      - name: zeppelin
+        image: subhodeep2022/spark-bigdata:zeppelin-0.12.0
+        ports:
+        - containerPort: 8080
+          name: web
+        - containerPort: 4040
+          name: spark-ui
+        env:
+        # Network Configuration
+        - name: ZEPPELIN_PORT
+          value: "8080"
+        - name: ZEPPELIN_ADDR
+          value: "0.0.0.0"
+        
+        # Spark Path Configuration (Server side)
+        - name: SPARK_HOME
+          value: "/spark"
+        
+        # Kubernetes Interpreter Configuration
+        - name: ZEPPELIN_K8S_CONTAINER_IMAGE
+          value: "subhodeep2022/spark-bigdata:zeppelin-0.12.0"
+        - name: ZEPPELIN_K8S_SPARK_CONTAINER_IMAGE
+          value: "subhodeep2022/spark-bigdata:spark-3.5.7-fixed-v2"
+        - name: ZEPPELIN_K8S_SPARK_HOME
+          value: "/spark"
+        - name: ZEPPELIN_K8S_CONTAINER_IMAGE_PULL_POLICY
+          value: "Always" # Forces fresh pull to bypass stale node caches
+        - name: ZEPPELIN_K8S_SERVICE_ACCOUNT
+          value: "zeppelin-server" # Grant permissions for Driver Pods (Interpreters) to create Executors
+        
+        # Lifecycle Management (Auto-Shutdown)
+        # Shuts down interpreter pods after inactivity.
+        # ALLOWED VALUES:
+        # - TESTING: 60000 (60s)
+        # - PRODUCTION: 1200000 (20m)
+        - name: ZEPPELIN_INTERPRETER_LIFECYCLEMANAGER_CLASS
+          value: "org.apache.zeppelin.interpreter.lifecycle.TimeoutLifecycleManager"
+        - name: ZEPPELIN_INTERPRETER_LIFECYCLEMANAGER_TIMEOUT_THRESHOLD
+          value: "60000"
+
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        volumeMounts:
+        # Mount custom Spark config (disables event logs, etc.)
+        - name: spark-config
+          mountPath: /spark/conf/spark-defaults.conf
+          subPath: spark-defaults.conf
+        # Mount custom Zeppelin Config (Lifecycle Manager)
+        - name: zeppelin-site
+          mountPath: /opt/zeppelin/conf/zeppelin-site.xml
+          subPath: zeppelin-site.xml
+        # Persistent Storage for Notebooks
+        - name: notebook-storage
+          mountPath: /opt/zeppelin/notebook
+        # Shared volume for Spark binaries
+        - name: spark-home
+          mountPath: /spark
+        # Pod Templates for Interpreters
+        - name: interpreter-template
+          mountPath: /opt/zeppelin/k8s/interpreter-template.yaml
+          subPath: interpreter-template.yaml
+        - name: executor-template
+          mountPath: /opt/zeppelin/k8s/executor-template.yaml
+          subPath: executor-template.yaml
+        # MOUNT OVERRIDE FOR DEFAULT SPEC
+        - name: interpreter-spec
+          mountPath: /opt/zeppelin/k8s/interpreter/100-interpreter-spec.yaml
+          subPath: 100-interpreter-spec.yaml
+      
+      serviceAccountName: zeppelin-server
+      volumes:
+      - name: spark-config
+        configMap:
+          name: spark-config
+      - name: zeppelin-site
+        configMap:
+          name: zeppelin-site
+      # Create ConfigMaps for Templates below, or use hostPath for testing? 
+      # Better to verify file existence first. I will create a ConfigMap for these templates.
+      - name: interpreter-template
+        configMap:
+          name: spark-templates
+      - name: executor-template
+        configMap:
+          name: spark-templates
+      # MOUNT OVERRIDE FOR DEFAULT SPEC
+      - name: interpreter-spec
+        configMap:
+          name: zeppelin-interpreter-spec
+      - name: notebook-storage
+        persistentVolumeClaim:
+          claimName: zeppelin-notebook-pvc
+      - name: spark-home
+        emptyDir: {}
+---
+# Main Service for Accessing Zeppelin UI
+apiVersion: v1
+kind: Service
+metadata:
+  name: zeppelin
+  namespace: default
+spec:
+  selector:
+    app: zeppelin
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
+    name: web
+  - protocol: TCP
+    port: 4040
+    targetPort: 4040
+    name: spark-ui
+  type: LoadBalancer
+---
+# Headless Service for Internal RPC Communication
+# Required for Interpreter Pods to connect back to Server on dynamic ports
+apiVersion: v1
+kind: Service
+metadata:
+  name: zeppelin-server
+  namespace: default
+spec:
+  clusterIP: None
+  selector:
+    app: zeppelin
+  ports:
+  - port: 12323
+    name: rpc
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: zeppelin-server
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: zeppelin-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: zeppelin-server
+  namespace: default
+
+

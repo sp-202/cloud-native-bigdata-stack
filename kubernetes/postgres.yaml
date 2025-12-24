@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: default
+data:
+  init-dbs.sh: |
+    #!/bin/bash
+    set -e
+    echo "Creating databases for Hive and Airflow..."
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+        CREATE USER hive WITH PASSWORD 'hive';
+        CREATE DATABASE metastore OWNER hive;
+        CREATE USER airflow WITH PASSWORD 'airflow';
+        CREATE DATABASE airflow OWNER airflow;
+        GRANT ALL PRIVILEGES ON DATABASE metastore TO hive;
+        GRANT ALL PRIVILEGES ON DATABASE airflow TO airflow;
+    EOSQL
+    echo "Databases created."
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13
+        env:
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          value: "password" # Root password (internal only)
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: storage
+          mountPath: /var/lib/postgresql/data
+        - name: init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: postgres-data-pvc
+      - name: init-scripts
+        configMap:
+          name: postgres-init
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: postgres

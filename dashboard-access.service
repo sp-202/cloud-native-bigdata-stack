@@ -1,0 +1,13 @@
+[Unit]
+Description=Kubernetes Dashboard Port Forward
+After=network.target
+
+[Service]
+User=ubuntu
+ExecStart=/usr/local/bin/kubectl -n kubernetes-dashboard port-forward --address 0.0.0.0 svc/kubernetes-dashboard-kong-proxy 8443:443
+Restart=always
+RestartSec=10
+Environment="KUBECONFIG=/home/ubuntu/.kube/config"
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,67 @@
+apiVersion: v1
+data:
+  driver-template.yaml: "spec:\n  containers:\n  - name: spark-kubernetes-driver\n
+    \   command: \n    - \"/bin/bash\"\n    - \"-c\"\n    - |\n      sed -i 's/exec
+    \\/usr\\/bin\\/tini -s -- //g' /opt/spark/kubernetes/dockerfiles/spark/entrypoint.sh
+    &&\n      /opt/spark/kubernetes/dockerfiles/spark/entrypoint.sh \"$@\"\n    -
+    \"--\"\n"
+  executor-template.yaml: "spec:\n  containers:\n  - name: spark-kubernetes-executor\n
+    \   command: \n    - \"/bin/bash\"\n    - \"-c\"\n    - |\n      sed -i 's/exec
+    \\/usr\\/bin\\/tini -s -- //g' /opt/spark/kubernetes/dockerfiles/spark/entrypoint.sh
+    &&\n      /opt/spark/kubernetes/dockerfiles/spark/entrypoint.sh \"$@\"\n    -
+    \"--\"\n"
+  spark-defaults.conf: |
+    # Default system properties included when running spark-submit.
+    # This is useful for setting default environmental settings.
+
+    # Example:
+    # spark.master                     spark://master:7077
+    # spark.eventLog.enabled           true
+    # spark.eventLog.dir               hdfs://namenode:8021/directory
+    # spark.serializer                 org.apache.spark.serializer.KryoSerializer
+    # spark.driver.memory              5g
+    # spark.executor.extraJavaOptions  -XX:+PrintGCDetails -Dkey=value -Dnumbers="one two three"
+
+    # S3 Configuration
+    spark.hadoop.fs.s3a.impl                 org.apache.hadoop.fs.s3a.S3AFileSystem
+    spark.hadoop.fs.s3a.endpoint             http://minio:9000
+    spark.hadoop.fs.s3a.access.key           minioadmin
+    spark.hadoop.fs.s3a.secret.key           minioadmin
+    spark.hadoop.fs.s3a.path.style.access    true
+    spark.hadoop.fs.s3a.connection.ssl.enabled false
+    spark.hadoop.fs.s3a.aws.credentials.provider org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
+
+    # Delta Lake Configuration
+    spark.sql.extensions                     io.delta.sql.DeltaSparkSessionExtension
+    spark.sql.catalog.spark_catalog          org.apache.spark.sql.delta.catalog.DeltaCatalog
+
+    # Hive Metastore Configuration
+    # Uses direct JDBC connection to Postgres for Metastore
+    spark.hadoop.javax.jdo.option.ConnectionURL jdbc:postgresql://postgres:5432/metastore
+    spark.hadoop.javax.jdo.option.ConnectionDriverName org.postgresql.Driver
+    spark.hadoop.javax.jdo.option.ConnectionUserName hive
+    spark.hadoop.javax.jdo.option.ConnectionPassword hive
+    spark.sql.catalogImplementation          hive
+    spark.hadoop.hive.metastore.uris         thrift://hive-metastore:9083
+
+    # Driver & Executor Config
+    spark.driver.extraClassPath              /opt/spark/custom-jars/postgresql-42.6.0.jar
+    spark.executor.extraClassPath            /opt/spark/custom-jars/postgresql-42.6.0.jar
+    spark.driver.extraJavaOptions            -Djava.net.preferIPv4Stack=true -Djava.security.egd=file:/dev/./urandom -XX:+TieredCompilation -XX:TieredStopAtLevel=1
+    spark.executor.extraJavaOptions          -Djava.net.preferIPv4Stack=true -Djava.security.egd=file:/dev/./urandom -XX:+TieredCompilation -XX:TieredStopAtLevel=1
+
+    # Performance Tuning
+    spark.cores.max                          4
+    spark.sql.shuffle.partitions             200
+    spark.sql.adaptive.enabled               true
+    spark.memory.fraction                    0.8
+    spark.sql.inMemoryColumnarStorage.compressed true
+    spark.sql.autoBroadcastJoinThreshold     104857600
+
+    # Kubernetes Pod Templates (Workaround for tini)
+    spark.kubernetes.driver.podTemplateFile  /opt/spark/conf/driver-template.yaml
+    spark.kubernetes.executor.podTemplateFile /opt/spark/conf/executor-template.yaml
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: spark-config
