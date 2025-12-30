@@ -67,8 +67,19 @@ data:
             <name>hive.server2.authentication</name>
             <value>NOSASL</value>
         </property>
-        <!-- Reverting to Embedded Metastore for HiveServer2 to avoid Auth issues -->
-        <!-- hive.metastore.uris removed -->
+        <!-- Optimization for Single Node/Container -->
+        <property>
+            <name>hive.exec.mode.local.auto</name>
+            <value>true</value>
+        </property>
+        <property>
+            <name>hive.vectorized.execution.enabled</name>
+            <value>false</value>
+        </property>
+        <property>
+            <name>mapreduce.framework.name</name>
+            <value>local</value>
+        </property>
     </configuration>
 
 ---
@@ -129,6 +140,15 @@ spec:
         env:
         - name: HADOOP_OPTS
           value: "-Dhive.log.level=INFO"
+        - name: HADOOP_HEAPSIZE
+          value: "2048"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "3Gi"
+            cpu: "1000m"
         ports:
         - containerPort: 10000
         volumeMounts:

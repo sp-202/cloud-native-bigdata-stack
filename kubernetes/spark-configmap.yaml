@@ -21,6 +21,9 @@ data:
     # spark.serializer                 org.apache.spark.serializer.KryoSerializer
     # spark.driver.memory              5g
     # spark.executor.extraJavaOptions  -XX:+PrintGCDetails -Dkey=value -Dnumbers="one two three"
+    spark.eventLog.enabled           true
+    spark.eventLog.dir               s3a://spark-logs/spark-events
+    spark.history.fs.logDirectory    s3a://spark-logs/spark-events
 
     # S3 Configuration
     spark.hadoop.fs.s3a.impl                 org.apache.hadoop.fs.s3a.S3AFileSystem
@@ -57,6 +60,13 @@ data:
     spark.memory.fraction                    0.8
     spark.sql.inMemoryColumnarStorage.compressed true
     spark.sql.autoBroadcastJoinThreshold     104857600
+
+    # Prometheus Metrics
+    spark.ui.prometheus.enabled              true
+    spark.metrics.conf.*.sink.prometheusServlet.class org.apache.spark.metrics.sink.PrometheusServlet
+    spark.metrics.conf.*.sink.prometheusServlet.path /metrics/prometheus
+    spark.metrics.conf.master.sink.prometheusServlet.path /metrics/master/prometheus
+    spark.metrics.conf.applications.sink.prometheusServlet.path /metrics/applications/prometheus
 
     # Kubernetes Pod Templates (Workaround for tini)
     spark.kubernetes.driver.podTemplateFile  /opt/spark/conf/driver-template.yaml

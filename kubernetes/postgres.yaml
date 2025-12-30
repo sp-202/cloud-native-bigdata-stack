@@ -47,6 +47,13 @@ spec:
           value: "password" # Root password (internal only)
         - name: PGDATA
           value: "/var/lib/postgresql/data/pgdata"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
         ports:
         - containerPort: 5432
         volumeMounts:

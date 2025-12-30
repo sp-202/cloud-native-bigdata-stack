@@ -34,16 +34,34 @@ spec:
           value: "admin"
         - name: _AIRFLOW_WWW_USER_PASSWORD
           value: "admin"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
         ports:
         - containerPort: 8080
         volumeMounts:
         - name: dags
           mountPath: /opt/airflow/dags
+      - name: minio-sync
+        image: minio/mc
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          mc alias set myminio http://minio:9000 minioadmin minioadmin;
+          while true; do
+            mc mirror --overwrite myminio/dags /opt/airflow/dags;
+            sleep 60;
+          done
+        volumeMounts:
+        - name: dags
+          mountPath: /opt/airflow/dags
       volumes:
       - name: dags
-        hostPath:
-          path: /home/ubuntu/spark-delta-lake/airflow/dags
-          type: Directory
+        emptyDir: {}
 
 ---
 apiVersion: apps/v1
@@ -74,14 +92,32 @@ spec:
           value: "46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho="
         - name: AIRFLOW__CORE__LOAD_EXAMPLES
           value: "True"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: dags
+          mountPath: /opt/airflow/dags
+      - name: minio-sync
+        image: minio/mc
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          mc alias set myminio http://minio:9000 minioadmin minioadmin;
+          while true; do
+            mc mirror --overwrite myminio/dags /opt/airflow/dags;
+            sleep 60;
+          done
         volumeMounts:
         - name: dags
           mountPath: /opt/airflow/dags
       volumes:
       - name: dags
-        hostPath:
-          path: /home/ubuntu/spark-delta-lake/airflow/dags
-          type: Directory
+        emptyDir: {}
 
 ---
 apiVersion: v1
@@ -90,9 +126,10 @@ metadata:
   name: airflow-webserver
   namespace: default
 spec:
-  type: LoadBalancer # Expose externally like Zeppelin
+  # type: LoadBalancer
   ports:
-  - port: 8083 # Map to 8083 as requested in .env (internally 8080)
+  - port: 8080 # Standard HTTP
     targetPort: 8080
   selector:
     app: airflow-webserver
+

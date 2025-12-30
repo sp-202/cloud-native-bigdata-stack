@@ -1,42 +1,34 @@
-# Connecting Spark/Hive Data to Superset
+# Superset Connection Guide
 
-This guide explains how to connect your processed data and metadata to Apache Superset for visualization.
+## Hive Connection
+To connect Superset to Hive (running in the cluster), use the following SQLAlchemy URI:
 
-## Primary Connection: Hive Metastore (PostgreSQL)
-
-To visualize tables and metadata managed by the Hive Metastore, connect Superset directly to the backend PostgreSQL database.
-
-### Connection Details
-
-*   **Database Type**: PostgreSQL
-*   **Host**: `hive-metastore-postgresql`
-*   **Port**: `5432`
-*   **Database Name**: `metastore`
-*   **Username**: `hive`
-*   **Password**: `hive`
-
-### SQLAlchemy URI
-
-Use the following URI in the Superset "Add Database" configuration:
-
+**Display Name**: `Hive`
+**SQLAlchemy URI**:
 ```
-postgresql+psycopg2://hive:hive@hive-metastore-postgresql:5432/metastore
+hive://hive-metastore:10000/default?auth=NOSASL
 ```
 
-### Steps to Add Connection
+### Authentication
+- **Username**: `hive` (or any string)
+- **Password**: `hive` (or any string)
 
-1.  Login to Superset (`http://localhost:8088`).
-2.  Navigate to **Settings** (⚙️) -> **Database Connections**.
-3.  Click **+ Database**.
-4.  Select **PostgreSQL**.
-5.  Enter the **SQLAlchemy URI** provided above.
-6.  Click **Test Connection** to verify.
-7.  Click **Connect**.
+## Troubleshooting
+### TSocket read 0 bytes
+If you see `TSocket read 0 bytes`, it means there is an authentication protocol mismatch. Our Hive server is configured for `NOSASL`, but the client defaults to `SASL`. The `?auth=NOSASL` query parameter fixes this.
 
-## Alternative: Querying Data via Spark Thrift Server
+### SemanticException [Error 10004]: Invalid table alias
+If you see errors like `Invalid table alias or column reference 'tablename.column'`, Superset is generating SQL that Hive struggles with.
+**Possible Causes:**
+1. **Reserved Keywords**: You have a column named `type`. `TYPE` is a reserved keyword in Hive. Superset might not quote it correctly in generated queries.
+2. **Ambiguous Alias**: Hive is confused by Superset's auto-aliasing.
 
-For direct data querying (not just metadata), you can configure the Spark Thrift Server (if enabled) and connect via the Hive driver.
-
-*   **URI**: `hive://hive-server:10000/default`
-
-> **Note**: Ensure the `hive-server` service is running and accessible on the `databricks-net` network.
+**Workaround (Virtual Dataset):**
+1. Go to **SQL Lab**.
+2. Write a query that **renames the problematic column**:
+   ```sql
+   SELECT `type` AS stock_type, particulars, uom, quantity FROM closing_stock
+   ```
+   *(Note the backticks around `type`)*
+3. Click **Explore** (or Save as Dataset).
+4. Use `stock_type` in your charts instead of `type`.
