@@ -16,6 +16,20 @@ if [ -f "/etc/rancher/k3s/k3s.yaml" ]; then
     fi
 fi
 
+# Auto-Alias for K3s (if kubectl is missing but k3s exists)
+if ! command -v kubectl &> /dev/null; then
+    if command -v k3s &> /dev/null; then
+        echo "⚠️  'kubectl' not found, but 'k3s' detected. using 'k3s kubectl'..."
+        function kubectl() {
+            k3s kubectl "$@"
+        }
+        export -f kubectl
+    else
+        echo "❌ Error: Neither 'kubectl' nor 'k3s' found in PATH."
+        exit 1
+    fi
+fi
+
 # Check if kubectl is connected
 if ! kubectl cluster-info > /dev/null 2>&1; then
     echo "❌ Error: kubectl is NOT connected to a cluster."
