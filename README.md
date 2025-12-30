@@ -1,136 +1,92 @@
-# Modern Data Engineering Pipeline Infrastructure
+# 🚀 Big Data Platform on Kubernetes
 
-This repository hosts a comprehensive, containerized data engineering infrastructure designed to facilitate robust data processing, orchestration, and visualization workflows. It leverages industry-standard open-source technologies to create a scalable and reproducible local development environment.
+> A production-ready, cloud-native Big Data stack featuring **Spark**, **Airflow**, **Zeppelin**, and **Superset**, optimized for Kubernetes dynamic scaling.
 
-## Architecture Overview
+## 🏗 Architecture
+This platform is architected for **statelessness** and **scalability**.
+*   **Split Architecture**: Infrastructure (Data/PVCs) is separated from Applications (Stateless).
+*   **Dynamic Resources**: Spark Executors are spawned on-demand by the Kubernetes Scheduler.
+*   **S3-First Design**: All logs, DAGs, and notebooks are stored in MinIO (S3), not on local disks.
 
-The pipeline integrates the following core components:
-
-*   **Apache Spark**: A unified analytics engine for large-scale data processing.
-*   **Delta Lake**: An open-source storage layer that brings reliability to data lakes.
-*   **Apache Airflow**: A platform to programmatically author, schedule, and monitor workflows.
-*   **Apache Superset**: A modern data exploration and visualization platform.
-*   **Apache Zeppelin**: A web-based notebook that enables data-driven, interactive data analytics.
-*   **MinIO**: High-performance, S3-compatible object storage.
-*   **Hive Metastore**: A central repository for metadata storage.
-
-## Service Configuration & Port Mapping
-
-The infrastructure exposes the following services and ports for interaction:
-
-| Service | Description | URL / Endpoint | Credentials |
-| :--- | :--- | :--- | :--- |
-| **Spark Master** | Cluster management UI | `http://localhost:8080` | - |
-| **Spark Worker** | Worker node UI | `http://localhost:8081` | - |
-| **Spark UI** | Job monitoring (active jobs) | `http://localhost:4040` | - |
-| **MinIO Console** | Object storage management | `http://localhost:9001` | `minioadmin` / `minioadmin` |
-| **MinIO API** | S3-compatible API endpoint | `http://localhost:9000` | `minioadmin` / `minioadmin` |
-| **Airflow UI** | Workflow orchestration | `http://localhost:8083` | `admin` / `admin` |
-| **Zeppelin** | Interactive notebooks | `http://localhost:8082` | - |
-| **Superset** | Data visualization | `http://localhost:8088` | `admin` / `admin` |
-| **Code Server** | Browser-based IDE | `http://localhost:8084` | Password: `admin` |
-| **Hive Metastore** | Metadata service (Thrift) | `localhost:9083` | - |
-
-## Getting Started
-
-Follow these steps to initialize and run the pipeline infrastructure.
-
-### Prerequisites
-
-*   **Docker Engine** (v20.10+)
-*   **Docker Compose** (v1.29+)
-*   **Git**
-*   **Hardware**: Minimum 8GB RAM (16GB recommended) allocated to Docker.
-
-### Installation
-
-1.  **Clone the Repository**
-    ```bash
-    git clone <repository-url>
-    cd spark-delta-lake
-    ```
-
-2.  **Initialize Submodules**
-    This project includes Apache Superset as a submodule. Initialize it to ensure all dependencies are present.
-    ```bash
-    git submodule update --init --recursive
-    ```
-
-3.  **Launch the Infrastructure**
-    Start the core services using Docker Compose.
-    ```bash
-    docker-compose up -d
-    ```
-
-4.  **Initialize Superset (First Run Only)**
-    If this is your first time running the stack, you must initialize Superset.
-    ```bash
-    cd superset
-    docker-compose -f docker-compose-non-dev.yml up -d
-    # Note: Superset initialization may take several minutes.
-    ```
-
-## Usage Guide
-
-### Workflow Orchestration with Airflow
-*   Access the Airflow UI at `http://localhost:8083`.
-*   DAGs are located in the `airflow/dags/` directory.
-*   You can edit DAGs directly using the integrated Code Server at `http://localhost:8084`.
-
-### Interactive Analytics with Zeppelin
-*   Access Zeppelin at `http://localhost:8082`.
-*   Spark is pre-configured. You can run Spark SQL or PySpark code directly in notebooks.
-*   The environment includes Delta Lake support out-of-the-box.
-
-### Data Visualization with Superset
-*   Access Superset at `http://localhost:8088`.
-*   Connect to the Hive Metastore or other data sources to visualize your datasets.
-*   Refer to `SUPERSET_CONNECTION_GUIDE.md` for detailed connection instructions.
-
-## Network Architecture
-
-All services communicate over a dedicated Docker bridge network (`databricks-net`), ensuring secure and isolated inter-service communication. Service discovery is enabled via container hostnames (e.g., `spark-master`, `minio`, `hive-metastore`).
-
-## Contributing
-
-Contributions are welcome. Please fork the repository and submit a pull request for any enhancements or bug fixes. Ensure that all changes are tested against the local environment.
-
-
-
-## Docker Images & Configuration
-
-For production and Kubernetes deployment, we use custom Docker images that bake in necessary configurations and dependencies.
-
-### Spark Image (`subhodeep2022/spark-bigdata:spark-3.5.7`)
-- **Base**: `spark/Dockerfile`
-- **Included Config**: `conf/spark-defaults.conf` (pre-configured for MinIO/S3, Hive Metastore, and Delta Lake).
-- **Included Jars**: AWS SDK, Hadoop AWS, Postgres, Delta Lake (in `/opt/spark/jars` and `/opt/spark/custom-jars`).
-- **Runtime Overrides**:
-  - **Kubernetes ConfigMap**: Mount your own `spark-defaults.conf` to `/opt/spark/conf/spark-defaults.conf`.
-  - **Environment Variables**:
-    - `SPARK_MASTER_URL`: URL of the Spark Master.
-    - `SPARK_MODE`: `master` or `worker`.
-    - `SPARK_RPC_AUTHENTICATION_ENABLED`: Default `no`. Set to `yes` if needed (requires keys).
-    - `SPARK_WORKER_MEMORY` / `SPARK_WORKER_CORES`: Resource limits.
-
-### Zeppelin Image (`subhodeep2022/spark-bigdata:zeppelin-0.12.0`)
-- **Base**: `zeppelin/Dockerfile` (builds on `apache/zeppelin:0.12.0`).
-- **Included**: Spark 3.5.7 client, same Jars as Spark image, and same `spark-defaults.conf`.
-- **Runtime Overrides**:
-  - **Spark Connection**: Set `SPARK_MASTER` env var (e.g., `spark://spark-master:7077`).
-  - **Configuration**:
-    - `ZEPPELIN_ADDR`: Default `0.0.0.0`.
-    - `ZEPPELIN_SPARK_ENABLESUPPORTEDVERSIONCHECK`: Default `false` (required for newer Spark versions).
-    - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`: Credentials for MinIO/S3 access.
-
-### Building the Images
-To build and push the images:
-```bash
-# Build Spark
-docker build -t subhodeep2022/spark-bigdata:spark-3.5.7 ./spark
-docker push subhodeep2022/spark-bigdata:spark-3.5.7
-
-# Build Zeppelin (from project root)
-docker build -f zeppelin/Dockerfile -t subhodeep2022/spark-bigdata:zeppelin-0.12.0 .
-docker push subhodeep2022/spark-bigdata:zeppelin-0.12.0
+```mermaid
+graph TD
+    User[User] -->|Ingress (Traefik)| Airflow
+    User -->|Ingress| Zeppelin
+    User -->|Ingress| Superset
+    
+    subgraph "Application Layer"
+        Airflow -->|Submit Job| SparkOp[Spark Operator]
+        Zeppelin -->|Interactive| SparkOp
+        Superset -->|Query| Hive
+    end
+    
+    subgraph "Compute Layer"
+        SparkOp -.->|Spawns| Driver[Spark Driver]
+        Driver -.->|Spawns| Exec[Spark Executors]
+    end
+    
+    subgraph "Infrastructure Layer"
+        Hive -->|Metastore| Postgres
+        Driver -->|Read/Write| MinIO[MinIO (S3)]
+        Exec -->|Read/Write| MinIO
+    end
 ```
+
+## 🛠 Tech Stack
+
+| Component | Technology | Role |
+| :--- | :--- | :--- |
+| **Orchestration** | Apache Airflow 2.x | Workflow Management (Git-Sync / S3-Sync) |
+| **Compute** | Apache Spark 3.5 | Distributed Data Processing (Kubeflow Operator) |
+| **Interactive** | Apache Zeppelin | Multi-user Notebooks (Spark/Python/SQL) |
+| **Analytics** | Apache Superset | Business Intelligence & Visualizations |
+| **Storage** | MinIO | S3-compatible Object Storage |
+| **Ingress** | Traefik | Edge Router & LoadBalancer |
+| **Monitoring** | Prometheus & Grafana | Metrics Collection & Dashboards |
+
+## ⚡ Getting Started
+
+Choose the deployment method that matches your environment.
+
+| Environment | Directory | Command | Best For |
+| :--- | :--- | :--- | :--- |
+| **Standard / Cloud** | `root (./)` | `./deploy-infra.sh` | GKE, EKS, AKS, Generic K8s |
+| **K3s (Edge/IoT)** | [`k3s/`](k3s/) | `cd k3s && ./deploy-infra.sh` | Single Node, Homelab, Edge Devices |
+| **MicroK8s** | [`microk8s/`](microk8s/) | `cd microk8s && ./deploy-infra.sh` | Ubuntu Desktop, Dev Workstations |
+
+### 1. Deploy Infrastructure (Stateful)
+This sets up Databases, Storage, and Monitoring. Run this **ONCE**.
+```bash
+./deploy-infra.sh
+# Wait for "Infrastructure Deployment Complete"
+```
+
+### 2. Deploy Applications (Stateless)
+This installs/updates Airflow, Zeppelin, and Superset.
+```bash
+./deploy-apps.sh
+```
+
+## 📚 Documentation
+For detailed guides, please refer to:
+
+*   **[Production Guide](PRODUCTION.md)**: Deployment SOP and Safety Procedures.
+*   **[Debugging Guide](DEBUGGING.md)**: Troubleshooting common errors (Ingress, 500s, OOM).
+*   **Service Reference**:
+    *   [Apache Spark Details](docs/spark.md)
+    *   [Apache Zeppelin Tuning](docs/zeppelin.md)
+    *   [Airflow Architecture](docs/airflow.md)
+    *   [Superset Caching](docs/superset.md)
+    *   [Monitoring Stack](docs/monitoring.md)
+
+## 🧹 Maintenance (Cleanup)
+To switch clusters or reset the environment:
+
+*   **Safe Cleanup** (Preserves Data/PVCs):
+    ```bash
+    ./cleanup.sh
+    ```
+*   **Total Destruction** (Wipes ALL Data):
+    ```bash
+    ./cleanup.sh --destroy-all
+    ```

@@ -1,4 +1,12 @@
 # Check for Destructive Flag
+# K3s Auto-Context Fix
+if [ -f "/etc/rancher/k3s/k3s.yaml" ]; then
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    if [ ! -r "/etc/rancher/k3s/k3s.yaml" ]; then
+        sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+    fi
+fi
+
 DESTROY_ALL=false
 if [[ "$1" == "--destroy-all" ]]; then
   DESTROY_ALL=true
