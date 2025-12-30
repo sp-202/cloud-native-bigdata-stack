@@ -1,0 +1,10 @@
+spec:
+  containers:
+  - name: spark-kubernetes-driver
+    command: 
+    - "/bin/bash"
+    - "-c"
+    - |
+      sed -i 's/exec \/usr\/bin\/tini -s -- //g' /opt/spark/kubernetes/dockerfiles/spark/entrypoint.sh &&
+      /opt/spark/kubernetes/dockerfiles/spark/entrypoint.sh "$@"
+    - "--"

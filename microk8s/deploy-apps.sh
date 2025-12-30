@@ -1,0 +1,117 @@
+#!/bin/bash
+set -e
+
+echo "=============================================="
+echo "Starting Application Layer Deployment (Stateless)"
+echo "=============================================="
+
+# Add current directory to PATH for local helm binary
+export PATH=$PWD:$PATH
+
+# Check if kubectl is connected
+if ! kubectl cluster-info > /dev/null 2>&1; then
+    echo "Error: kubectl is not connected to a cluster."
+    exit 1
+fi
+
+# Fetch Traefik IP for Ingress Rules
+EXTERNAL_IP=$(kubectl get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+if [ -z "$EXTERNAL_IP" ]; then
+  echo "Error: Traefik IP not found. Is Infrastructure deployed?"
+  exit 1
+fi
+INGRESS_DOMAIN="${EXTERNAL_IP}.sslip.io"
+echo "Using Domain: $INGRESS_DOMAIN"
+
+# [1/3] Preparing Configurations...
+echo "[1/3] Preparing Configurations..."
+# Create Namespaces if needed (though Infra should handle it)
+kubectl create namespace default --dry-run=client -o yaml | kubectl apply -f -
+
+# Apply ConfigMaps & Secrets (Safe to update)
+# kubectl apply -f kubernetes/configmaps.yaml
+
+# Generate Spark Configs
+cat kubernetes/spark-configmap.yaml | sed "s/LOG_BUCKET/spark-logs/g" | kubectl apply -f -
+# Enable Zeppelin to use MinIO/S3
+kubectl create configmap zeppelin-site --from-file=zeppelin-site.xml=kubernetes/zeppelin-site.xml --dry-run=client -o yaml | kubectl apply -f -
+kubectl create configmap zeppelin-interpreter-spec --from-file=interpreter-spec.yaml=kubernetes/100-interpreter-spec.yaml --dry-run=client -o yaml | kubectl apply -f -
+kubectl create configmap spark-templates --from-file=interpreter-template.yaml=kubernetes/interpreter-template.yaml --from-file=executor-template.yaml=kubernetes/executor-template.yaml --dry-run=client -o yaml | kubectl apply -f -
+kubectl create configmap spark-config --from-file=spark-defaults.conf=kubernetes/spark-defaults.conf --dry-run=client -o yaml | kubectl apply -f -
+
+# [2/3] Deploying Applications...
+echo "[2/3] Deploying Applications..."
+kubectl apply -f kubernetes/hive-metastore.yaml
+kubectl apply -f kubernetes/airflow.yaml
+
+echo "[4/6] Deploying Compute (Zeppelin)..."
+kubectl apply -f kubernetes/zeppelin.yaml
+
+echo "[5/6] Installing Infrastructure (Traefik, Spark Operator, Dashboard)..."
+# Install Traefik
+helm repo add traefik https://traefik.github.io/charts
+helm repo update
+helm upgrade --install traefik traefik/traefik \
+  --set ports.web.nodePort=null \
+  --set ports.websecure.nodePort=null \
+  --set global.checkNewVersion=false \
+  --set global.sendAnonymousUsage=false \
+  --set "additionalArguments={--api.insecure=true,--api.dashboard=true}" \
+  --timeout 10m
+# Manually expose Traefik API port 9000 -> 8080 (Traefik internal)
+kubectl patch svc traefik -p '{"spec":{"ports":[{"name":"traefik","port":9000,"targetPort":8080}]}}' || true
+
+# Wait for Traefik LoadBalancer IP
+echo "Waiting for Traefik LoadBalancer IP..."
+EXTERNAL_IP=""
+while [ -z "$EXTERNAL_IP" ]; do
+  EXTERNAL_IP=$(kubectl get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  if [ -z "$EXTERNAL_IP" ]; then
+    echo "Waiting for IP..."
+    sleep 10
+  fi
+done
+echo "Traefik IP Assigned: $EXTERNAL_IP"
+INGRESS_DOMAIN="${EXTERNAL_IP}.sslip.io"
+echo "Using Domain: $INGRESS_DOMAIN"
+
+# Apply dynamically updated Ingress for Traefik Dashboard
+cat kubernetes/traefik-dashboard-ingress.yaml | sed "s/INGRESS_DOMAIN/$INGRESS_DOMAIN/g" | kubectl apply -f -
+
+# Install Spark Operator (in default namespace)
+helm repo add spark-operator https://kubeflow.github.io/spark-operator
+helm upgrade --install spark-operator spark-operator/spark-operator --timeout 10m
+
+# Apply transport for SSL Bypass
+kubectl apply -f kubernetes/traefik-transport.yaml
+
+# Airflow
+kubectl apply -f kubernetes/airflow.yaml
+# Zeppelin
+kubectl apply -f kubernetes/zeppelin.yaml
+
+# Superset (Helm Upgrade is safe for Apps)
+echo "Installing/Updating Superset..."
+helm repo add superset https://apache.github.io/superset
+helm upgrade --install superset superset/superset --namespace default -f kubernetes/superset-values.yaml
+
+# Apply Ingress Rules for Apps (Update Domain)
+echo "Updating Ingress Rules..."
+cat kubernetes/ingress.yaml | sed "s/INGRESS_DOMAIN/$INGRESS_DOMAIN/g" | kubectl apply -f -
+
+echo "Application Deployment Complete!"
+echo "=============================================="
+echo "Deployment Complete!"
+echo "Access URLs:"
+echo "Traefik Dashboard: http://traefik.$INGRESS_DOMAIN/dashboard/"
+echo "K8s Dashboard:     http://dashboard.$INGRESS_DOMAIN"
+echo "Grafana:           http://grafana.$INGRESS_DOMAIN"
+echo "Airflow:           http://airflow.$INGRESS_DOMAIN"
+echo "MinIO Console:     http://minio.$INGRESS_DOMAIN"
+echo "Zeppelin:          http://zeppelin.$INGRESS_DOMAIN"
+echo "Superset:          http://superset.$INGRESS_DOMAIN"
+echo "=============================================="
+echo "Fetching Kubernetes Dashboard Token..."
+kubectl get secret admin-user-secret -n kubernetes-dashboard -o jsonpath='{.data.token}' | base64 -d
+echo ""
+echo "=============================================="
