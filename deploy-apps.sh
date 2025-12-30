@@ -97,8 +97,7 @@ helm upgrade --install superset superset/superset --namespace default -f kuberne
 
 # Apply Ingress Rules for Apps (Update Domain)
 echo "Updating Ingress Rules..."
-cat kubernetes/spark-ingress.yaml | sed "s/INGRESS_DOMAIN/$INGRESS_DOMAIN/g" | kubectl apply -f -
-cat kubernetes/centralized-ingress.yaml | sed "s/INGRESS_DOMAIN/$INGRESS_DOMAIN/g" | kubectl apply -f -
+cat kubernetes/ingress.yaml | sed "s/INGRESS_DOMAIN/$INGRESS_DOMAIN/g" | kubectl apply -f -
 
 echo "Application Deployment Complete!"
 echo "=============================================="
