@@ -8,18 +8,18 @@ echo "=============================================="
 # Add current directory to PATH for local helm binary
 export PATH=$PWD:$PATH
 
-# Check if kubectl is connected
-if ! kubectl cluster-info > /dev/null 2>&1; then
-    echo "Error: kubectl is not connected to a cluster."
-    exit 1
-fi
-
 # K3s Auto-Context Fix (Run in every script)
 if [ -f "/etc/rancher/k3s/k3s.yaml" ]; then
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
     if [ ! -r "/etc/rancher/k3s/k3s.yaml" ]; then
         sudo chmod 644 /etc/rancher/k3s/k3s.yaml
     fi
+fi
+
+# Check if kubectl is connected
+if ! kubectl cluster-info > /dev/null 2>&1; then
+    echo "Error: kubectl is not connected to a cluster."
+    exit 1
 fi
 
 # Fetch Traefik IP for Ingress Rules
