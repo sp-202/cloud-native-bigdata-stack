@@ -3,7 +3,7 @@ kind: Ingress
 metadata:
   name: centralized-ingress
   namespace: default
-  namespace: default
+
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
@@ -19,7 +19,7 @@ spec:
           service:
             name: airflow-webserver
             port:
-              number: 8080
+              name: web
   # MinIO Console
   - host: minio.INGRESS_DOMAIN
     http:
@@ -30,7 +30,7 @@ spec:
           service:
             name: minio
             port:
-              number: 9001
+              name: console
   # MinIO API
   - host: s3.INGRESS_DOMAIN
     http:
@@ -41,7 +41,7 @@ spec:
           service:
             name: minio
             port:
-              number: 9000
+              name: api
   # Superset
   - host: superset.INGRESS_DOMAIN
     http:
@@ -52,7 +52,7 @@ spec:
           service:
             name: superset
             port:
-              number: 8088
+              name: http
   # Zeppelin
   - host: zeppelin.INGRESS_DOMAIN
     http:
@@ -63,7 +63,7 @@ spec:
           service:
             name: zeppelin
             port:
-              number: 8080
+              name: web
   # Spark UI
   - host: spark.INGRESS_DOMAIN
     http:
@@ -74,5 +74,5 @@ spec:
           service:
             name: zeppelin
             port:
-              number: 4040
+              name: spark-ui
 

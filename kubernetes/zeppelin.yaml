@@ -40,6 +40,8 @@ spec:
           value: "8080"
         - name: ZEPPELIN_ADDR
           value: "0.0.0.0"
+        - name: ZEPPELIN_MEM
+          value: "-Xms1024m -Xmx4096m -XX:MaxMetaspaceSize=512m"
         
         # S3 Notebook Storage (MinIO)
         - name: ZEPPELIN_NOTEBOOK_STORAGE

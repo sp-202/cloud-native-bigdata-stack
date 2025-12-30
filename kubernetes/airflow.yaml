@@ -35,12 +35,13 @@ spec:
         - name: _AIRFLOW_WWW_USER_PASSWORD
           value: "admin"
         resources:
+        resources:
           requests:
-            memory: "512Mi"
-            cpu: "200m"
-          limits:
             memory: "1Gi"
             cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
         ports:
         - containerPort: 8080
         volumeMounts:
@@ -130,6 +131,7 @@ spec:
   ports:
   - port: 8080 # Standard HTTP
     targetPort: 8080
+    name: web
   selector:
     app: airflow-webserver
 
