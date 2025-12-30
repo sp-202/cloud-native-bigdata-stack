@@ -12,7 +12,7 @@ spec:
   resources:
     requests:
       storage: 5Gi
-  storageClassName: local-path # K3s Default
+  storageClassName: microk8s-hostpath
 
 ---
 apiVersion: v1
@@ -26,4 +26,4 @@ spec:
   resources:
     requests:
       storage: 10Gi
-  storageClassName: local-path # K3s Default
+  storageClassName: microk8s-hostpath
