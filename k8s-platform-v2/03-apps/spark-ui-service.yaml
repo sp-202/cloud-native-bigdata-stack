@@ -11,4 +11,5 @@ spec:
     targetPort: 4040
   selector:
     spark-role: driver
-  type: ClusterIP
+    interpreterSettingName: spark
+  type: NodePort
