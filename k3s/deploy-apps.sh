@@ -58,6 +58,19 @@ if [ -z "$EXTERNAL_IP" ]; then
   echo "Error: Traefik IP not found. Is Infrastructure deployed?"
   exit 1
 fi
+
+# Try to get Public IP (for External Access) - Best Effort
+PUBLIC_IP=$(curl -s --connect-timeout 2 ifconfig.me || true)
+
+if [ -n "$PUBLIC_IP" ] && [[ "$PUBLIC_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Detected Public IP: $PUBLIC_IP"
+    echo "Using Public IP for Ingress Domain..."
+    EXTERNAL_IP=$PUBLIC_IP
+else
+    echo "Could not detect Public IP (or running in restricted/internal network)."
+    echo "Falling back to Cluster IP: $EXTERNAL_IP"
+fi
+
 INGRESS_DOMAIN="${EXTERNAL_IP}.sslip.io"
 echo "Using Domain: $INGRESS_DOMAIN"
 
@@ -110,6 +123,13 @@ while [ -z "$EXTERNAL_IP" ]; do
     sleep 10
   fi
 done
+
+# If we detected a Public IP earlier, use it for the Ingress Domain (overriding internal LB IP)
+if [ -n "$PUBLIC_IP" ]; then
+    echo "Using Public IP for Ingress: $PUBLIC_IP"
+    EXTERNAL_IP=$PUBLIC_IP
+fi
+
 echo "Traefik IP Assigned: $EXTERNAL_IP"
 INGRESS_DOMAIN="${EXTERNAL_IP}.sslip.io"
 echo "Using Domain: $INGRESS_DOMAIN"
@@ -129,6 +149,10 @@ kubectl apply -f kubernetes/airflow.yaml
 # Zeppelin
 kubectl apply -f kubernetes/zeppelin.yaml
 
+# Apply Ingress Rules EARLY (so they exist even if Superset takes time)
+echo "Updating Ingress Rules..."
+cat kubernetes/ingress.yaml | sed "s/INGRESS_DOMAIN/$INGRESS_DOMAIN/g" | kubectl apply -f -
+
 # Superset (Helm Upgrade is safe for Apps)
 echo "Installing/Updating Superset..."
 if [ ! -d "superset" ]; then
@@ -138,11 +162,8 @@ fi
 echo "Updating Chart Dependencies..."
 helm dependency update ./superset/helm/superset
 # helm repo add superset https://apache.github.io/superset
-helm upgrade --install superset ./superset/helm/superset --namespace default -f kubernetes/superset-values.yaml
-
-# Apply Ingress Rules for Apps (Update Domain)
-echo "Updating Ingress Rules..."
-cat kubernetes/ingress.yaml | sed "s/INGRESS_DOMAIN/$INGRESS_DOMAIN/g" | kubectl apply -f -
+# Install without waiting for pods to be ready (allows script to finish)
+helm upgrade --install superset ./superset/helm/superset --namespace default -f kubernetes/superset-values.yaml --wait=false
 
 echo "Application Deployment Complete!"
 echo "=============================================="
