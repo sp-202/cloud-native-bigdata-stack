@@ -1,0 +1,76 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: centralized-ingress
+  namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+  # Airflow
+  - host: airflow.$(INGRESS_DOMAIN)
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: airflow-webserver
+            port:
+              name: web
+  # MinIO Console
+  - host: minio.$(INGRESS_DOMAIN)
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: minio
+            port:
+              name: console
+  # MinIO API
+  - host: s3.$(INGRESS_DOMAIN)
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: minio
+            port:
+              name: api
+  # Superset
+  - host: superset.$(INGRESS_DOMAIN)
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: superset
+            port:
+              name: http
+  # Zeppelin
+  - host: zeppelin.$(INGRESS_DOMAIN)
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: zeppelin
+            port:
+              name: web
+  # Spark UI
+  - host: spark.$(INGRESS_DOMAIN)
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: zeppelin
+            port:
+              name: spark-ui

@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - 00-core
+  - 01-networking
+  - 02-database
+  - 03-apps
+  - 04-configs
+  - 05-monitoring
+
+vars:
+  - name: INGRESS_DOMAIN
+    objref:
+      kind: ConfigMap
+      name: global-config
+      apiVersion: v1
+    fieldref:
+      fieldpath: data.INGRESS_DOMAIN

@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - minio.yaml
+  - postgres.yaml
+
+configMapGenerator:
+  - name: minio-scripts
+    files:
+      - create-buckets.sh
+  - name: postgres-init
+    files:
+      - init-dbs.sh

@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-metastore
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hive-metastore
+  template:
+    metadata:
+      labels:
+        app: hive-metastore
+    spec:
+      initContainers:
+      - name: init-permissions
+        image: subhodeep2022/spark-bigdata:hive-3.1.3-custom
+        command: ["/bin/bash", "-c"]
+        args:
+         - "mkdir -p /tmp/hive && chmod 777 /tmp/hive"
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: hive-scratch
+          mountPath: /tmp/hive
+      containers:
+      - name: hive-metastore
+        image: subhodeep2022/spark-bigdata:hive-3.1.3-custom
+        imagePullPolicy: Always
+        command: ["/bin/bash", "-c"]
+        # Schema Init + Start Metastore
+        args:
+         - |
+           /opt/hive/bin/schematool -dbType postgres -validate || /opt/hive/bin/schematool -dbType postgres -initSchema
+           /opt/hive/bin/hive --service metastore
+        env:
+        - name: HADOOP_OPTS
+          value: "-Dhive.log.level=INFO"
+        ports:
+        - containerPort: 9083
+        volumeMounts:
+        - name: hive-config
+          mountPath: /opt/hive/conf/hive-site.xml
+          subPath: hive-site.xml
+        - name: hive-scratch
+          mountPath: /tmp/hive
+      # Sidecar: HiveServer2 for JDBC Queries (Superset)
+      - name: hive-server
+        image: subhodeep2022/spark-bigdata:hive-3.1.3-custom
+        imagePullPolicy: Always
+        command: ["/bin/bash", "-c"]
+        args:
+         - "/opt/hive/bin/hive --service hiveserver2"
+        env:
+        - name: HADOOP_OPTS
+          value: "-Dhive.log.level=INFO"
+        - name: HADOOP_HEAPSIZE
+          value: "2048"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "3Gi"
+            cpu: "1000m"
+        ports:
+        - containerPort: 10000
+        volumeMounts:
+        - name: hive-config
+          mountPath: /opt/hive/conf/hive-site.xml
+          subPath: hive-site.xml
+        - name: hive-scratch
+          mountPath: /tmp/hive
+      volumes:
+      - name: hive-config
+        configMap:
+          name: hive-config
+      - name: hive-scratch
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive-metastore
+  namespace: default
+spec:
+  ports:
+  - name: metastore
+    port: 9083
+    targetPort: 9083
+  - name: hiveserver2
+    port: 10000
+    targetPort: 10000
+  selector:
+    app: hive-metastore

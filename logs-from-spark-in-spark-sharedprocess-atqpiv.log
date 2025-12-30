@@ -1,0 +1,814 @@
+Interpreter download command: /usr/lib/jvm/java-11-openjdk-amd64/bin/java -Dfile.encoding=UTF-8 -Dlog4j.configuration=file:///opt/zeppelin/conf/log4j.properties -Dlog4j.configurationFile=file:///opt/zeppelin/conf/log4j2.properties -Dzeppelin.log.file=/opt/zeppelin/logs/zeppelin-interpreter-spark-shared_process-zeppelin-spark-sharedprocess-atqpiv.log -cp :/opt/zeppelin/interpreter/spark/*:::/opt/zeppelin/interpreter/zeppelin-interpreter-shaded-0.12.0.jar:/opt/zeppelin/interpreter/spark/spark-interpreter-0.12.0.jar org.apache.zeppelin.interpreter.remote.RemoteInterpreterDownloader zeppelin-server.default.svc 38535 spark /tmp/local-repo/spark
+ INFO [2025-12-30 19:06:01,351] ({main} RemoteInterpreterDownloader.java[syncAllLibraries]:73) - Loading all libraries for interpreter spark to /tmp/local-repo/spark
+[INFO] Interpreter launch command: /spark/bin/spark-submit --class org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer --driver-class-path :/tmp/local-repo/spark/*:/opt/zeppelin/interpreter/spark/*:::/opt/zeppelin/interpreter/zeppelin-interpreter-shaded-0.12.0.jar:/opt/zeppelin/interpreter/spark/spark-interpreter-0.12.0.jar --driver-java-options   -Dfile.encoding=UTF-8 -Dlog4j.configuration=file:///opt/zeppelin/conf/log4j.properties -Dlog4j.configurationFile=file:///opt/zeppelin/conf/log4j2.properties -Dzeppelin.log.file=/opt/zeppelin/logs/zeppelin-interpreter-spark-shared_process-zeppelin-spark-sharedprocess-atqpiv.log /opt/zeppelin/interpreter/spark/spark-interpreter-0.12.0.jar zeppelin-server.default.svc 38535 spark-shared_process 12321:12321
+ WARN [2025-12-30 19:06:06,245] ({main} NativeCodeLoader.java[<clinit>]:60) - Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
+ INFO [2025-12-30 19:06:06,767] ({RegisterThread} RemoteInterpreterServer.java[run]:583) - Start registration
+ INFO [2025-12-30 19:06:06,769] ({RemoteInterpreterServer-Thread} RemoteInterpreterServer.java[run]:193) - Launching ThriftServer at 10.42.0.225:12321
+ INFO [2025-12-30 19:06:07,871] ({RegisterThread} RemoteInterpreterServer.java[run]:597) - Registering interpreter process
+ INFO [2025-12-30 19:06:07,935] ({RegisterThread} RemoteInterpreterServer.java[run]:599) - Registered interpreter process
+ INFO [2025-12-30 19:06:07,935] ({RegisterThread} RemoteInterpreterServer.java[run]:620) - Registration finished
+ WARN [2025-12-30 19:06:08,438] ({pool-3-thread-1} ZeppelinConfiguration.java[<init>]:92) - Failed to load XML configuration, proceeding with a default,for a stacktrace activate the debug log
+ INFO [2025-12-30 19:06:08,446] ({pool-3-thread-1} RemoteInterpreterServer.java[createLifecycleManager]:275) - Creating interpreter lifecycle manager: org.apache.zeppelin.interpreter.lifecycle.TimeoutLifecycleManager
+ INFO [2025-12-30 19:06:08,540] ({pool-3-thread-1} TimeoutLifecycleManager.java[<init>]:67) - TimeoutLifecycleManager is started with checkInterval: 60000, timeoutThreshold: ¸60000
+ INFO [2025-12-30 19:06:08,541] ({pool-3-thread-1} TimeoutLifecycleManager.java[onInterpreterProcessStarted]:73) - Interpreter process: spark-shared_process is started
+ INFO [2025-12-30 19:06:08,542] ({pool-3-thread-1} RemoteInterpreterServer.java[init]:218) - Creating RemoteInterpreterEventClient with connection pool size: 100
+ INFO [2025-12-30 19:06:08,944] ({pool-3-thread-1} RemoteInterpreterServer.java[createInterpreter]:369) - Instantiate interpreter org.apache.zeppelin.spark.SparkInterpreter, isForceShutdown: true
+ INFO [2025-12-30 19:06:09,034] ({pool-3-thread-1} RemoteInterpreterServer.java[createInterpreter]:369) - Instantiate interpreter org.apache.zeppelin.spark.SparkSqlInterpreter, isForceShutdown: true
+ INFO [2025-12-30 19:06:09,052] ({pool-3-thread-1} RemoteInterpreterServer.java[createInterpreter]:369) - Instantiate interpreter org.apache.zeppelin.spark.PySparkInterpreter, isForceShutdown: true
+ INFO [2025-12-30 19:06:09,136] ({pool-3-thread-1} RemoteInterpreterServer.java[createInterpreter]:369) - Instantiate interpreter org.apache.zeppelin.spark.IPySparkInterpreter, isForceShutdown: true
+ INFO [2025-12-30 19:06:09,151] ({pool-3-thread-1} RemoteInterpreterServer.java[createInterpreter]:369) - Instantiate interpreter org.apache.zeppelin.spark.SparkRInterpreter, isForceShutdown: true
+ INFO [2025-12-30 19:06:09,163] ({pool-3-thread-1} RemoteInterpreterServer.java[createInterpreter]:369) - Instantiate interpreter org.apache.zeppelin.spark.SparkIRInterpreter, isForceShutdown: true
+ INFO [2025-12-30 19:06:09,236] ({pool-3-thread-1} RemoteInterpreterServer.java[createInterpreter]:369) - Instantiate interpreter org.apache.zeppelin.spark.SparkShinyInterpreter, isForceShutdown: true
+ INFO [2025-12-30 19:06:09,339] ({pool-3-thread-2} SchedulerFactory.java[<init>]:55) - Scheduler Thread Pool Size: 100
+ INFO [2025-12-30 19:06:09,341] ({pool-3-thread-2} SchedulerFactory.java[lambda$createOrGetFIFOScheduler$0]:75) - Create FIFOScheduler: interpreter_609831994
+ INFO [2025-12-30 19:06:09,346] ({pool-3-thread-2} SchedulerFactory.java[lambda$createOrGetParallelScheduler$1]:86) - Create ParallelScheduler: org.apache.zeppelin.spark.SparkSqlInterpreter154228570 with maxConcurrency: 10
+ INFO [2025-12-30 19:06:09,347] ({pool-3-thread-2} SchedulerFactory.java[lambda$createOrGetFIFOScheduler$0]:75) - Create FIFOScheduler: interpreter_1557822603
+ INFO [2025-12-30 19:06:09,347] ({pool-3-thread-2} SchedulerFactory.java[lambda$createOrGetFIFOScheduler$0]:75) - Create FIFOScheduler: interpreter_96380490
+ INFO [2025-12-30 19:06:09,348] ({pool-3-thread-2} SchedulerFactory.java[lambda$createOrGetFIFOScheduler$0]:75) - Create FIFOScheduler: org.apache.zeppelin.spark.SparkRInterpreter724788883
+ INFO [2025-12-30 19:06:09,349] ({pool-3-thread-2} SchedulerFactory.java[lambda$createOrGetFIFOScheduler$0]:75) - Create FIFOScheduler: interpreter_522243863
+ INFO [2025-12-30 19:06:09,349] ({pool-3-thread-2} SchedulerFactory.java[lambda$createOrGetFIFOScheduler$0]:75) - Create FIFOScheduler: interpreter_417853360
+ INFO [2025-12-30 19:06:09,442] ({FIFOScheduler-interpreter_1557822603-Worker-1} AbstractScheduler.java[runJob]:131) - Job paragraph_1767112138782_80512128 started by scheduler interpreter_1557822603
+ INFO [2025-12-30 19:06:09,745] ({FIFOScheduler-interpreter_1557822603-Worker-1} SparkInterpreter.java[extractScalaVersion]:272) - Using Scala: version 2.12.18
+ INFO [2025-12-30 19:06:09,940] ({FIFOScheduler-interpreter_1557822603-Worker-1} SparkScala212Interpreter.scala[createSparkILoop]:170) - Scala shell repl output dir: /tmp/spark13067868761179688028
+ INFO [2025-12-30 19:06:10,856] ({FIFOScheduler-interpreter_1557822603-Worker-1} SparkScala212Interpreter.scala[createSparkILoop]:179) - UserJars: file:/opt/zeppelin/interpreter/spark/spark-interpreter-0.12.0.jar:/opt/zeppelin/interpreter/spark/scala-2.12/spark-scala-2.12-0.12.0.jar
+ INFO [2025-12-30 19:06:29,735] ({FIFOScheduler-interpreter_1557822603-Worker-1} HiveConf.java[findConfigFile]:187) - Found configuration file null
+ WARN [2025-12-30 19:06:30,248] ({FIFOScheduler-interpreter_1557822603-Worker-1} AbstractSparkScalaInterpreter.java[createSparkContext]:199) - Hive support can not be enabled because no hive-site.xml found
+ INFO [2025-12-30 19:06:30,351] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Running Spark version 3.5.7
+ INFO [2025-12-30 19:06:30,352] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - OS info Linux, 6.14.0-1021-gcp, amd64
+ INFO [2025-12-30 19:06:30,352] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Java version 11.0.26
+ INFO [2025-12-30 19:06:30,639] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - ==============================================================
+ INFO [2025-12-30 19:06:30,639] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - No custom resources configured for spark.driver.
+ INFO [2025-12-30 19:06:30,640] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - ==============================================================
+ INFO [2025-12-30 19:06:30,641] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Submitted application: org.apache.zeppelin.interpreter.remote.RemoteInterpreterServer
+ INFO [2025-12-30 19:06:30,751] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Default ResourceProfile created, executor resources: Map(cores -> name: cores, amount: 1, script: , vendor: , memory -> name: memory, amount: 1024, script: , vendor: , offHeap -> name: offHeap, amount: 0, script: , vendor: ), task resources: Map(cpus -> name: cpus, amount: 1.0)
+ INFO [2025-12-30 19:06:30,845] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Limiting resource is cpus at 1 tasks per executor
+ INFO [2025-12-30 19:06:30,848] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Added ResourceProfile id: 0
+ INFO [2025-12-30 19:06:31,147] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Changing view acls to: zeppelin
+ INFO [2025-12-30 19:06:31,148] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Changing modify acls to: zeppelin
+ INFO [2025-12-30 19:06:31,149] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Changing view acls groups to: 
+ INFO [2025-12-30 19:06:31,149] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Changing modify acls groups to: 
+ INFO [2025-12-30 19:06:31,150] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - SecurityManager: authentication disabled; ui acls disabled; users with view permissions: zeppelin; groups with view permissions: EMPTY; users with modify permissions: zeppelin; groups with modify permissions: EMPTY
+ INFO [2025-12-30 19:06:32,257] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Successfully started service 'sparkDriver' on port 37125.
+ INFO [2025-12-30 19:06:32,372] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Registering MapOutputTracker
+ INFO [2025-12-30 19:06:32,473] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Registering BlockManagerMaster
+ INFO [2025-12-30 19:06:32,559] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Using org.apache.spark.storage.DefaultTopologyMapper for getting topology information
+ INFO [2025-12-30 19:06:32,560] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - BlockManagerMasterEndpoint up
+ INFO [2025-12-30 19:06:32,564] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Registering BlockManagerMasterHeartbeat
+ INFO [2025-12-30 19:06:32,597] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Created local directory at /tmp/blockmgr-a8b7d779-d516-4a24-995d-7d9c576b190c
+ INFO [2025-12-30 19:06:32,658] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - MemoryStore started with capacity 1398.4 MiB
+ INFO [2025-12-30 19:06:32,679] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Registering OutputCommitCoordinator
+ INFO [2025-12-30 19:06:32,833] ({FIFOScheduler-interpreter_1557822603-Worker-1} Log.java[initialized]:170) - Logging initialized @30911ms to org.sparkproject.jetty.util.log.Slf4jLog
+ INFO [2025-12-30 19:06:32,987] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Start Jetty 0.0.0.0:4040 for SparkUI
+ INFO [2025-12-30 19:06:33,038] ({FIFOScheduler-interpreter_1557822603-Worker-1} Server.java[doStart]:375) - jetty-9.4.58.v20250814; built: 2025-08-14T02:28:49.637Z; git: 8f1440587e9e4ae7db3d74cf205643f3d707148d; jvm 11.0.26+4-post-Ubuntu-1ubuntu120.04
+ INFO [2025-12-30 19:06:33,064] ({FIFOScheduler-interpreter_1557822603-Worker-1} Server.java[doStart]:415) - Started @31187ms
+ INFO [2025-12-30 19:06:33,147] ({FIFOScheduler-interpreter_1557822603-Worker-1} AbstractConnector.java[doStart]:333) - Started ServerConnector@775ef581{HTTP/1.1, (http/1.1)}{0.0.0.0:4040}
+ INFO [2025-12-30 19:06:33,148] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Successfully started service 'SparkUI' on port 4040.
+ INFO [2025-12-30 19:06:33,238] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@5c8a7569{/,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:33,262] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Added JAR file:/opt/zeppelin/interpreter/spark/spark-interpreter-0.12.0.jar at spark://spark-sharedprocess-atqpiv:37125/jars/spark-interpreter-0.12.0.jar with timestamp 1767121590346
+ INFO [2025-12-30 19:06:33,443] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Fair scheduler configuration not found, created default pool: default, schedulingMode: FAIR, minShare: 0, weight: 1
+ INFO [2025-12-30 19:06:33,575] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Starting executor ID driver on host spark-sharedprocess-atqpiv
+ INFO [2025-12-30 19:06:33,576] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - OS info Linux, 6.14.0-1021-gcp, amd64
+ INFO [2025-12-30 19:06:33,576] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Java version 11.0.26
+ INFO [2025-12-30 19:06:33,636] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Starting executor with user classpath (userClassPathFirst = false): 'file:/opt/spark/custom-jars/postgresql-42.6.0.jar,file:/opt/zeppelin/postgresql-42.6.0.jar'
+ INFO [2025-12-30 19:06:33,637] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Using REPL class URI: spark://spark-sharedprocess-atqpiv:37125/classes
+ INFO [2025-12-30 19:06:33,643] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Created or updated repl class loader org.apache.spark.executor.ExecutorClassLoader@3876491 for default.
+ INFO [2025-12-30 19:06:33,666] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Fetching spark://spark-sharedprocess-atqpiv:37125/jars/spark-interpreter-0.12.0.jar with timestamp 1767121590346
+ INFO [2025-12-30 19:06:33,882] ({FIFOScheduler-interpreter_1557822603-Worker-1} TransportClientFactory.java[createClient]:316) - Successfully created connection to spark-sharedprocess-atqpiv/10.42.0.225:37125 after 48 ms (0 ms spent in bootstraps)
+ INFO [2025-12-30 19:06:33,948] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Fetching spark://spark-sharedprocess-atqpiv:37125/jars/spark-interpreter-0.12.0.jar to /tmp/spark-3c518df3-05e9-472f-a550-ef77a72bd414/userFiles-a81c0816-c031-4aa0-b7fd-b8b7e5a104f5/fetchFileTemp4976509826559250535.tmp
+ INFO [2025-12-30 19:06:34,368] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Adding file:/tmp/spark-3c518df3-05e9-472f-a550-ef77a72bd414/userFiles-a81c0816-c031-4aa0-b7fd-b8b7e5a104f5/spark-interpreter-0.12.0.jar to class loader default
+ INFO [2025-12-30 19:06:34,384] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Successfully started service 'org.apache.spark.network.netty.NettyBlockTransferService' on port 39109.
+ INFO [2025-12-30 19:06:34,385] ({FIFOScheduler-interpreter_1557822603-Worker-1} NettyBlockTransferService.scala[init]:84) - Server created on spark-sharedprocess-atqpiv:39109
+ INFO [2025-12-30 19:06:34,387] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Using org.apache.spark.storage.RandomBlockReplicationPolicy for block replication policy
+ INFO [2025-12-30 19:06:34,445] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Registering BlockManager BlockManagerId(driver, spark-sharedprocess-atqpiv, 39109, None)
+ INFO [2025-12-30 19:06:34,451] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Registering block manager spark-sharedprocess-atqpiv:39109 with 1398.4 MiB RAM, BlockManagerId(driver, spark-sharedprocess-atqpiv, 39109, None)
+ INFO [2025-12-30 19:06:34,455] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Registered BlockManager BlockManagerId(driver, spark-sharedprocess-atqpiv, 39109, None)
+ INFO [2025-12-30 19:06:34,457] ({FIFOScheduler-interpreter_1557822603-Worker-1} Logging.scala[logInfo]:60) - Initialized BlockManager: BlockManagerId(driver, spark-sharedprocess-atqpiv, 39109, None)
+ INFO [2025-12-30 19:06:34,937] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStop]:1159) - Stopped o.s.j.s.ServletContextHandler@5c8a7569{/,null,STOPPED,@Spark}
+ INFO [2025-12-30 19:06:34,940] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@4c473132{/jobs,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:34,941] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@508c4d45{/jobs/json,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:34,942] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@5262f0ec{/jobs/job,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:34,943] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@7c383739{/jobs/job/json,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:34,944] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@6a833fd3{/stages,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:34,946] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@479239b6{/stages/json,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:34,948] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@5ab440c2{/stages/stage,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:34,950] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@421d5870{/stages/stage/json,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:34,951] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@a7664be{/stages/pool,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:34,953] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@4426f0b4{/stages/pool/json,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:34,954] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@6b250ae8{/storage,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:34,955] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@7312233d{/storage/json,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:34,956] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@1c7cf280{/storage/rdd,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:34,957] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@68c7aca5{/storage/rdd/json,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,034] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@22a66a2b{/environment,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,036] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@e6e58f6{/environment/json,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,038] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@6d94ee50{/executors,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,039] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@1655cbb{/executors/json,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,043] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@26f081e9{/executors/threadDump,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,044] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@70863074{/executors/threadDump/json,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,045] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@5e298df2{/executors/heapHistogram,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,046] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@2d8b85ab{/executors/heapHistogram/json,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,144] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@665047ed{/static,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,146] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@22eba2f{/,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,152] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@6a5a2214{/api,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,155] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@34b02dde{/jobs/job/kill,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,158] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@2ad15d6b{/stages/stage/kill,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,234] ({FIFOScheduler-interpreter_1557822603-Worker-1} ContextHandler.java[doStart]:921) - Started o.s.j.s.ServletContextHandler@1a317256{/metrics/json,null,AVAILABLE,@Spark}
+ INFO [2025-12-30 19:06:35,539] ({FIFOScheduler-interpreter_1557822603-Worker-1} AbstractSparkScalaInterpreter.java[createSparkContext]:202) - Created Spark session (without Hive support)
+ INFO [2025-12-30 19:07:02,234] ({FIFOScheduler-interpreter_1557822603-Worker-1} PythonInterpreter.java[open]:84) - zeppelin.python.useIPython: true
+ INFO [2025-12-30 19:07:02,234] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[checkKernelPrerequisite]:173) - checkKernelPrerequisite using python executable: python
+ INFO [2025-12-30 19:07:02,955] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[checkKernelPrerequisite]:197) - Prerequisite for kernel python is met
+ INFO [2025-12-30 19:07:02,968] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[open]:143) - Python Exec: python
+ INFO [2025-12-30 19:07:02,968] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[checkKernelPrerequisite]:173) - checkKernelPrerequisite using python executable: python
+ INFO [2025-12-30 19:07:03,515] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[checkKernelPrerequisite]:197) - Prerequisite for kernel python is met
+ INFO [2025-12-30 19:07:03,800] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[launchJupyterKernel]:242) - Launching Jupyter Kernel at port: 45207
+ INFO [2025-12-30 19:07:03,841] ({FIFOScheduler-interpreter_1557822603-Worker-1} IPythonInterpreter.java[setupKernelEnv]:203) - PYTHONPATH: /spark/python/lib/pyspark.zip:/spark/python/lib/py4j-0.10.9.7-src.zip:/opt/zeppelin/interpreter/lib/python:/spark/python/lib/py4j-0.10.9.7-src.zip:/spark/python/:
+ INFO [2025-12-30 19:07:03,847] ({FIFOScheduler-interpreter_1557822603-Worker-1} ProcessLauncher.java[transition]:109) - Process state is transitioned to LAUNCHED
+ INFO [2025-12-30 19:07:03,847] ({FIFOScheduler-interpreter_1557822603-Worker-1} ProcessLauncher.java[launch]:96) - Process is launched: [python, /tmp/zeppelin_jupyter_kernel_python14510291536013617215/kernel_server.py, python, 45207]
+ INFO [2025-12-30 19:07:05,453] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:402) - Wait for Jupyter Kernel to be started
+ INFO [2025-12-30 19:07:05,566] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:402) - Wait for Jupyter Kernel to be started
+ INFO [2025-12-30 19:07:05,670] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:402) - Wait for Jupyter Kernel to be started
+ INFO [2025-12-30 19:07:05,775] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:402) - Wait for Jupyter Kernel to be started
+ INFO [2025-12-30 19:07:05,880] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:402) - Wait for Jupyter Kernel to be started
+ INFO [2025-12-30 19:07:05,985] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:402) - Wait for Jupyter Kernel to be started
+ INFO [2025-12-30 19:07:06,089] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:402) - Wait for Jupyter Kernel to be started
+ INFO [2025-12-30 19:07:06,193] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:402) - Wait for Jupyter Kernel to be started
+ INFO [2025-12-30 19:07:06,296] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:402) - Wait for Jupyter Kernel to be started
+ INFO [2025-12-30 19:07:06,402] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:402) - Wait for Jupyter Kernel to be started
+ INFO [2025-12-30 19:07:06,506] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:402) - Wait for Jupyter Kernel to be started
+ INFO [2025-12-30 19:07:06,611] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:402) - Wait for Jupyter Kernel to be started
+ INFO [2025-12-30 19:07:06,715] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:402) - Wait for Jupyter Kernel to be started
+ INFO [2025-12-30 19:07:06,825] ({FIFOScheduler-interpreter_1557822603-Worker-1} JupyterKernelInterpreter.java[waitForReady]:398) - Jupyter Kernel is Running
+ INFO [2025-12-30 19:07:06,826] ({FIFOScheduler-interpreter_1557822603-Worker-1} ProcessLauncher.java[transition]:109) - Process state is transitioned to RUNNING
+ INFO [2025-12-30 19:07:06,826] ({FIFOScheduler-interpreter_1557822603-Worker-1} PythonUtils.java[createGatewayServer]:40) - Launching GatewayServer at 10.42.0.225:41961
+ INFO [2025-12-30 19:07:08,398] ({FIFOScheduler-interpreter_1557822603-Worker-1} PythonInterpreter.java[open]:91) - IPython is available, Use IPythonInterpreter to replace PythonInterpreter
+ INFO [2025-12-30 19:07:09,775] ({Thread-19} Logging.scala[logInfo]:60) - Starting job: count at /tmp/ipykernel_230/393626415.py:6
+ INFO [2025-12-30 19:07:09,857] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Got job 0 (count at /tmp/ipykernel_230/393626415.py:6) with 8 output partitions
+ INFO [2025-12-30 19:07:09,857] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Final stage: ResultStage 0 (count at /tmp/ipykernel_230/393626415.py:6)
+ INFO [2025-12-30 19:07:09,857] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Parents of final stage: List()
+ INFO [2025-12-30 19:07:09,859] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Missing parents: List()
+ INFO [2025-12-30 19:07:09,865] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting ResultStage 0 (PythonRDD[1] at count at /tmp/ipykernel_230/393626415.py:6), which has no missing parents
+ INFO [2025-12-30 19:07:10,242] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_0 stored as values in memory (estimated size 7.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:10,344] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_0_piece0 stored as bytes in memory (estimated size 4.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:10,347] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Added broadcast_0_piece0 in memory on spark-sharedprocess-atqpiv:39109 (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:10,351] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Created broadcast 0 from broadcast at DAGScheduler.scala:1611
+ INFO [2025-12-30 19:07:10,436] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting 8 missing tasks from ResultStage 0 (PythonRDD[1] at count at /tmp/ipykernel_230/393626415.py:6) (first 15 tasks are for partitions Vector(0, 1, 2, 3, 4, 5, 6, 7))
+ INFO [2025-12-30 19:07:10,438] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Adding task set 0.0 with 8 tasks resource profile 0
+ INFO [2025-12-30 19:07:10,459] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Added task set TaskSet_0.0 tasks to pool default
+ INFO [2025-12-30 19:07:10,555] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 0.0 in stage 0.0 (TID 0) (spark-sharedprocess-atqpiv, executor driver, partition 0, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:10,559] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 1.0 in stage 0.0 (TID 1) (spark-sharedprocess-atqpiv, executor driver, partition 1, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:10,560] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 2.0 in stage 0.0 (TID 2) (spark-sharedprocess-atqpiv, executor driver, partition 2, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:10,561] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 3.0 in stage 0.0 (TID 3) (spark-sharedprocess-atqpiv, executor driver, partition 3, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:10,561] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 4.0 in stage 0.0 (TID 4) (spark-sharedprocess-atqpiv, executor driver, partition 4, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:10,633] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 5.0 in stage 0.0 (TID 5) (spark-sharedprocess-atqpiv, executor driver, partition 5, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:10,635] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 6.0 in stage 0.0 (TID 6) (spark-sharedprocess-atqpiv, executor driver, partition 6, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:10,635] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 7.0 in stage 0.0 (TID 7) (spark-sharedprocess-atqpiv, executor driver, partition 7, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:10,648] ({Executor task launch worker for task 3.0 in stage 0.0 (TID 3)} Logging.scala[logInfo]:60) - Running task 3.0 in stage 0.0 (TID 3)
+ INFO [2025-12-30 19:07:10,648] ({Executor task launch worker for task 2.0 in stage 0.0 (TID 2)} Logging.scala[logInfo]:60) - Running task 2.0 in stage 0.0 (TID 2)
+ INFO [2025-12-30 19:07:10,649] ({Executor task launch worker for task 6.0 in stage 0.0 (TID 6)} Logging.scala[logInfo]:60) - Running task 6.0 in stage 0.0 (TID 6)
+ INFO [2025-12-30 19:07:10,648] ({Executor task launch worker for task 5.0 in stage 0.0 (TID 5)} Logging.scala[logInfo]:60) - Running task 5.0 in stage 0.0 (TID 5)
+ INFO [2025-12-30 19:07:10,649] ({Executor task launch worker for task 4.0 in stage 0.0 (TID 4)} Logging.scala[logInfo]:60) - Running task 4.0 in stage 0.0 (TID 4)
+ INFO [2025-12-30 19:07:10,649] ({Executor task launch worker for task 0.0 in stage 0.0 (TID 0)} Logging.scala[logInfo]:60) - Running task 0.0 in stage 0.0 (TID 0)
+ INFO [2025-12-30 19:07:10,649] ({Executor task launch worker for task 7.0 in stage 0.0 (TID 7)} Logging.scala[logInfo]:60) - Running task 7.0 in stage 0.0 (TID 7)
+ INFO [2025-12-30 19:07:10,648] ({Executor task launch worker for task 1.0 in stage 0.0 (TID 1)} Logging.scala[logInfo]:60) - Running task 1.0 in stage 0.0 (TID 1)
+ INFO [2025-12-30 19:07:12,739] ({Executor task launch worker for task 3.0 in stage 0.0 (TID 3)} Logging.scala[logInfo]:60) - Times: total = 1401, boot = 1303, init = 97, finish = 1
+ INFO [2025-12-30 19:07:12,743] ({Executor task launch worker for task 0.0 in stage 0.0 (TID 0)} Logging.scala[logInfo]:60) - Times: total = 1403, boot = 1315, init = 87, finish = 1
+ INFO [2025-12-30 19:07:12,833] ({Executor task launch worker for task 2.0 in stage 0.0 (TID 2)} Logging.scala[logInfo]:60) - Times: total = 1484, boot = 1368, init = 115, finish = 1
+ INFO [2025-12-30 19:07:12,739] ({Executor task launch worker for task 7.0 in stage 0.0 (TID 7)} Logging.scala[logInfo]:60) - Times: total = 1484, boot = 1404, init = 79, finish = 1
+ INFO [2025-12-30 19:07:12,838] ({Executor task launch worker for task 4.0 in stage 0.0 (TID 4)} Logging.scala[logInfo]:60) - Times: total = 1488, boot = 1415, init = 73, finish = 0
+ INFO [2025-12-30 19:07:12,740] ({Executor task launch worker for task 5.0 in stage 0.0 (TID 5)} Logging.scala[logInfo]:60) - Times: total = 1402, boot = 1309, init = 92, finish = 1
+ INFO [2025-12-30 19:07:12,936] ({Executor task launch worker for task 6.0 in stage 0.0 (TID 6)} Logging.scala[logInfo]:60) - Times: total = 1484, boot = 1410, init = 74, finish = 0
+ INFO [2025-12-30 19:07:13,039] ({Executor task launch worker for task 1.0 in stage 0.0 (TID 1)} Logging.scala[logInfo]:60) - Times: total = 1788, boot = 1486, init = 302, finish = 0
+ INFO [2025-12-30 19:07:13,046] ({Executor task launch worker for task 6.0 in stage 0.0 (TID 6)} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 0.0 (TID 6). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:13,046] ({Executor task launch worker for task 4.0 in stage 0.0 (TID 4)} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 0.0 (TID 4). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:13,046] ({Executor task launch worker for task 3.0 in stage 0.0 (TID 3)} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 0.0 (TID 3). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:13,048] ({Executor task launch worker for task 7.0 in stage 0.0 (TID 7)} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 0.0 (TID 7). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:13,134] ({Executor task launch worker for task 0.0 in stage 0.0 (TID 0)} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 0.0 (TID 0). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:13,046] ({Executor task launch worker for task 1.0 in stage 0.0 (TID 1)} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 0.0 (TID 1). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:13,135] ({Executor task launch worker for task 2.0 in stage 0.0 (TID 2)} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 0.0 (TID 2). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:13,135] ({Executor task launch worker for task 5.0 in stage 0.0 (TID 5)} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 0.0 (TID 5). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:13,146] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 0.0 (TID 4) in 2584 ms on spark-sharedprocess-atqpiv (executor driver) (1/8)
+ INFO [2025-12-30 19:07:13,148] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 0.0 (TID 6) in 2514 ms on spark-sharedprocess-atqpiv (executor driver) (2/8)
+ INFO [2025-12-30 19:07:13,148] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 0.0 (TID 7) in 2513 ms on spark-sharedprocess-atqpiv (executor driver) (3/8)
+ INFO [2025-12-30 19:07:13,148] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 0.0 (TID 3) in 2588 ms on spark-sharedprocess-atqpiv (executor driver) (4/8)
+ INFO [2025-12-30 19:07:13,235] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 0.0 (TID 1) in 2676 ms on spark-sharedprocess-atqpiv (executor driver) (5/8)
+ INFO [2025-12-30 19:07:13,236] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 0.0 (TID 0) in 2698 ms on spark-sharedprocess-atqpiv (executor driver) (6/8)
+ INFO [2025-12-30 19:07:13,238] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 0.0 (TID 2) in 2678 ms on spark-sharedprocess-atqpiv (executor driver) (7/8)
+ INFO [2025-12-30 19:07:13,239] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 0.0 (TID 5) in 2678 ms on spark-sharedprocess-atqpiv (executor driver) (8/8)
+ INFO [2025-12-30 19:07:13,240] ({task-result-getter-1} Logging.scala[logInfo]:60) - Removed TaskSet 0.0, whose tasks have all completed, from pool default
+ INFO [2025-12-30 19:07:13,242] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Connected to AccumulatorServer at host: 127.0.0.1 port: 54747
+ INFO [2025-12-30 19:07:13,337] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - ResultStage 0 (count at /tmp/ipykernel_230/393626415.py:6) finished in 3.386 s
+ INFO [2025-12-30 19:07:13,342] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Job 0 is finished. Cancelling potential speculative or zombie tasks for this job
+ INFO [2025-12-30 19:07:13,343] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Killing all running tasks in stage 0: Stage finished
+ INFO [2025-12-30 19:07:13,345] ({Thread-19} Logging.scala[logInfo]:60) - Job 0 finished: count at /tmp/ipykernel_230/393626415.py:6, took 3.511004 s
+ INFO [2025-12-30 19:07:18,476] ({Thread-19} Logging.scala[logInfo]:60) - Starting job: count at /tmp/ipykernel_230/393626415.py:6
+ INFO [2025-12-30 19:07:18,478] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Got job 1 (count at /tmp/ipykernel_230/393626415.py:6) with 8 output partitions
+ INFO [2025-12-30 19:07:18,478] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Final stage: ResultStage 1 (count at /tmp/ipykernel_230/393626415.py:6)
+ INFO [2025-12-30 19:07:18,478] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Parents of final stage: List()
+ INFO [2025-12-30 19:07:18,478] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Missing parents: List()
+ INFO [2025-12-30 19:07:18,479] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting ResultStage 1 (PythonRDD[2] at count at /tmp/ipykernel_230/393626415.py:6), which has no missing parents
+ INFO [2025-12-30 19:07:18,483] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_1 stored as values in memory (estimated size 7.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:18,535] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_1_piece0 stored as bytes in memory (estimated size 4.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:18,536] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Added broadcast_1_piece0 in memory on spark-sharedprocess-atqpiv:39109 (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:18,537] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Created broadcast 1 from broadcast at DAGScheduler.scala:1611
+ INFO [2025-12-30 19:07:18,538] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting 8 missing tasks from ResultStage 1 (PythonRDD[2] at count at /tmp/ipykernel_230/393626415.py:6) (first 15 tasks are for partitions Vector(0, 1, 2, 3, 4, 5, 6, 7))
+ INFO [2025-12-30 19:07:18,538] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Adding task set 1.0 with 8 tasks resource profile 0
+ INFO [2025-12-30 19:07:18,539] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Added task set TaskSet_1.0 tasks to pool default
+ INFO [2025-12-30 19:07:18,541] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 0.0 in stage 1.0 (TID 8) (spark-sharedprocess-atqpiv, executor driver, partition 0, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:18,542] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 1.0 in stage 1.0 (TID 9) (spark-sharedprocess-atqpiv, executor driver, partition 1, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:18,542] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 2.0 in stage 1.0 (TID 10) (spark-sharedprocess-atqpiv, executor driver, partition 2, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:18,543] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 3.0 in stage 1.0 (TID 11) (spark-sharedprocess-atqpiv, executor driver, partition 3, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:18,543] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 4.0 in stage 1.0 (TID 12) (spark-sharedprocess-atqpiv, executor driver, partition 4, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:18,544] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 5.0 in stage 1.0 (TID 13) (spark-sharedprocess-atqpiv, executor driver, partition 5, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:18,544] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 6.0 in stage 1.0 (TID 14) (spark-sharedprocess-atqpiv, executor driver, partition 6, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:18,546] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 7.0 in stage 1.0 (TID 15) (spark-sharedprocess-atqpiv, executor driver, partition 7, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:18,547] ({Executor task launch worker for task 2.0 in stage 1.0 (TID 10)} Logging.scala[logInfo]:60) - Running task 2.0 in stage 1.0 (TID 10)
+ INFO [2025-12-30 19:07:18,547] ({Executor task launch worker for task 4.0 in stage 1.0 (TID 12)} Logging.scala[logInfo]:60) - Running task 4.0 in stage 1.0 (TID 12)
+ INFO [2025-12-30 19:07:18,547] ({Executor task launch worker for task 5.0 in stage 1.0 (TID 13)} Logging.scala[logInfo]:60) - Running task 5.0 in stage 1.0 (TID 13)
+ INFO [2025-12-30 19:07:18,547] ({Executor task launch worker for task 3.0 in stage 1.0 (TID 11)} Logging.scala[logInfo]:60) - Running task 3.0 in stage 1.0 (TID 11)
+ INFO [2025-12-30 19:07:18,547] ({Executor task launch worker for task 1.0 in stage 1.0 (TID 9)} Logging.scala[logInfo]:60) - Running task 1.0 in stage 1.0 (TID 9)
+ INFO [2025-12-30 19:07:18,547] ({Executor task launch worker for task 0.0 in stage 1.0 (TID 8)} Logging.scala[logInfo]:60) - Running task 0.0 in stage 1.0 (TID 8)
+ INFO [2025-12-30 19:07:18,547] ({Executor task launch worker for task 7.0 in stage 1.0 (TID 15)} Logging.scala[logInfo]:60) - Running task 7.0 in stage 1.0 (TID 15)
+ INFO [2025-12-30 19:07:18,547] ({Executor task launch worker for task 6.0 in stage 1.0 (TID 14)} Logging.scala[logInfo]:60) - Running task 6.0 in stage 1.0 (TID 14)
+ INFO [2025-12-30 19:07:18,637] ({Executor task launch worker for task 1.0 in stage 1.0 (TID 9)} Logging.scala[logInfo]:60) - Times: total = 82, boot = -5518, init = 5599, finish = 1
+ INFO [2025-12-30 19:07:18,639] ({Executor task launch worker for task 3.0 in stage 1.0 (TID 11)} Logging.scala[logInfo]:60) - Times: total = 3, boot = -5684, init = 5687, finish = 0
+ INFO [2025-12-30 19:07:18,734] ({Executor task launch worker for task 4.0 in stage 1.0 (TID 12)} Logging.scala[logInfo]:60) - Times: total = 84, boot = -5609, init = 5693, finish = 0
+ INFO [2025-12-30 19:07:18,738] ({Executor task launch worker for task 4.0 in stage 1.0 (TID 12)} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 1.0 (TID 12). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:18,739] ({Executor task launch worker for task 1.0 in stage 1.0 (TID 9)} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 1.0 (TID 9). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:18,739] ({Executor task launch worker for task 2.0 in stage 1.0 (TID 10)} Logging.scala[logInfo]:60) - Times: total = 99, boot = -5595, init = 5694, finish = 0
+ INFO [2025-12-30 19:07:18,741] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 1.0 (TID 12) in 198 ms on spark-sharedprocess-atqpiv (executor driver) (1/8)
+ INFO [2025-12-30 19:07:18,742] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 1.0 (TID 9) in 201 ms on spark-sharedprocess-atqpiv (executor driver) (2/8)
+ INFO [2025-12-30 19:07:18,744] ({Executor task launch worker for task 5.0 in stage 1.0 (TID 13)} Logging.scala[logInfo]:60) - Times: total = 7, boot = -5792, init = 5799, finish = 0
+ INFO [2025-12-30 19:07:18,839] ({Executor task launch worker for task 2.0 in stage 1.0 (TID 10)} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 1.0 (TID 10). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:18,839] ({Executor task launch worker for task 7.0 in stage 1.0 (TID 15)} Logging.scala[logInfo]:60) - Times: total = 98, boot = -5503, init = 5601, finish = 0
+ INFO [2025-12-30 19:07:18,844] ({Executor task launch worker for task 5.0 in stage 1.0 (TID 13)} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 1.0 (TID 13). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:18,845] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 1.0 (TID 10) in 303 ms on spark-sharedprocess-atqpiv (executor driver) (3/8)
+ INFO [2025-12-30 19:07:18,845] ({Executor task launch worker for task 3.0 in stage 1.0 (TID 11)} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 1.0 (TID 11). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:18,849] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 1.0 (TID 13) in 305 ms on spark-sharedprocess-atqpiv (executor driver) (4/8)
+ INFO [2025-12-30 19:07:18,850] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 1.0 (TID 11) in 307 ms on spark-sharedprocess-atqpiv (executor driver) (5/8)
+ INFO [2025-12-30 19:07:18,849] ({Executor task launch worker for task 7.0 in stage 1.0 (TID 15)} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 1.0 (TID 15). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:18,935] ({Executor task launch worker for task 6.0 in stage 1.0 (TID 14)} Logging.scala[logInfo]:60) - Times: total = 198, boot = -5702, init = 5900, finish = 0
+ INFO [2025-12-30 19:07:18,934] ({Executor task launch worker for task 0.0 in stage 1.0 (TID 8)} Logging.scala[logInfo]:60) - Times: total = 291, boot = -5598, init = 5889, finish = 0
+ INFO [2025-12-30 19:07:18,938] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 1.0 (TID 15) in 393 ms on spark-sharedprocess-atqpiv (executor driver) (6/8)
+ INFO [2025-12-30 19:07:18,939] ({Executor task launch worker for task 6.0 in stage 1.0 (TID 14)} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 1.0 (TID 14). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:18,941] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 1.0 (TID 14) in 397 ms on spark-sharedprocess-atqpiv (executor driver) (7/8)
+ INFO [2025-12-30 19:07:18,944] ({Executor task launch worker for task 0.0 in stage 1.0 (TID 8)} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 1.0 (TID 8). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:18,948] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 1.0 (TID 8) in 408 ms on spark-sharedprocess-atqpiv (executor driver) (8/8)
+ INFO [2025-12-30 19:07:18,948] ({task-result-getter-1} Logging.scala[logInfo]:60) - Removed TaskSet 1.0, whose tasks have all completed, from pool default
+ INFO [2025-12-30 19:07:19,033] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - ResultStage 1 (count at /tmp/ipykernel_230/393626415.py:6) finished in 0.469 s
+ INFO [2025-12-30 19:07:19,034] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Job 1 is finished. Cancelling potential speculative or zombie tasks for this job
+ INFO [2025-12-30 19:07:19,036] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Killing all running tasks in stage 1: Stage finished
+ INFO [2025-12-30 19:07:19,037] ({Thread-19} Logging.scala[logInfo]:60) - Job 1 finished: count at /tmp/ipykernel_230/393626415.py:6, took 0.560496 s
+ INFO [2025-12-30 19:07:24,077] ({Thread-19} Logging.scala[logInfo]:60) - Starting job: count at /tmp/ipykernel_230/393626415.py:6
+ INFO [2025-12-30 19:07:24,079] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Got job 2 (count at /tmp/ipykernel_230/393626415.py:6) with 8 output partitions
+ INFO [2025-12-30 19:07:24,079] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Final stage: ResultStage 2 (count at /tmp/ipykernel_230/393626415.py:6)
+ INFO [2025-12-30 19:07:24,079] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Parents of final stage: List()
+ INFO [2025-12-30 19:07:24,079] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Missing parents: List()
+ INFO [2025-12-30 19:07:24,080] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting ResultStage 2 (PythonRDD[3] at count at /tmp/ipykernel_230/393626415.py:6), which has no missing parents
+ INFO [2025-12-30 19:07:24,083] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_2 stored as values in memory (estimated size 7.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:24,089] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_2_piece0 stored as bytes in memory (estimated size 4.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:24,090] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Added broadcast_2_piece0 in memory on spark-sharedprocess-atqpiv:39109 (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:24,091] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Created broadcast 2 from broadcast at DAGScheduler.scala:1611
+ INFO [2025-12-30 19:07:24,134] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting 8 missing tasks from ResultStage 2 (PythonRDD[3] at count at /tmp/ipykernel_230/393626415.py:6) (first 15 tasks are for partitions Vector(0, 1, 2, 3, 4, 5, 6, 7))
+ INFO [2025-12-30 19:07:24,134] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Adding task set 2.0 with 8 tasks resource profile 0
+ INFO [2025-12-30 19:07:24,135] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Added task set TaskSet_2.0 tasks to pool default
+ INFO [2025-12-30 19:07:24,136] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 0.0 in stage 2.0 (TID 16) (spark-sharedprocess-atqpiv, executor driver, partition 0, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:24,136] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 1.0 in stage 2.0 (TID 17) (spark-sharedprocess-atqpiv, executor driver, partition 1, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:24,137] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 2.0 in stage 2.0 (TID 18) (spark-sharedprocess-atqpiv, executor driver, partition 2, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:24,137] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 3.0 in stage 2.0 (TID 19) (spark-sharedprocess-atqpiv, executor driver, partition 3, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:24,138] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 4.0 in stage 2.0 (TID 20) (spark-sharedprocess-atqpiv, executor driver, partition 4, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:24,138] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 5.0 in stage 2.0 (TID 21) (spark-sharedprocess-atqpiv, executor driver, partition 5, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:24,139] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 6.0 in stage 2.0 (TID 22) (spark-sharedprocess-atqpiv, executor driver, partition 6, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:24,139] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 7.0 in stage 2.0 (TID 23) (spark-sharedprocess-atqpiv, executor driver, partition 7, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:24,140] ({Executor task launch worker for task 0.0 in stage 2.0 (TID 16)} Logging.scala[logInfo]:60) - Running task 0.0 in stage 2.0 (TID 16)
+ INFO [2025-12-30 19:07:24,140] ({Executor task launch worker for task 5.0 in stage 2.0 (TID 21)} Logging.scala[logInfo]:60) - Running task 5.0 in stage 2.0 (TID 21)
+ INFO [2025-12-30 19:07:24,140] ({Executor task launch worker for task 4.0 in stage 2.0 (TID 20)} Logging.scala[logInfo]:60) - Running task 4.0 in stage 2.0 (TID 20)
+ INFO [2025-12-30 19:07:24,140] ({Executor task launch worker for task 2.0 in stage 2.0 (TID 18)} Logging.scala[logInfo]:60) - Running task 2.0 in stage 2.0 (TID 18)
+ INFO [2025-12-30 19:07:24,140] ({Executor task launch worker for task 1.0 in stage 2.0 (TID 17)} Logging.scala[logInfo]:60) - Running task 1.0 in stage 2.0 (TID 17)
+ INFO [2025-12-30 19:07:24,140] ({Executor task launch worker for task 3.0 in stage 2.0 (TID 19)} Logging.scala[logInfo]:60) - Running task 3.0 in stage 2.0 (TID 19)
+ INFO [2025-12-30 19:07:24,140] ({Executor task launch worker for task 7.0 in stage 2.0 (TID 23)} Logging.scala[logInfo]:60) - Running task 7.0 in stage 2.0 (TID 23)
+ INFO [2025-12-30 19:07:24,140] ({Executor task launch worker for task 6.0 in stage 2.0 (TID 22)} Logging.scala[logInfo]:60) - Running task 6.0 in stage 2.0 (TID 22)
+ INFO [2025-12-30 19:07:24,238] ({Executor task launch worker for task 7.0 in stage 2.0 (TID 23)} Logging.scala[logInfo]:60) - Times: total = 88, boot = -5395, init = 5483, finish = 0
+ INFO [2025-12-30 19:07:24,240] ({Executor task launch worker for task 4.0 in stage 2.0 (TID 20)} Logging.scala[logInfo]:60) - Times: total = 4, boot = -5285, init = 5289, finish = 0
+ INFO [2025-12-30 19:07:24,240] ({Executor task launch worker for task 0.0 in stage 2.0 (TID 16)} Logging.scala[logInfo]:60) - Times: total = 6, boot = -5195, init = 5201, finish = 0
+ INFO [2025-12-30 19:07:24,334] ({Executor task launch worker for task 7.0 in stage 2.0 (TID 23)} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 2.0 (TID 23). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:24,335] ({Executor task launch worker for task 0.0 in stage 2.0 (TID 16)} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 2.0 (TID 16). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:24,336] ({Executor task launch worker for task 2.0 in stage 2.0 (TID 18)} Logging.scala[logInfo]:60) - Times: total = 129, boot = -5404, init = 5533, finish = 0
+ INFO [2025-12-30 19:07:24,338] ({Executor task launch worker for task 5.0 in stage 2.0 (TID 21)} Logging.scala[logInfo]:60) - Times: total = 189, boot = -5298, init = 5485, finish = 2
+ INFO [2025-12-30 19:07:24,338] ({Executor task launch worker for task 4.0 in stage 2.0 (TID 20)} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 2.0 (TID 20). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:24,339] ({Executor task launch worker for task 3.0 in stage 2.0 (TID 19)} Logging.scala[logInfo]:60) - Times: total = 188, boot = -5404, init = 5592, finish = 0
+ INFO [2025-12-30 19:07:24,339] ({Executor task launch worker for task 1.0 in stage 2.0 (TID 17)} Logging.scala[logInfo]:60) - Times: total = 189, boot = -5208, init = 5397, finish = 0
+ INFO [2025-12-30 19:07:24,342] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 2.0 (TID 23) in 203 ms on spark-sharedprocess-atqpiv (executor driver) (1/8)
+ INFO [2025-12-30 19:07:24,342] ({Executor task launch worker for task 6.0 in stage 2.0 (TID 22)} Logging.scala[logInfo]:60) - Times: total = 188, boot = -5404, init = 5592, finish = 0
+ INFO [2025-12-30 19:07:24,346] ({Executor task launch worker for task 2.0 in stage 2.0 (TID 18)} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 2.0 (TID 18). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:24,347] ({Executor task launch worker for task 1.0 in stage 2.0 (TID 17)} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 2.0 (TID 17). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:24,445] ({Executor task launch worker for task 5.0 in stage 2.0 (TID 21)} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 2.0 (TID 21). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:24,440] ({Executor task launch worker for task 3.0 in stage 2.0 (TID 19)} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 2.0 (TID 19). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:24,446] ({Executor task launch worker for task 6.0 in stage 2.0 (TID 22)} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 2.0 (TID 22). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:24,446] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 2.0 (TID 16) in 311 ms on spark-sharedprocess-atqpiv (executor driver) (2/8)
+ INFO [2025-12-30 19:07:24,448] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 2.0 (TID 20) in 310 ms on spark-sharedprocess-atqpiv (executor driver) (3/8)
+ INFO [2025-12-30 19:07:24,452] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 2.0 (TID 19) in 315 ms on spark-sharedprocess-atqpiv (executor driver) (4/8)
+ INFO [2025-12-30 19:07:24,453] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 2.0 (TID 17) in 317 ms on spark-sharedprocess-atqpiv (executor driver) (5/8)
+ INFO [2025-12-30 19:07:24,455] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 2.0 (TID 22) in 317 ms on spark-sharedprocess-atqpiv (executor driver) (6/8)
+ INFO [2025-12-30 19:07:24,533] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 2.0 (TID 18) in 396 ms on spark-sharedprocess-atqpiv (executor driver) (7/8)
+ INFO [2025-12-30 19:07:24,534] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 2.0 (TID 21) in 396 ms on spark-sharedprocess-atqpiv (executor driver) (8/8)
+ INFO [2025-12-30 19:07:24,535] ({task-result-getter-3} Logging.scala[logInfo]:60) - Removed TaskSet 2.0, whose tasks have all completed, from pool default
+ INFO [2025-12-30 19:07:24,545] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - ResultStage 2 (count at /tmp/ipykernel_230/393626415.py:6) finished in 0.463 s
+ INFO [2025-12-30 19:07:24,545] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Job 2 is finished. Cancelling potential speculative or zombie tasks for this job
+ INFO [2025-12-30 19:07:24,546] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Killing all running tasks in stage 2: Stage finished
+ INFO [2025-12-30 19:07:24,546] ({Thread-19} Logging.scala[logInfo]:60) - Job 2 finished: count at /tmp/ipykernel_230/393626415.py:6, took 0.468471 s
+ INFO [2025-12-30 19:07:29,677] ({Thread-19} Logging.scala[logInfo]:60) - Starting job: count at /tmp/ipykernel_230/393626415.py:6
+ INFO [2025-12-30 19:07:29,678] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Got job 3 (count at /tmp/ipykernel_230/393626415.py:6) with 8 output partitions
+ INFO [2025-12-30 19:07:29,679] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Final stage: ResultStage 3 (count at /tmp/ipykernel_230/393626415.py:6)
+ INFO [2025-12-30 19:07:29,679] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Parents of final stage: List()
+ INFO [2025-12-30 19:07:29,679] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Missing parents: List()
+ INFO [2025-12-30 19:07:29,680] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting ResultStage 3 (PythonRDD[4] at count at /tmp/ipykernel_230/393626415.py:6), which has no missing parents
+ INFO [2025-12-30 19:07:29,683] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_3 stored as values in memory (estimated size 7.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:29,687] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_3_piece0 stored as bytes in memory (estimated size 4.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:29,734] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Added broadcast_3_piece0 in memory on spark-sharedprocess-atqpiv:39109 (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:29,735] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Created broadcast 3 from broadcast at DAGScheduler.scala:1611
+ INFO [2025-12-30 19:07:29,736] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting 8 missing tasks from ResultStage 3 (PythonRDD[4] at count at /tmp/ipykernel_230/393626415.py:6) (first 15 tasks are for partitions Vector(0, 1, 2, 3, 4, 5, 6, 7))
+ INFO [2025-12-30 19:07:29,736] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Adding task set 3.0 with 8 tasks resource profile 0
+ INFO [2025-12-30 19:07:29,737] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Added task set TaskSet_3.0 tasks to pool default
+ INFO [2025-12-30 19:07:29,738] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 0.0 in stage 3.0 (TID 24) (spark-sharedprocess-atqpiv, executor driver, partition 0, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:29,739] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 1.0 in stage 3.0 (TID 25) (spark-sharedprocess-atqpiv, executor driver, partition 1, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:29,739] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 2.0 in stage 3.0 (TID 26) (spark-sharedprocess-atqpiv, executor driver, partition 2, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:29,740] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 3.0 in stage 3.0 (TID 27) (spark-sharedprocess-atqpiv, executor driver, partition 3, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:29,740] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 4.0 in stage 3.0 (TID 28) (spark-sharedprocess-atqpiv, executor driver, partition 4, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:29,741] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 5.0 in stage 3.0 (TID 29) (spark-sharedprocess-atqpiv, executor driver, partition 5, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:29,742] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 6.0 in stage 3.0 (TID 30) (spark-sharedprocess-atqpiv, executor driver, partition 6, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:29,742] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 7.0 in stage 3.0 (TID 31) (spark-sharedprocess-atqpiv, executor driver, partition 7, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:29,743] ({Executor task launch worker for task 0.0 in stage 3.0 (TID 24)} Logging.scala[logInfo]:60) - Running task 0.0 in stage 3.0 (TID 24)
+ INFO [2025-12-30 19:07:29,743] ({Executor task launch worker for task 4.0 in stage 3.0 (TID 28)} Logging.scala[logInfo]:60) - Running task 4.0 in stage 3.0 (TID 28)
+ INFO [2025-12-30 19:07:29,743] ({Executor task launch worker for task 5.0 in stage 3.0 (TID 29)} Logging.scala[logInfo]:60) - Running task 5.0 in stage 3.0 (TID 29)
+ INFO [2025-12-30 19:07:29,744] ({Executor task launch worker for task 7.0 in stage 3.0 (TID 31)} Logging.scala[logInfo]:60) - Running task 7.0 in stage 3.0 (TID 31)
+ INFO [2025-12-30 19:07:29,743] ({Executor task launch worker for task 3.0 in stage 3.0 (TID 27)} Logging.scala[logInfo]:60) - Running task 3.0 in stage 3.0 (TID 27)
+ INFO [2025-12-30 19:07:29,743] ({Executor task launch worker for task 1.0 in stage 3.0 (TID 25)} Logging.scala[logInfo]:60) - Running task 1.0 in stage 3.0 (TID 25)
+ INFO [2025-12-30 19:07:29,743] ({Executor task launch worker for task 2.0 in stage 3.0 (TID 26)} Logging.scala[logInfo]:60) - Running task 2.0 in stage 3.0 (TID 26)
+ INFO [2025-12-30 19:07:29,743] ({Executor task launch worker for task 6.0 in stage 3.0 (TID 30)} Logging.scala[logInfo]:60) - Running task 6.0 in stage 3.0 (TID 30)
+ INFO [2025-12-30 19:07:29,835] ({Executor task launch worker for task 4.0 in stage 3.0 (TID 28)} Logging.scala[logInfo]:60) - Times: total = 85, boot = -5502, init = 5587, finish = 0
+ INFO [2025-12-30 19:07:29,936] ({Executor task launch worker for task 6.0 in stage 3.0 (TID 30)} Logging.scala[logInfo]:60) - Times: total = 10, boot = -5392, init = 5402, finish = 0
+ INFO [2025-12-30 19:07:29,940] ({Executor task launch worker for task 7.0 in stage 3.0 (TID 31)} Logging.scala[logInfo]:60) - Times: total = 185, boot = -5499, init = 5684, finish = 0
+ INFO [2025-12-30 19:07:29,945] ({Executor task launch worker for task 7.0 in stage 3.0 (TID 31)} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 3.0 (TID 31). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:30,037] ({Executor task launch worker for task 3.0 in stage 3.0 (TID 27)} Logging.scala[logInfo]:60) - Times: total = 11, boot = -5295, init = 5305, finish = 1
+ INFO [2025-12-30 19:07:30,037] ({Executor task launch worker for task 1.0 in stage 3.0 (TID 25)} Logging.scala[logInfo]:60) - Times: total = 203, boot = -5393, init = 5596, finish = 0
+ INFO [2025-12-30 19:07:30,038] ({Executor task launch worker for task 6.0 in stage 3.0 (TID 30)} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 3.0 (TID 30). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:30,039] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 3.0 (TID 31) in 297 ms on spark-sharedprocess-atqpiv (executor driver) (1/8)
+ INFO [2025-12-30 19:07:30,039] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 3.0 (TID 30) in 298 ms on spark-sharedprocess-atqpiv (executor driver) (2/8)
+ INFO [2025-12-30 19:07:30,039] ({Executor task launch worker for task 4.0 in stage 3.0 (TID 28)} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 3.0 (TID 28). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:30,040] ({Executor task launch worker for task 5.0 in stage 3.0 (TID 29)} Logging.scala[logInfo]:60) - Times: total = 85, boot = -5416, init = 5501, finish = 0
+ INFO [2025-12-30 19:07:30,040] ({Executor task launch worker for task 3.0 in stage 3.0 (TID 27)} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 3.0 (TID 27). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:30,040] ({Executor task launch worker for task 0.0 in stage 3.0 (TID 24)} Logging.scala[logInfo]:60) - Times: total = 185, boot = -5303, init = 5487, finish = 1
+ INFO [2025-12-30 19:07:30,039] ({Executor task launch worker for task 2.0 in stage 3.0 (TID 26)} Logging.scala[logInfo]:60) - Times: total = 3, boot = -5402, init = 5404, finish = 1
+ INFO [2025-12-30 19:07:30,045] ({Executor task launch worker for task 2.0 in stage 3.0 (TID 26)} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 3.0 (TID 26). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:30,135] ({Executor task launch worker for task 1.0 in stage 3.0 (TID 25)} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 3.0 (TID 25). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:30,135] ({Executor task launch worker for task 0.0 in stage 3.0 (TID 24)} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 3.0 (TID 24). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:30,136] ({Executor task launch worker for task 5.0 in stage 3.0 (TID 29)} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 3.0 (TID 29). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:30,137] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 3.0 (TID 28) in 397 ms on spark-sharedprocess-atqpiv (executor driver) (3/8)
+ INFO [2025-12-30 19:07:30,138] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 3.0 (TID 26) in 399 ms on spark-sharedprocess-atqpiv (executor driver) (4/8)
+ INFO [2025-12-30 19:07:30,140] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 3.0 (TID 25) in 401 ms on spark-sharedprocess-atqpiv (executor driver) (5/8)
+ INFO [2025-12-30 19:07:30,141] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 3.0 (TID 29) in 400 ms on spark-sharedprocess-atqpiv (executor driver) (6/8)
+ INFO [2025-12-30 19:07:30,141] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 3.0 (TID 24) in 403 ms on spark-sharedprocess-atqpiv (executor driver) (7/8)
+ INFO [2025-12-30 19:07:30,142] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 3.0 (TID 27) in 402 ms on spark-sharedprocess-atqpiv (executor driver) (8/8)
+ INFO [2025-12-30 19:07:30,142] ({task-result-getter-3} Logging.scala[logInfo]:60) - Removed TaskSet 3.0, whose tasks have all completed, from pool default
+ INFO [2025-12-30 19:07:30,145] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - ResultStage 3 (count at /tmp/ipykernel_230/393626415.py:6) finished in 0.464 s
+ INFO [2025-12-30 19:07:30,146] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Job 3 is finished. Cancelling potential speculative or zombie tasks for this job
+ INFO [2025-12-30 19:07:30,146] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Killing all running tasks in stage 3: Stage finished
+ INFO [2025-12-30 19:07:30,233] ({Thread-19} Logging.scala[logInfo]:60) - Job 3 finished: count at /tmp/ipykernel_230/393626415.py:6, took 0.555902 s
+ INFO [2025-12-30 19:07:35,272] ({Thread-19} Logging.scala[logInfo]:60) - Starting job: count at /tmp/ipykernel_230/393626415.py:6
+ INFO [2025-12-30 19:07:35,273] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Got job 4 (count at /tmp/ipykernel_230/393626415.py:6) with 8 output partitions
+ INFO [2025-12-30 19:07:35,274] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Final stage: ResultStage 4 (count at /tmp/ipykernel_230/393626415.py:6)
+ INFO [2025-12-30 19:07:35,274] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Parents of final stage: List()
+ INFO [2025-12-30 19:07:35,274] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Missing parents: List()
+ INFO [2025-12-30 19:07:35,275] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting ResultStage 4 (PythonRDD[5] at count at /tmp/ipykernel_230/393626415.py:6), which has no missing parents
+ INFO [2025-12-30 19:07:35,278] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_4 stored as values in memory (estimated size 7.9 KiB, free 1398.3 MiB)
+ INFO [2025-12-30 19:07:35,283] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_4_piece0 stored as bytes in memory (estimated size 4.9 KiB, free 1398.3 MiB)
+ INFO [2025-12-30 19:07:35,284] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Added broadcast_4_piece0 in memory on spark-sharedprocess-atqpiv:39109 (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:35,285] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Created broadcast 4 from broadcast at DAGScheduler.scala:1611
+ INFO [2025-12-30 19:07:35,286] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting 8 missing tasks from ResultStage 4 (PythonRDD[5] at count at /tmp/ipykernel_230/393626415.py:6) (first 15 tasks are for partitions Vector(0, 1, 2, 3, 4, 5, 6, 7))
+ INFO [2025-12-30 19:07:35,286] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Adding task set 4.0 with 8 tasks resource profile 0
+ INFO [2025-12-30 19:07:35,287] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Added task set TaskSet_4.0 tasks to pool default
+ INFO [2025-12-30 19:07:35,288] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 0.0 in stage 4.0 (TID 32) (spark-sharedprocess-atqpiv, executor driver, partition 0, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:35,289] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 1.0 in stage 4.0 (TID 33) (spark-sharedprocess-atqpiv, executor driver, partition 1, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:35,334] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 2.0 in stage 4.0 (TID 34) (spark-sharedprocess-atqpiv, executor driver, partition 2, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:35,335] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 3.0 in stage 4.0 (TID 35) (spark-sharedprocess-atqpiv, executor driver, partition 3, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:35,335] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 4.0 in stage 4.0 (TID 36) (spark-sharedprocess-atqpiv, executor driver, partition 4, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:35,336] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 5.0 in stage 4.0 (TID 37) (spark-sharedprocess-atqpiv, executor driver, partition 5, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:35,337] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 6.0 in stage 4.0 (TID 38) (spark-sharedprocess-atqpiv, executor driver, partition 6, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:35,337] ({dispatcher-event-loop-5} Logging.scala[logInfo]:60) - Starting task 7.0 in stage 4.0 (TID 39) (spark-sharedprocess-atqpiv, executor driver, partition 7, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:35,338] ({Executor task launch worker for task 3.0 in stage 4.0 (TID 35)} Logging.scala[logInfo]:60) - Running task 3.0 in stage 4.0 (TID 35)
+ INFO [2025-12-30 19:07:35,338] ({Executor task launch worker for task 2.0 in stage 4.0 (TID 34)} Logging.scala[logInfo]:60) - Running task 2.0 in stage 4.0 (TID 34)
+ INFO [2025-12-30 19:07:35,339] ({Executor task launch worker for task 4.0 in stage 4.0 (TID 36)} Logging.scala[logInfo]:60) - Running task 4.0 in stage 4.0 (TID 36)
+ INFO [2025-12-30 19:07:35,339] ({Executor task launch worker for task 7.0 in stage 4.0 (TID 39)} Logging.scala[logInfo]:60) - Running task 7.0 in stage 4.0 (TID 39)
+ INFO [2025-12-30 19:07:35,339] ({Executor task launch worker for task 5.0 in stage 4.0 (TID 37)} Logging.scala[logInfo]:60) - Running task 5.0 in stage 4.0 (TID 37)
+ INFO [2025-12-30 19:07:35,338] ({Executor task launch worker for task 0.0 in stage 4.0 (TID 32)} Logging.scala[logInfo]:60) - Running task 0.0 in stage 4.0 (TID 32)
+ INFO [2025-12-30 19:07:35,338] ({Executor task launch worker for task 1.0 in stage 4.0 (TID 33)} Logging.scala[logInfo]:60) - Running task 1.0 in stage 4.0 (TID 33)
+ INFO [2025-12-30 19:07:35,341] ({Executor task launch worker for task 6.0 in stage 4.0 (TID 38)} Logging.scala[logInfo]:60) - Running task 6.0 in stage 4.0 (TID 38)
+ INFO [2025-12-30 19:07:35,434] ({Executor task launch worker for task 6.0 in stage 4.0 (TID 38)} Logging.scala[logInfo]:60) - Times: total = 3, boot = -5205, init = 5208, finish = 0
+ INFO [2025-12-30 19:07:35,443] ({Executor task launch worker for task 6.0 in stage 4.0 (TID 38)} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 4.0 (TID 38). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:35,443] ({Executor task launch worker for task 4.0 in stage 4.0 (TID 36)} Logging.scala[logInfo]:60) - Times: total = 96, boot = -5312, init = 5408, finish = 0
+ INFO [2025-12-30 19:07:35,534] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 4.0 (TID 38) in 198 ms on spark-sharedprocess-atqpiv (executor driver) (1/8)
+ INFO [2025-12-30 19:07:35,539] ({Executor task launch worker for task 0.0 in stage 4.0 (TID 32)} Logging.scala[logInfo]:60) - Times: total = 141, boot = -5199, init = 5340, finish = 0
+ INFO [2025-12-30 19:07:35,539] ({Executor task launch worker for task 4.0 in stage 4.0 (TID 36)} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 4.0 (TID 36). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:35,541] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 4.0 (TID 36) in 206 ms on spark-sharedprocess-atqpiv (executor driver) (2/8)
+ INFO [2025-12-30 19:07:35,544] ({Executor task launch worker for task 0.0 in stage 4.0 (TID 32)} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 4.0 (TID 32). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:35,545] ({Executor task launch worker for task 3.0 in stage 4.0 (TID 35)} Logging.scala[logInfo]:60) - Times: total = 99, boot = -5410, init = 5509, finish = 0
+ INFO [2025-12-30 19:07:35,634] ({Executor task launch worker for task 2.0 in stage 4.0 (TID 34)} Logging.scala[logInfo]:60) - Times: total = 89, boot = -5301, init = 5390, finish = 0
+ INFO [2025-12-30 19:07:35,635] ({Executor task launch worker for task 7.0 in stage 4.0 (TID 39)} Logging.scala[logInfo]:60) - Times: total = 4, boot = -5407, init = 5411, finish = 0
+ INFO [2025-12-30 19:07:35,548] ({Executor task launch worker for task 1.0 in stage 4.0 (TID 33)} Logging.scala[logInfo]:60) - Times: total = 191, boot = -5304, init = 5495, finish = 0
+ INFO [2025-12-30 19:07:35,637] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 4.0 (TID 32) in 349 ms on spark-sharedprocess-atqpiv (executor driver) (3/8)
+ INFO [2025-12-30 19:07:35,642] ({Executor task launch worker for task 3.0 in stage 4.0 (TID 35)} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 4.0 (TID 35). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:35,643] ({Executor task launch worker for task 1.0 in stage 4.0 (TID 33)} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 4.0 (TID 33). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:35,642] ({Executor task launch worker for task 7.0 in stage 4.0 (TID 39)} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 4.0 (TID 39). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:35,644] ({Executor task launch worker for task 2.0 in stage 4.0 (TID 34)} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 4.0 (TID 34). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:35,645] ({Executor task launch worker for task 5.0 in stage 4.0 (TID 37)} Logging.scala[logInfo]:60) - Times: total = 292, boot = -5300, init = 5592, finish = 0
+ INFO [2025-12-30 19:07:35,645] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 4.0 (TID 35) in 311 ms on spark-sharedprocess-atqpiv (executor driver) (4/8)
+ INFO [2025-12-30 19:07:35,650] ({Executor task launch worker for task 5.0 in stage 4.0 (TID 37)} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 4.0 (TID 37). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:35,653] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 4.0 (TID 33) in 365 ms on spark-sharedprocess-atqpiv (executor driver) (5/8)
+ INFO [2025-12-30 19:07:35,654] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 4.0 (TID 34) in 321 ms on spark-sharedprocess-atqpiv (executor driver) (6/8)
+ INFO [2025-12-30 19:07:35,657] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 4.0 (TID 39) in 320 ms on spark-sharedprocess-atqpiv (executor driver) (7/8)
+ INFO [2025-12-30 19:07:35,733] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 4.0 (TID 37) in 397 ms on spark-sharedprocess-atqpiv (executor driver) (8/8)
+ INFO [2025-12-30 19:07:35,734] ({task-result-getter-3} Logging.scala[logInfo]:60) - Removed TaskSet 4.0, whose tasks have all completed, from pool default
+ INFO [2025-12-30 19:07:35,737] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - ResultStage 4 (count at /tmp/ipykernel_230/393626415.py:6) finished in 0.460 s
+ INFO [2025-12-30 19:07:35,738] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Job 4 is finished. Cancelling potential speculative or zombie tasks for this job
+ INFO [2025-12-30 19:07:35,738] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Killing all running tasks in stage 4: Stage finished
+ INFO [2025-12-30 19:07:35,739] ({Thread-19} Logging.scala[logInfo]:60) - Job 4 finished: count at /tmp/ipykernel_230/393626415.py:6, took 0.466289 s
+ INFO [2025-12-30 19:07:40,789] ({Thread-19} Logging.scala[logInfo]:60) - Starting job: count at /tmp/ipykernel_230/393626415.py:6
+ INFO [2025-12-30 19:07:40,790] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Got job 5 (count at /tmp/ipykernel_230/393626415.py:6) with 8 output partitions
+ INFO [2025-12-30 19:07:40,790] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Final stage: ResultStage 5 (count at /tmp/ipykernel_230/393626415.py:6)
+ INFO [2025-12-30 19:07:40,790] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Parents of final stage: List()
+ INFO [2025-12-30 19:07:40,790] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Missing parents: List()
+ INFO [2025-12-30 19:07:40,791] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting ResultStage 5 (PythonRDD[6] at count at /tmp/ipykernel_230/393626415.py:6), which has no missing parents
+ INFO [2025-12-30 19:07:40,794] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_5 stored as values in memory (estimated size 7.9 KiB, free 1398.3 MiB)
+ INFO [2025-12-30 19:07:40,798] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_5_piece0 stored as bytes in memory (estimated size 4.9 KiB, free 1398.3 MiB)
+ INFO [2025-12-30 19:07:40,799] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Added broadcast_5_piece0 in memory on spark-sharedprocess-atqpiv:39109 (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:40,800] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Created broadcast 5 from broadcast at DAGScheduler.scala:1611
+ INFO [2025-12-30 19:07:40,800] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting 8 missing tasks from ResultStage 5 (PythonRDD[6] at count at /tmp/ipykernel_230/393626415.py:6) (first 15 tasks are for partitions Vector(0, 1, 2, 3, 4, 5, 6, 7))
+ INFO [2025-12-30 19:07:40,800] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Adding task set 5.0 with 8 tasks resource profile 0
+ INFO [2025-12-30 19:07:40,801] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Added task set TaskSet_5.0 tasks to pool default
+ INFO [2025-12-30 19:07:40,802] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 0.0 in stage 5.0 (TID 40) (spark-sharedprocess-atqpiv, executor driver, partition 0, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:40,803] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 1.0 in stage 5.0 (TID 41) (spark-sharedprocess-atqpiv, executor driver, partition 1, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:40,803] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 2.0 in stage 5.0 (TID 42) (spark-sharedprocess-atqpiv, executor driver, partition 2, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:40,804] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 3.0 in stage 5.0 (TID 43) (spark-sharedprocess-atqpiv, executor driver, partition 3, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:40,804] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 4.0 in stage 5.0 (TID 44) (spark-sharedprocess-atqpiv, executor driver, partition 4, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:40,805] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 5.0 in stage 5.0 (TID 45) (spark-sharedprocess-atqpiv, executor driver, partition 5, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:40,805] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 6.0 in stage 5.0 (TID 46) (spark-sharedprocess-atqpiv, executor driver, partition 6, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:40,806] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 7.0 in stage 5.0 (TID 47) (spark-sharedprocess-atqpiv, executor driver, partition 7, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:40,807] ({Executor task launch worker for task 0.0 in stage 5.0 (TID 40)} Logging.scala[logInfo]:60) - Running task 0.0 in stage 5.0 (TID 40)
+ INFO [2025-12-30 19:07:40,833] ({Executor task launch worker for task 2.0 in stage 5.0 (TID 42)} Logging.scala[logInfo]:60) - Running task 2.0 in stage 5.0 (TID 42)
+ INFO [2025-12-30 19:07:40,834] ({Executor task launch worker for task 4.0 in stage 5.0 (TID 44)} Logging.scala[logInfo]:60) - Running task 4.0 in stage 5.0 (TID 44)
+ INFO [2025-12-30 19:07:40,833] ({Executor task launch worker for task 6.0 in stage 5.0 (TID 46)} Logging.scala[logInfo]:60) - Running task 6.0 in stage 5.0 (TID 46)
+ INFO [2025-12-30 19:07:40,834] ({Executor task launch worker for task 7.0 in stage 5.0 (TID 47)} Logging.scala[logInfo]:60) - Running task 7.0 in stage 5.0 (TID 47)
+ INFO [2025-12-30 19:07:40,834] ({Executor task launch worker for task 5.0 in stage 5.0 (TID 45)} Logging.scala[logInfo]:60) - Running task 5.0 in stage 5.0 (TID 45)
+ INFO [2025-12-30 19:07:40,834] ({Executor task launch worker for task 3.0 in stage 5.0 (TID 43)} Logging.scala[logInfo]:60) - Running task 3.0 in stage 5.0 (TID 43)
+ INFO [2025-12-30 19:07:40,835] ({Executor task launch worker for task 1.0 in stage 5.0 (TID 41)} Logging.scala[logInfo]:60) - Running task 1.0 in stage 5.0 (TID 41)
+ INFO [2025-12-30 19:07:40,847] ({Executor task launch worker for task 4.0 in stage 5.0 (TID 44)} Logging.scala[logInfo]:60) - Times: total = 2, boot = -5106, init = 5108, finish = 0
+ INFO [2025-12-30 19:07:40,935] ({Executor task launch worker for task 6.0 in stage 5.0 (TID 46)} Logging.scala[logInfo]:60) - Times: total = 96, boot = -5290, init = 5386, finish = 0
+ INFO [2025-12-30 19:07:40,936] ({Executor task launch worker for task 5.0 in stage 5.0 (TID 45)} Logging.scala[logInfo]:60) - Times: total = 43, boot = -5393, init = 5436, finish = 0
+ INFO [2025-12-30 19:07:40,936] ({Executor task launch worker for task 4.0 in stage 5.0 (TID 44)} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 5.0 (TID 44). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:40,937] ({Executor task launch worker for task 0.0 in stage 5.0 (TID 40)} Logging.scala[logInfo]:60) - Times: total = 99, boot = -5387, init = 5486, finish = 0
+ INFO [2025-12-30 19:07:40,937] ({Executor task launch worker for task 1.0 in stage 5.0 (TID 41)} Logging.scala[logInfo]:60) - Times: total = 5, boot = -5298, init = 5303, finish = 0
+ INFO [2025-12-30 19:07:40,938] ({Executor task launch worker for task 7.0 in stage 5.0 (TID 47)} Logging.scala[logInfo]:60) - Times: total = 1, boot = -5290, init = 5291, finish = 0
+ INFO [2025-12-30 19:07:40,940] ({Executor task launch worker for task 3.0 in stage 5.0 (TID 43)} Logging.scala[logInfo]:60) - Times: total = 97, boot = -5297, init = 5393, finish = 1
+ INFO [2025-12-30 19:07:41,042] ({Executor task launch worker for task 1.0 in stage 5.0 (TID 41)} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 5.0 (TID 41). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:41,042] ({Executor task launch worker for task 2.0 in stage 5.0 (TID 42)} Logging.scala[logInfo]:60) - Times: total = 98, boot = -5289, init = 5386, finish = 1
+ INFO [2025-12-30 19:07:41,044] ({Executor task launch worker for task 7.0 in stage 5.0 (TID 47)} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 5.0 (TID 47). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:41,043] ({Executor task launch worker for task 6.0 in stage 5.0 (TID 46)} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 5.0 (TID 46). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:41,044] ({Executor task launch worker for task 5.0 in stage 5.0 (TID 45)} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 5.0 (TID 45). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:41,045] ({Executor task launch worker for task 3.0 in stage 5.0 (TID 43)} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 5.0 (TID 43). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:41,044] ({Executor task launch worker for task 0.0 in stage 5.0 (TID 40)} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 5.0 (TID 40). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:41,044] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 5.0 (TID 44) in 240 ms on spark-sharedprocess-atqpiv (executor driver) (1/8)
+ INFO [2025-12-30 19:07:41,134] ({Executor task launch worker for task 2.0 in stage 5.0 (TID 42)} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 5.0 (TID 42). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:41,134] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 5.0 (TID 47) in 328 ms on spark-sharedprocess-atqpiv (executor driver) (2/8)
+ INFO [2025-12-30 19:07:41,136] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 5.0 (TID 41) in 334 ms on spark-sharedprocess-atqpiv (executor driver) (3/8)
+ INFO [2025-12-30 19:07:41,136] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 5.0 (TID 43) in 332 ms on spark-sharedprocess-atqpiv (executor driver) (4/8)
+ INFO [2025-12-30 19:07:41,138] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 5.0 (TID 46) in 333 ms on spark-sharedprocess-atqpiv (executor driver) (5/8)
+ INFO [2025-12-30 19:07:41,139] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 5.0 (TID 40) in 337 ms on spark-sharedprocess-atqpiv (executor driver) (6/8)
+ INFO [2025-12-30 19:07:41,140] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 5.0 (TID 42) in 337 ms on spark-sharedprocess-atqpiv (executor driver) (7/8)
+ INFO [2025-12-30 19:07:41,140] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 5.0 (TID 45) in 335 ms on spark-sharedprocess-atqpiv (executor driver) (8/8)
+ INFO [2025-12-30 19:07:41,140] ({task-result-getter-0} Logging.scala[logInfo]:60) - Removed TaskSet 5.0, whose tasks have all completed, from pool default
+ INFO [2025-12-30 19:07:41,142] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - ResultStage 5 (count at /tmp/ipykernel_230/393626415.py:6) finished in 0.350 s
+ INFO [2025-12-30 19:07:41,143] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Job 5 is finished. Cancelling potential speculative or zombie tasks for this job
+ INFO [2025-12-30 19:07:41,143] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Killing all running tasks in stage 5: Stage finished
+ INFO [2025-12-30 19:07:41,143] ({Thread-19} Logging.scala[logInfo]:60) - Job 5 finished: count at /tmp/ipykernel_230/393626415.py:6, took 0.354322 s
+ INFO [2025-12-30 19:07:43,051] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Removed broadcast_0_piece0 on spark-sharedprocess-atqpiv:39109 in memory (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:43,058] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Removed broadcast_4_piece0 on spark-sharedprocess-atqpiv:39109 in memory (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:43,137] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Removed broadcast_5_piece0 on spark-sharedprocess-atqpiv:39109 in memory (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:43,142] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Removed broadcast_2_piece0 on spark-sharedprocess-atqpiv:39109 in memory (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:43,146] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Removed broadcast_1_piece0 on spark-sharedprocess-atqpiv:39109 in memory (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:43,150] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Removed broadcast_3_piece0 on spark-sharedprocess-atqpiv:39109 in memory (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:46,186] ({Thread-19} Logging.scala[logInfo]:60) - Starting job: count at /tmp/ipykernel_230/393626415.py:6
+ INFO [2025-12-30 19:07:46,187] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Got job 6 (count at /tmp/ipykernel_230/393626415.py:6) with 8 output partitions
+ INFO [2025-12-30 19:07:46,187] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Final stage: ResultStage 6 (count at /tmp/ipykernel_230/393626415.py:6)
+ INFO [2025-12-30 19:07:46,187] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Parents of final stage: List()
+ INFO [2025-12-30 19:07:46,187] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Missing parents: List()
+ INFO [2025-12-30 19:07:46,189] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting ResultStage 6 (PythonRDD[7] at count at /tmp/ipykernel_230/393626415.py:6), which has no missing parents
+ INFO [2025-12-30 19:07:46,191] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_6 stored as values in memory (estimated size 7.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:46,193] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_6_piece0 stored as bytes in memory (estimated size 4.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:46,194] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Added broadcast_6_piece0 in memory on spark-sharedprocess-atqpiv:39109 (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:46,194] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Created broadcast 6 from broadcast at DAGScheduler.scala:1611
+ INFO [2025-12-30 19:07:46,195] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting 8 missing tasks from ResultStage 6 (PythonRDD[7] at count at /tmp/ipykernel_230/393626415.py:6) (first 15 tasks are for partitions Vector(0, 1, 2, 3, 4, 5, 6, 7))
+ INFO [2025-12-30 19:07:46,195] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Adding task set 6.0 with 8 tasks resource profile 0
+ INFO [2025-12-30 19:07:46,196] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Added task set TaskSet_6.0 tasks to pool default
+ INFO [2025-12-30 19:07:46,197] ({dispatcher-event-loop-3} Logging.scala[logInfo]:60) - Starting task 0.0 in stage 6.0 (TID 48) (spark-sharedprocess-atqpiv, executor driver, partition 0, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:46,198] ({dispatcher-event-loop-3} Logging.scala[logInfo]:60) - Starting task 1.0 in stage 6.0 (TID 49) (spark-sharedprocess-atqpiv, executor driver, partition 1, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:46,198] ({dispatcher-event-loop-3} Logging.scala[logInfo]:60) - Starting task 2.0 in stage 6.0 (TID 50) (spark-sharedprocess-atqpiv, executor driver, partition 2, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:46,199] ({dispatcher-event-loop-3} Logging.scala[logInfo]:60) - Starting task 3.0 in stage 6.0 (TID 51) (spark-sharedprocess-atqpiv, executor driver, partition 3, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:46,199] ({dispatcher-event-loop-3} Logging.scala[logInfo]:60) - Starting task 4.0 in stage 6.0 (TID 52) (spark-sharedprocess-atqpiv, executor driver, partition 4, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:46,200] ({dispatcher-event-loop-3} Logging.scala[logInfo]:60) - Starting task 5.0 in stage 6.0 (TID 53) (spark-sharedprocess-atqpiv, executor driver, partition 5, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:46,200] ({dispatcher-event-loop-3} Logging.scala[logInfo]:60) - Starting task 6.0 in stage 6.0 (TID 54) (spark-sharedprocess-atqpiv, executor driver, partition 6, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:46,200] ({dispatcher-event-loop-3} Logging.scala[logInfo]:60) - Starting task 7.0 in stage 6.0 (TID 55) (spark-sharedprocess-atqpiv, executor driver, partition 7, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:46,201] ({Executor task launch worker for task 1.0 in stage 6.0 (TID 49)} Logging.scala[logInfo]:60) - Running task 1.0 in stage 6.0 (TID 49)
+ INFO [2025-12-30 19:07:46,233] ({Executor task launch worker for task 2.0 in stage 6.0 (TID 50)} Logging.scala[logInfo]:60) - Running task 2.0 in stage 6.0 (TID 50)
+ INFO [2025-12-30 19:07:46,234] ({Executor task launch worker for task 5.0 in stage 6.0 (TID 53)} Logging.scala[logInfo]:60) - Running task 5.0 in stage 6.0 (TID 53)
+ INFO [2025-12-30 19:07:46,233] ({Executor task launch worker for task 7.0 in stage 6.0 (TID 55)} Logging.scala[logInfo]:60) - Running task 7.0 in stage 6.0 (TID 55)
+ INFO [2025-12-30 19:07:46,233] ({Executor task launch worker for task 4.0 in stage 6.0 (TID 52)} Logging.scala[logInfo]:60) - Running task 4.0 in stage 6.0 (TID 52)
+ INFO [2025-12-30 19:07:46,235] ({Executor task launch worker for task 6.0 in stage 6.0 (TID 54)} Logging.scala[logInfo]:60) - Running task 6.0 in stage 6.0 (TID 54)
+ INFO [2025-12-30 19:07:46,233] ({Executor task launch worker for task 3.0 in stage 6.0 (TID 51)} Logging.scala[logInfo]:60) - Running task 3.0 in stage 6.0 (TID 51)
+ INFO [2025-12-30 19:07:46,234] ({Executor task launch worker for task 0.0 in stage 6.0 (TID 48)} Logging.scala[logInfo]:60) - Running task 0.0 in stage 6.0 (TID 48)
+ INFO [2025-12-30 19:07:46,249] ({Executor task launch worker for task 5.0 in stage 6.0 (TID 53)} Logging.scala[logInfo]:60) - Times: total = 5, boot = -5202, init = 5207, finish = 0
+ INFO [2025-12-30 19:07:46,336] ({Executor task launch worker for task 2.0 in stage 6.0 (TID 50)} Logging.scala[logInfo]:60) - Times: total = 93, boot = -5198, init = 5291, finish = 0
+ INFO [2025-12-30 19:07:46,336] ({Executor task launch worker for task 7.0 in stage 6.0 (TID 55)} Logging.scala[logInfo]:60) - Times: total = 97, boot = -5199, init = 5295, finish = 1
+ INFO [2025-12-30 19:07:46,338] ({Executor task launch worker for task 2.0 in stage 6.0 (TID 50)} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 6.0 (TID 50). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:46,338] ({Executor task launch worker for task 4.0 in stage 6.0 (TID 52)} Logging.scala[logInfo]:60) - Times: total = 98, boot = -5190, init = 5287, finish = 1
+ INFO [2025-12-30 19:07:46,341] ({Executor task launch worker for task 4.0 in stage 6.0 (TID 52)} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 6.0 (TID 52). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:46,336] ({Executor task launch worker for task 5.0 in stage 6.0 (TID 53)} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 6.0 (TID 53). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:46,343] ({Executor task launch worker for task 6.0 in stage 6.0 (TID 54)} Logging.scala[logInfo]:60) - Times: total = 8, boot = -5098, init = 5106, finish = 0
+ INFO [2025-12-30 19:07:46,342] ({Executor task launch worker for task 1.0 in stage 6.0 (TID 49)} Logging.scala[logInfo]:60) - Times: total = 97, boot = -5195, init = 5292, finish = 0
+ INFO [2025-12-30 19:07:46,439] ({Executor task launch worker for task 6.0 in stage 6.0 (TID 54)} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 6.0 (TID 54). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:46,339] ({Executor task launch worker for task 7.0 in stage 6.0 (TID 55)} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 6.0 (TID 55). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:46,440] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 6.0 (TID 50) in 242 ms on spark-sharedprocess-atqpiv (executor driver) (1/8)
+ INFO [2025-12-30 19:07:46,439] ({Executor task launch worker for task 1.0 in stage 6.0 (TID 49)} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 6.0 (TID 49). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:46,436] ({Executor task launch worker for task 3.0 in stage 6.0 (TID 51)} Logging.scala[logInfo]:60) - Times: total = 7, boot = -5104, init = 5110, finish = 1
+ INFO [2025-12-30 19:07:46,443] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 6.0 (TID 52) in 244 ms on spark-sharedprocess-atqpiv (executor driver) (2/8)
+ INFO [2025-12-30 19:07:46,435] ({Executor task launch worker for task 0.0 in stage 6.0 (TID 48)} Logging.scala[logInfo]:60) - Times: total = 48, boot = -5205, init = 5253, finish = 0
+ INFO [2025-12-30 19:07:46,445] ({Executor task launch worker for task 0.0 in stage 6.0 (TID 48)} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 6.0 (TID 48). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:46,448] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 6.0 (TID 49) in 249 ms on spark-sharedprocess-atqpiv (executor driver) (3/8)
+ INFO [2025-12-30 19:07:46,447] ({Executor task launch worker for task 3.0 in stage 6.0 (TID 51)} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 6.0 (TID 51). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:46,449] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 6.0 (TID 54) in 249 ms on spark-sharedprocess-atqpiv (executor driver) (4/8)
+ INFO [2025-12-30 19:07:46,449] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 6.0 (TID 55) in 249 ms on spark-sharedprocess-atqpiv (executor driver) (5/8)
+ INFO [2025-12-30 19:07:46,449] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 6.0 (TID 53) in 250 ms on spark-sharedprocess-atqpiv (executor driver) (6/8)
+ INFO [2025-12-30 19:07:46,535] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 6.0 (TID 48) in 338 ms on spark-sharedprocess-atqpiv (executor driver) (7/8)
+ INFO [2025-12-30 19:07:46,535] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 6.0 (TID 51) in 336 ms on spark-sharedprocess-atqpiv (executor driver) (8/8)
+ INFO [2025-12-30 19:07:46,535] ({task-result-getter-0} Logging.scala[logInfo]:60) - Removed TaskSet 6.0, whose tasks have all completed, from pool default
+ INFO [2025-12-30 19:07:46,539] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - ResultStage 6 (count at /tmp/ipykernel_230/393626415.py:6) finished in 0.349 s
+ INFO [2025-12-30 19:07:46,540] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Job 6 is finished. Cancelling potential speculative or zombie tasks for this job
+ INFO [2025-12-30 19:07:46,540] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Killing all running tasks in stage 6: Stage finished
+ INFO [2025-12-30 19:07:46,540] ({Thread-19} Logging.scala[logInfo]:60) - Job 6 finished: count at /tmp/ipykernel_230/393626415.py:6, took 0.353888 s
+ INFO [2025-12-30 19:07:51,579] ({Thread-19} Logging.scala[logInfo]:60) - Starting job: count at /tmp/ipykernel_230/393626415.py:6
+ INFO [2025-12-30 19:07:51,580] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Got job 7 (count at /tmp/ipykernel_230/393626415.py:6) with 8 output partitions
+ INFO [2025-12-30 19:07:51,581] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Final stage: ResultStage 7 (count at /tmp/ipykernel_230/393626415.py:6)
+ INFO [2025-12-30 19:07:51,581] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Parents of final stage: List()
+ INFO [2025-12-30 19:07:51,581] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Missing parents: List()
+ INFO [2025-12-30 19:07:51,582] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting ResultStage 7 (PythonRDD[8] at count at /tmp/ipykernel_230/393626415.py:6), which has no missing parents
+ INFO [2025-12-30 19:07:51,585] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_7 stored as values in memory (estimated size 7.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:51,587] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_7_piece0 stored as bytes in memory (estimated size 4.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:51,634] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Added broadcast_7_piece0 in memory on spark-sharedprocess-atqpiv:39109 (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:51,635] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Created broadcast 7 from broadcast at DAGScheduler.scala:1611
+ INFO [2025-12-30 19:07:51,636] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting 8 missing tasks from ResultStage 7 (PythonRDD[8] at count at /tmp/ipykernel_230/393626415.py:6) (first 15 tasks are for partitions Vector(0, 1, 2, 3, 4, 5, 6, 7))
+ INFO [2025-12-30 19:07:51,636] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Adding task set 7.0 with 8 tasks resource profile 0
+ INFO [2025-12-30 19:07:51,637] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Added task set TaskSet_7.0 tasks to pool default
+ INFO [2025-12-30 19:07:51,638] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 0.0 in stage 7.0 (TID 56) (spark-sharedprocess-atqpiv, executor driver, partition 0, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:51,639] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 1.0 in stage 7.0 (TID 57) (spark-sharedprocess-atqpiv, executor driver, partition 1, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:51,639] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 2.0 in stage 7.0 (TID 58) (spark-sharedprocess-atqpiv, executor driver, partition 2, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:51,640] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 3.0 in stage 7.0 (TID 59) (spark-sharedprocess-atqpiv, executor driver, partition 3, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:51,640] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 4.0 in stage 7.0 (TID 60) (spark-sharedprocess-atqpiv, executor driver, partition 4, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:51,641] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 5.0 in stage 7.0 (TID 61) (spark-sharedprocess-atqpiv, executor driver, partition 5, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:51,641] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 6.0 in stage 7.0 (TID 62) (spark-sharedprocess-atqpiv, executor driver, partition 6, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:51,641] ({dispatcher-event-loop-1} Logging.scala[logInfo]:60) - Starting task 7.0 in stage 7.0 (TID 63) (spark-sharedprocess-atqpiv, executor driver, partition 7, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:51,642] ({Executor task launch worker for task 2.0 in stage 7.0 (TID 58)} Logging.scala[logInfo]:60) - Running task 2.0 in stage 7.0 (TID 58)
+ INFO [2025-12-30 19:07:51,642] ({Executor task launch worker for task 7.0 in stage 7.0 (TID 63)} Logging.scala[logInfo]:60) - Running task 7.0 in stage 7.0 (TID 63)
+ INFO [2025-12-30 19:07:51,642] ({Executor task launch worker for task 5.0 in stage 7.0 (TID 61)} Logging.scala[logInfo]:60) - Running task 5.0 in stage 7.0 (TID 61)
+ INFO [2025-12-30 19:07:51,642] ({Executor task launch worker for task 0.0 in stage 7.0 (TID 56)} Logging.scala[logInfo]:60) - Running task 0.0 in stage 7.0 (TID 56)
+ INFO [2025-12-30 19:07:51,642] ({Executor task launch worker for task 1.0 in stage 7.0 (TID 57)} Logging.scala[logInfo]:60) - Running task 1.0 in stage 7.0 (TID 57)
+ INFO [2025-12-30 19:07:51,642] ({Executor task launch worker for task 3.0 in stage 7.0 (TID 59)} Logging.scala[logInfo]:60) - Running task 3.0 in stage 7.0 (TID 59)
+ INFO [2025-12-30 19:07:51,642] ({Executor task launch worker for task 4.0 in stage 7.0 (TID 60)} Logging.scala[logInfo]:60) - Running task 4.0 in stage 7.0 (TID 60)
+ INFO [2025-12-30 19:07:51,642] ({Executor task launch worker for task 6.0 in stage 7.0 (TID 62)} Logging.scala[logInfo]:60) - Running task 6.0 in stage 7.0 (TID 62)
+ INFO [2025-12-30 19:07:51,650] ({Executor task launch worker for task 2.0 in stage 7.0 (TID 58)} Logging.scala[logInfo]:60) - Times: total = 2, boot = -5106, init = 5108, finish = 0
+ INFO [2025-12-30 19:07:51,652] ({Executor task launch worker for task 2.0 in stage 7.0 (TID 58)} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 7.0 (TID 58). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:51,736] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 7.0 (TID 58) in 97 ms on spark-sharedprocess-atqpiv (executor driver) (1/8)
+ INFO [2025-12-30 19:07:51,738] ({Executor task launch worker for task 4.0 in stage 7.0 (TID 60)} Logging.scala[logInfo]:60) - Times: total = 90, boot = -5105, init = 5194, finish = 1
+ INFO [2025-12-30 19:07:51,738] ({Executor task launch worker for task 0.0 in stage 7.0 (TID 56)} Logging.scala[logInfo]:60) - Times: total = 88, boot = -5199, init = 5287, finish = 0
+ INFO [2025-12-30 19:07:51,740] ({Executor task launch worker for task 4.0 in stage 7.0 (TID 60)} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 7.0 (TID 60). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:51,743] ({Executor task launch worker for task 0.0 in stage 7.0 (TID 56)} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 7.0 (TID 56). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:51,743] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 7.0 (TID 60) in 103 ms on spark-sharedprocess-atqpiv (executor driver) (2/8)
+ INFO [2025-12-30 19:07:51,836] ({Executor task launch worker for task 3.0 in stage 7.0 (TID 59)} Logging.scala[logInfo]:60) - Times: total = 188, boot = -5306, init = 5494, finish = 0
+ INFO [2025-12-30 19:07:51,837] ({Executor task launch worker for task 5.0 in stage 7.0 (TID 61)} Logging.scala[logInfo]:60) - Times: total = 188, boot = -5111, init = 5299, finish = 0
+ INFO [2025-12-30 19:07:51,839] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 7.0 (TID 56) in 201 ms on spark-sharedprocess-atqpiv (executor driver) (3/8)
+ INFO [2025-12-30 19:07:51,837] ({Executor task launch worker for task 1.0 in stage 7.0 (TID 57)} Logging.scala[logInfo]:60) - Times: total = 89, boot = -5209, init = 5298, finish = 0
+ INFO [2025-12-30 19:07:51,841] ({Executor task launch worker for task 3.0 in stage 7.0 (TID 59)} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 7.0 (TID 59). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:51,844] ({Executor task launch worker for task 1.0 in stage 7.0 (TID 57)} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 7.0 (TID 57). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:51,846] ({Executor task launch worker for task 5.0 in stage 7.0 (TID 61)} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 7.0 (TID 61). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:07:51,935] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 7.0 (TID 57) in 296 ms on spark-sharedprocess-atqpiv (executor driver) (4/8)
+ INFO [2025-12-30 19:07:51,935] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 7.0 (TID 59) in 295 ms on spark-sharedprocess-atqpiv (executor driver) (5/8)
+ INFO [2025-12-30 19:07:51,935] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 7.0 (TID 61) in 295 ms on spark-sharedprocess-atqpiv (executor driver) (6/8)
+ INFO [2025-12-30 19:07:51,937] ({Executor task launch worker for task 7.0 in stage 7.0 (TID 63)} Logging.scala[logInfo]:60) - Times: total = 85, boot = -5207, init = 5292, finish = 0
+ INFO [2025-12-30 19:07:51,939] ({Executor task launch worker for task 7.0 in stage 7.0 (TID 63)} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 7.0 (TID 63). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:51,939] ({Executor task launch worker for task 6.0 in stage 7.0 (TID 62)} Logging.scala[logInfo]:60) - Times: total = 85, boot = -5204, init = 5289, finish = 0
+ INFO [2025-12-30 19:07:51,941] ({Executor task launch worker for task 6.0 in stage 7.0 (TID 62)} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 7.0 (TID 62). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:51,942] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 7.0 (TID 63) in 301 ms on spark-sharedprocess-atqpiv (executor driver) (7/8)
+ INFO [2025-12-30 19:07:51,944] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 7.0 (TID 62) in 303 ms on spark-sharedprocess-atqpiv (executor driver) (8/8)
+ INFO [2025-12-30 19:07:51,944] ({task-result-getter-3} Logging.scala[logInfo]:60) - Removed TaskSet 7.0, whose tasks have all completed, from pool default
+ INFO [2025-12-30 19:07:51,946] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - ResultStage 7 (count at /tmp/ipykernel_230/393626415.py:6) finished in 0.363 s
+ INFO [2025-12-30 19:07:51,946] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Job 7 is finished. Cancelling potential speculative or zombie tasks for this job
+ INFO [2025-12-30 19:07:51,946] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Killing all running tasks in stage 7: Stage finished
+ INFO [2025-12-30 19:07:51,947] ({Thread-19} Logging.scala[logInfo]:60) - Job 7 finished: count at /tmp/ipykernel_230/393626415.py:6, took 0.367380 s
+ INFO [2025-12-30 19:07:57,072] ({Thread-19} Logging.scala[logInfo]:60) - Starting job: count at /tmp/ipykernel_230/393626415.py:6
+ INFO [2025-12-30 19:07:57,074] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Got job 8 (count at /tmp/ipykernel_230/393626415.py:6) with 8 output partitions
+ INFO [2025-12-30 19:07:57,074] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Final stage: ResultStage 8 (count at /tmp/ipykernel_230/393626415.py:6)
+ INFO [2025-12-30 19:07:57,074] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Parents of final stage: List()
+ INFO [2025-12-30 19:07:57,074] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Missing parents: List()
+ INFO [2025-12-30 19:07:57,075] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting ResultStage 8 (PythonRDD[9] at count at /tmp/ipykernel_230/393626415.py:6), which has no missing parents
+ INFO [2025-12-30 19:07:57,077] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_8 stored as values in memory (estimated size 7.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:57,079] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_8_piece0 stored as bytes in memory (estimated size 4.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:07:57,080] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Added broadcast_8_piece0 in memory on spark-sharedprocess-atqpiv:39109 (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:07:57,080] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Created broadcast 8 from broadcast at DAGScheduler.scala:1611
+ INFO [2025-12-30 19:07:57,081] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting 8 missing tasks from ResultStage 8 (PythonRDD[9] at count at /tmp/ipykernel_230/393626415.py:6) (first 15 tasks are for partitions Vector(0, 1, 2, 3, 4, 5, 6, 7))
+ INFO [2025-12-30 19:07:57,081] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Adding task set 8.0 with 8 tasks resource profile 0
+ INFO [2025-12-30 19:07:57,082] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Added task set TaskSet_8.0 tasks to pool default
+ INFO [2025-12-30 19:07:57,083] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 0.0 in stage 8.0 (TID 64) (spark-sharedprocess-atqpiv, executor driver, partition 0, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:57,083] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 1.0 in stage 8.0 (TID 65) (spark-sharedprocess-atqpiv, executor driver, partition 1, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:57,084] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 2.0 in stage 8.0 (TID 66) (spark-sharedprocess-atqpiv, executor driver, partition 2, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:57,085] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 3.0 in stage 8.0 (TID 67) (spark-sharedprocess-atqpiv, executor driver, partition 3, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:57,086] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 4.0 in stage 8.0 (TID 68) (spark-sharedprocess-atqpiv, executor driver, partition 4, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:57,086] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 5.0 in stage 8.0 (TID 69) (spark-sharedprocess-atqpiv, executor driver, partition 5, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:57,087] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 6.0 in stage 8.0 (TID 70) (spark-sharedprocess-atqpiv, executor driver, partition 6, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:57,087] ({dispatcher-event-loop-6} Logging.scala[logInfo]:60) - Starting task 7.0 in stage 8.0 (TID 71) (spark-sharedprocess-atqpiv, executor driver, partition 7, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:07:57,088] ({Executor task launch worker for task 1.0 in stage 8.0 (TID 65)} Logging.scala[logInfo]:60) - Running task 1.0 in stage 8.0 (TID 65)
+ INFO [2025-12-30 19:07:57,088] ({Executor task launch worker for task 6.0 in stage 8.0 (TID 70)} Logging.scala[logInfo]:60) - Running task 6.0 in stage 8.0 (TID 70)
+ INFO [2025-12-30 19:07:57,088] ({Executor task launch worker for task 5.0 in stage 8.0 (TID 69)} Logging.scala[logInfo]:60) - Running task 5.0 in stage 8.0 (TID 69)
+ INFO [2025-12-30 19:07:57,088] ({Executor task launch worker for task 3.0 in stage 8.0 (TID 67)} Logging.scala[logInfo]:60) - Running task 3.0 in stage 8.0 (TID 67)
+ INFO [2025-12-30 19:07:57,088] ({Executor task launch worker for task 2.0 in stage 8.0 (TID 66)} Logging.scala[logInfo]:60) - Running task 2.0 in stage 8.0 (TID 66)
+ INFO [2025-12-30 19:07:57,088] ({Executor task launch worker for task 0.0 in stage 8.0 (TID 64)} Logging.scala[logInfo]:60) - Running task 0.0 in stage 8.0 (TID 64)
+ INFO [2025-12-30 19:07:57,133] ({Executor task launch worker for task 4.0 in stage 8.0 (TID 68)} Logging.scala[logInfo]:60) - Running task 4.0 in stage 8.0 (TID 68)
+ INFO [2025-12-30 19:07:57,088] ({Executor task launch worker for task 7.0 in stage 8.0 (TID 71)} Logging.scala[logInfo]:60) - Running task 7.0 in stage 8.0 (TID 71)
+ INFO [2025-12-30 19:07:57,142] ({Executor task launch worker for task 2.0 in stage 8.0 (TID 66)} Logging.scala[logInfo]:60) - Times: total = 5, boot = -5200, init = 5205, finish = 0
+ INFO [2025-12-30 19:07:57,144] ({Executor task launch worker for task 2.0 in stage 8.0 (TID 66)} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 8.0 (TID 66). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:57,146] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 8.0 (TID 66) in 62 ms on spark-sharedprocess-atqpiv (executor driver) (1/8)
+ INFO [2025-12-30 19:07:57,146] ({Executor task launch worker for task 0.0 in stage 8.0 (TID 64)} Logging.scala[logInfo]:60) - Times: total = 4, boot = -5192, init = 5195, finish = 1
+ INFO [2025-12-30 19:07:57,148] ({Executor task launch worker for task 0.0 in stage 8.0 (TID 64)} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 8.0 (TID 64). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:57,234] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 8.0 (TID 64) in 152 ms on spark-sharedprocess-atqpiv (executor driver) (2/8)
+ INFO [2025-12-30 19:07:57,236] ({Executor task launch worker for task 5.0 in stage 8.0 (TID 69)} Logging.scala[logInfo]:60) - Times: total = 99, boot = -5195, init = 5294, finish = 0
+ INFO [2025-12-30 19:07:57,239] ({Executor task launch worker for task 3.0 in stage 8.0 (TID 67)} Logging.scala[logInfo]:60) - Times: total = 100, boot = -5392, init = 5492, finish = 0
+ INFO [2025-12-30 19:07:57,241] ({Executor task launch worker for task 3.0 in stage 8.0 (TID 67)} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 8.0 (TID 67). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:57,243] ({Executor task launch worker for task 5.0 in stage 8.0 (TID 69)} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 8.0 (TID 69). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:57,243] ({Executor task launch worker for task 7.0 in stage 8.0 (TID 71)} Logging.scala[logInfo]:60) - Times: total = 3, boot = -5300, init = 5302, finish = 1
+ INFO [2025-12-30 19:07:57,245] ({Executor task launch worker for task 7.0 in stage 8.0 (TID 71)} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 8.0 (TID 71). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:57,335] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 8.0 (TID 67) in 251 ms on spark-sharedprocess-atqpiv (executor driver) (3/8)
+ INFO [2025-12-30 19:07:57,336] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 8.0 (TID 69) in 250 ms on spark-sharedprocess-atqpiv (executor driver) (4/8)
+ INFO [2025-12-30 19:07:57,337] ({Executor task launch worker for task 4.0 in stage 8.0 (TID 68)} Logging.scala[logInfo]:60) - Times: total = 2, boot = -5195, init = 5197, finish = 0
+ INFO [2025-12-30 19:07:57,337] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 8.0 (TID 71) in 250 ms on spark-sharedprocess-atqpiv (executor driver) (5/8)
+ INFO [2025-12-30 19:07:57,339] ({Executor task launch worker for task 4.0 in stage 8.0 (TID 68)} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 8.0 (TID 68). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:57,339] ({Executor task launch worker for task 6.0 in stage 8.0 (TID 70)} Logging.scala[logInfo]:60) - Times: total = 5, boot = -5193, init = 5198, finish = 0
+ INFO [2025-12-30 19:07:57,342] ({Executor task launch worker for task 6.0 in stage 8.0 (TID 70)} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 8.0 (TID 70). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:57,343] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 8.0 (TID 70) in 257 ms on spark-sharedprocess-atqpiv (executor driver) (6/8)
+ INFO [2025-12-30 19:07:57,344] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 8.0 (TID 68) in 259 ms on spark-sharedprocess-atqpiv (executor driver) (7/8)
+ INFO [2025-12-30 19:07:57,346] ({Executor task launch worker for task 1.0 in stage 8.0 (TID 65)} Logging.scala[logInfo]:60) - Times: total = 96, boot = -5201, init = 5296, finish = 1
+ INFO [2025-12-30 19:07:57,435] ({Executor task launch worker for task 1.0 in stage 8.0 (TID 65)} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 8.0 (TID 65). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:07:57,436] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 8.0 (TID 65) in 353 ms on spark-sharedprocess-atqpiv (executor driver) (8/8)
+ INFO [2025-12-30 19:07:57,436] ({task-result-getter-0} Logging.scala[logInfo]:60) - Removed TaskSet 8.0, whose tasks have all completed, from pool default
+ INFO [2025-12-30 19:07:57,437] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - ResultStage 8 (count at /tmp/ipykernel_230/393626415.py:6) finished in 0.361 s
+ INFO [2025-12-30 19:07:57,437] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Job 8 is finished. Cancelling potential speculative or zombie tasks for this job
+ INFO [2025-12-30 19:07:57,437] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Killing all running tasks in stage 8: Stage finished
+ INFO [2025-12-30 19:07:57,438] ({Thread-19} Logging.scala[logInfo]:60) - Job 8 finished: count at /tmp/ipykernel_230/393626415.py:6, took 0.364644 s
+ INFO [2025-12-30 19:08:02,473] ({Thread-19} Logging.scala[logInfo]:60) - Starting job: count at /tmp/ipykernel_230/393626415.py:6
+ INFO [2025-12-30 19:08:02,474] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Got job 9 (count at /tmp/ipykernel_230/393626415.py:6) with 8 output partitions
+ INFO [2025-12-30 19:08:02,474] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Final stage: ResultStage 9 (count at /tmp/ipykernel_230/393626415.py:6)
+ INFO [2025-12-30 19:08:02,474] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Parents of final stage: List()
+ INFO [2025-12-30 19:08:02,475] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Missing parents: List()
+ INFO [2025-12-30 19:08:02,475] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting ResultStage 9 (PythonRDD[10] at count at /tmp/ipykernel_230/393626415.py:6), which has no missing parents
+ INFO [2025-12-30 19:08:02,478] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_9 stored as values in memory (estimated size 7.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:08:02,480] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_9_piece0 stored as bytes in memory (estimated size 4.9 KiB, free 1398.4 MiB)
+ INFO [2025-12-30 19:08:02,480] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Added broadcast_9_piece0 in memory on spark-sharedprocess-atqpiv:39109 (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:08:02,481] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Created broadcast 9 from broadcast at DAGScheduler.scala:1611
+ INFO [2025-12-30 19:08:02,482] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting 8 missing tasks from ResultStage 9 (PythonRDD[10] at count at /tmp/ipykernel_230/393626415.py:6) (first 15 tasks are for partitions Vector(0, 1, 2, 3, 4, 5, 6, 7))
+ INFO [2025-12-30 19:08:02,482] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Adding task set 9.0 with 8 tasks resource profile 0
+ INFO [2025-12-30 19:08:02,482] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Added task set TaskSet_9.0 tasks to pool default
+ INFO [2025-12-30 19:08:02,483] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 0.0 in stage 9.0 (TID 72) (spark-sharedprocess-atqpiv, executor driver, partition 0, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:02,484] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 1.0 in stage 9.0 (TID 73) (spark-sharedprocess-atqpiv, executor driver, partition 1, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:02,484] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 2.0 in stage 9.0 (TID 74) (spark-sharedprocess-atqpiv, executor driver, partition 2, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:02,485] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 3.0 in stage 9.0 (TID 75) (spark-sharedprocess-atqpiv, executor driver, partition 3, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:02,485] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 4.0 in stage 9.0 (TID 76) (spark-sharedprocess-atqpiv, executor driver, partition 4, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:02,486] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 5.0 in stage 9.0 (TID 77) (spark-sharedprocess-atqpiv, executor driver, partition 5, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:02,533] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 6.0 in stage 9.0 (TID 78) (spark-sharedprocess-atqpiv, executor driver, partition 6, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:02,534] ({dispatcher-event-loop-7} Logging.scala[logInfo]:60) - Starting task 7.0 in stage 9.0 (TID 79) (spark-sharedprocess-atqpiv, executor driver, partition 7, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:02,535] ({Executor task launch worker for task 0.0 in stage 9.0 (TID 72)} Logging.scala[logInfo]:60) - Running task 0.0 in stage 9.0 (TID 72)
+ INFO [2025-12-30 19:08:02,535] ({Executor task launch worker for task 6.0 in stage 9.0 (TID 78)} Logging.scala[logInfo]:60) - Running task 6.0 in stage 9.0 (TID 78)
+ INFO [2025-12-30 19:08:02,535] ({Executor task launch worker for task 7.0 in stage 9.0 (TID 79)} Logging.scala[logInfo]:60) - Running task 7.0 in stage 9.0 (TID 79)
+ INFO [2025-12-30 19:08:02,535] ({Executor task launch worker for task 5.0 in stage 9.0 (TID 77)} Logging.scala[logInfo]:60) - Running task 5.0 in stage 9.0 (TID 77)
+ INFO [2025-12-30 19:08:02,535] ({Executor task launch worker for task 4.0 in stage 9.0 (TID 76)} Logging.scala[logInfo]:60) - Running task 4.0 in stage 9.0 (TID 76)
+ INFO [2025-12-30 19:08:02,535] ({Executor task launch worker for task 1.0 in stage 9.0 (TID 73)} Logging.scala[logInfo]:60) - Running task 1.0 in stage 9.0 (TID 73)
+ INFO [2025-12-30 19:08:02,535] ({Executor task launch worker for task 3.0 in stage 9.0 (TID 75)} Logging.scala[logInfo]:60) - Running task 3.0 in stage 9.0 (TID 75)
+ INFO [2025-12-30 19:08:02,535] ({Executor task launch worker for task 2.0 in stage 9.0 (TID 74)} Logging.scala[logInfo]:60) - Running task 2.0 in stage 9.0 (TID 74)
+ INFO [2025-12-30 19:08:02,543] ({Executor task launch worker for task 1.0 in stage 9.0 (TID 73)} Logging.scala[logInfo]:60) - Times: total = 3, boot = -5195, init = 5198, finish = 0
+ INFO [2025-12-30 19:08:02,545] ({Executor task launch worker for task 1.0 in stage 9.0 (TID 73)} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 9.0 (TID 73). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:02,545] ({Executor task launch worker for task 7.0 in stage 9.0 (TID 79)} Logging.scala[logInfo]:60) - Times: total = 4, boot = -5101, init = 5105, finish = 0
+ INFO [2025-12-30 19:08:02,546] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 9.0 (TID 73) in 62 ms on spark-sharedprocess-atqpiv (executor driver) (1/8)
+ INFO [2025-12-30 19:08:02,547] ({Executor task launch worker for task 2.0 in stage 9.0 (TID 74)} Logging.scala[logInfo]:60) - Times: total = 6, boot = -5200, init = 5206, finish = 0
+ INFO [2025-12-30 19:08:02,548] ({Executor task launch worker for task 7.0 in stage 9.0 (TID 79)} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 9.0 (TID 79). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:02,635] ({Executor task launch worker for task 2.0 in stage 9.0 (TID 74)} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 9.0 (TID 74). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:02,637] ({Executor task launch worker for task 5.0 in stage 9.0 (TID 77)} Logging.scala[logInfo]:60) - Times: total = 95, boot = -5301, init = 5395, finish = 1
+ INFO [2025-12-30 19:08:02,637] ({Executor task launch worker for task 3.0 in stage 9.0 (TID 75)} Logging.scala[logInfo]:60) - Times: total = 97, boot = -5293, init = 5390, finish = 0
+ INFO [2025-12-30 19:08:02,639] ({Executor task launch worker for task 4.0 in stage 9.0 (TID 76)} Logging.scala[logInfo]:60) - Times: total = 98, boot = -5194, init = 5292, finish = 0
+ INFO [2025-12-30 19:08:02,639] ({Executor task launch worker for task 6.0 in stage 9.0 (TID 78)} Logging.scala[logInfo]:60) - Times: total = 95, boot = -5196, init = 5291, finish = 0
+ INFO [2025-12-30 19:08:02,638] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 9.0 (TID 79) in 104 ms on spark-sharedprocess-atqpiv (executor driver) (2/8)
+ INFO [2025-12-30 19:08:02,638] ({Executor task launch worker for task 0.0 in stage 9.0 (TID 72)} Logging.scala[logInfo]:60) - Times: total = 94, boot = -5201, init = 5295, finish = 0
+ INFO [2025-12-30 19:08:02,642] ({Executor task launch worker for task 5.0 in stage 9.0 (TID 77)} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 9.0 (TID 77). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:02,644] ({Executor task launch worker for task 0.0 in stage 9.0 (TID 72)} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 9.0 (TID 72). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:02,641] ({Executor task launch worker for task 3.0 in stage 9.0 (TID 75)} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 9.0 (TID 75). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:02,645] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 9.0 (TID 74) in 161 ms on spark-sharedprocess-atqpiv (executor driver) (3/8)
+ INFO [2025-12-30 19:08:02,646] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 9.0 (TID 77) in 160 ms on spark-sharedprocess-atqpiv (executor driver) (4/8)
+ INFO [2025-12-30 19:08:02,734] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 9.0 (TID 75) in 249 ms on spark-sharedprocess-atqpiv (executor driver) (5/8)
+ INFO [2025-12-30 19:08:02,735] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 9.0 (TID 72) in 252 ms on spark-sharedprocess-atqpiv (executor driver) (6/8)
+ INFO [2025-12-30 19:08:02,737] ({Executor task launch worker for task 4.0 in stage 9.0 (TID 76)} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 9.0 (TID 76). 1346 bytes result sent to driver
+ INFO [2025-12-30 19:08:02,736] ({Executor task launch worker for task 6.0 in stage 9.0 (TID 78)} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 9.0 (TID 78). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:02,743] ({task-result-getter-0} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 9.0 (TID 76) in 258 ms on spark-sharedprocess-atqpiv (executor driver) (7/8)
+ INFO [2025-12-30 19:08:02,743] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 9.0 (TID 78) in 210 ms on spark-sharedprocess-atqpiv (executor driver) (8/8)
+ INFO [2025-12-30 19:08:02,744] ({task-result-getter-2} Logging.scala[logInfo]:60) - Removed TaskSet 9.0, whose tasks have all completed, from pool default
+ INFO [2025-12-30 19:08:02,835] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - ResultStage 9 (count at /tmp/ipykernel_230/393626415.py:6) finished in 0.358 s
+ INFO [2025-12-30 19:08:02,835] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Job 9 is finished. Cancelling potential speculative or zombie tasks for this job
+ INFO [2025-12-30 19:08:02,835] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Killing all running tasks in stage 9: Stage finished
+ INFO [2025-12-30 19:08:02,836] ({Thread-19} Logging.scala[logInfo]:60) - Job 9 finished: count at /tmp/ipykernel_230/393626415.py:6, took 0.362279 s
+ INFO [2025-12-30 19:08:07,872] ({Thread-19} Logging.scala[logInfo]:60) - Starting job: count at /tmp/ipykernel_230/393626415.py:6
+ INFO [2025-12-30 19:08:07,873] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Got job 10 (count at /tmp/ipykernel_230/393626415.py:6) with 8 output partitions
+ INFO [2025-12-30 19:08:07,873] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Final stage: ResultStage 10 (count at /tmp/ipykernel_230/393626415.py:6)
+ INFO [2025-12-30 19:08:07,873] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Parents of final stage: List()
+ INFO [2025-12-30 19:08:07,874] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Missing parents: List()
+ INFO [2025-12-30 19:08:07,874] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting ResultStage 10 (PythonRDD[11] at count at /tmp/ipykernel_230/393626415.py:6), which has no missing parents
+ INFO [2025-12-30 19:08:07,877] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_10 stored as values in memory (estimated size 7.9 KiB, free 1398.3 MiB)
+ INFO [2025-12-30 19:08:07,879] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_10_piece0 stored as bytes in memory (estimated size 4.9 KiB, free 1398.3 MiB)
+ INFO [2025-12-30 19:08:07,879] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Added broadcast_10_piece0 in memory on spark-sharedprocess-atqpiv:39109 (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:08:07,880] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Created broadcast 10 from broadcast at DAGScheduler.scala:1611
+ INFO [2025-12-30 19:08:07,881] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting 8 missing tasks from ResultStage 10 (PythonRDD[11] at count at /tmp/ipykernel_230/393626415.py:6) (first 15 tasks are for partitions Vector(0, 1, 2, 3, 4, 5, 6, 7))
+ INFO [2025-12-30 19:08:07,881] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Adding task set 10.0 with 8 tasks resource profile 0
+ INFO [2025-12-30 19:08:07,882] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Added task set TaskSet_10.0 tasks to pool default
+ INFO [2025-12-30 19:08:07,883] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 0.0 in stage 10.0 (TID 80) (spark-sharedprocess-atqpiv, executor driver, partition 0, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:07,883] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 1.0 in stage 10.0 (TID 81) (spark-sharedprocess-atqpiv, executor driver, partition 1, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:07,884] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 2.0 in stage 10.0 (TID 82) (spark-sharedprocess-atqpiv, executor driver, partition 2, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:07,884] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 3.0 in stage 10.0 (TID 83) (spark-sharedprocess-atqpiv, executor driver, partition 3, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:07,885] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 4.0 in stage 10.0 (TID 84) (spark-sharedprocess-atqpiv, executor driver, partition 4, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:07,885] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 5.0 in stage 10.0 (TID 85) (spark-sharedprocess-atqpiv, executor driver, partition 5, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:07,885] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 6.0 in stage 10.0 (TID 86) (spark-sharedprocess-atqpiv, executor driver, partition 6, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:07,886] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 7.0 in stage 10.0 (TID 87) (spark-sharedprocess-atqpiv, executor driver, partition 7, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:07,886] ({Executor task launch worker for task 0.0 in stage 10.0 (TID 80)} Logging.scala[logInfo]:60) - Running task 0.0 in stage 10.0 (TID 80)
+ INFO [2025-12-30 19:08:07,887] ({Executor task launch worker for task 6.0 in stage 10.0 (TID 86)} Logging.scala[logInfo]:60) - Running task 6.0 in stage 10.0 (TID 86)
+ INFO [2025-12-30 19:08:07,887] ({Executor task launch worker for task 7.0 in stage 10.0 (TID 87)} Logging.scala[logInfo]:60) - Running task 7.0 in stage 10.0 (TID 87)
+ INFO [2025-12-30 19:08:07,934] ({Executor task launch worker for task 2.0 in stage 10.0 (TID 82)} Logging.scala[logInfo]:60) - Running task 2.0 in stage 10.0 (TID 82)
+ INFO [2025-12-30 19:08:07,934] ({Executor task launch worker for task 3.0 in stage 10.0 (TID 83)} Logging.scala[logInfo]:60) - Running task 3.0 in stage 10.0 (TID 83)
+ INFO [2025-12-30 19:08:07,935] ({Executor task launch worker for task 1.0 in stage 10.0 (TID 81)} Logging.scala[logInfo]:60) - Running task 1.0 in stage 10.0 (TID 81)
+ INFO [2025-12-30 19:08:07,936] ({Executor task launch worker for task 4.0 in stage 10.0 (TID 84)} Logging.scala[logInfo]:60) - Running task 4.0 in stage 10.0 (TID 84)
+ INFO [2025-12-30 19:08:07,936] ({Executor task launch worker for task 5.0 in stage 10.0 (TID 85)} Logging.scala[logInfo]:60) - Running task 5.0 in stage 10.0 (TID 85)
+ INFO [2025-12-30 19:08:07,944] ({Executor task launch worker for task 3.0 in stage 10.0 (TID 83)} Logging.scala[logInfo]:60) - Times: total = 3, boot = -5199, init = 5202, finish = 0
+ INFO [2025-12-30 19:08:07,947] ({Executor task launch worker for task 3.0 in stage 10.0 (TID 83)} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 10.0 (TID 83). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:07,949] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 3.0 in stage 10.0 (TID 83) in 65 ms on spark-sharedprocess-atqpiv (executor driver) (1/8)
+ INFO [2025-12-30 19:08:07,950] ({Executor task launch worker for task 2.0 in stage 10.0 (TID 82)} Logging.scala[logInfo]:60) - Times: total = 10, boot = -5099, init = 5109, finish = 0
+ INFO [2025-12-30 19:08:07,950] ({Executor task launch worker for task 1.0 in stage 10.0 (TID 81)} Logging.scala[logInfo]:60) - Times: total = 10, boot = -5191, init = 5200, finish = 1
+ INFO [2025-12-30 19:08:08,034] ({Executor task launch worker for task 1.0 in stage 10.0 (TID 81)} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 10.0 (TID 81). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:08,035] ({Executor task launch worker for task 4.0 in stage 10.0 (TID 84)} Logging.scala[logInfo]:60) - Times: total = 1, boot = -5098, init = 5099, finish = 0
+ INFO [2025-12-30 19:08:08,036] ({Executor task launch worker for task 2.0 in stage 10.0 (TID 82)} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 10.0 (TID 82). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:08,037] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 1.0 in stage 10.0 (TID 81) in 154 ms on spark-sharedprocess-atqpiv (executor driver) (2/8)
+ INFO [2025-12-30 19:08:08,038] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 2.0 in stage 10.0 (TID 82) in 155 ms on spark-sharedprocess-atqpiv (executor driver) (3/8)
+ INFO [2025-12-30 19:08:08,042] ({Executor task launch worker for task 0.0 in stage 10.0 (TID 80)} Logging.scala[logInfo]:60) - Times: total = 99, boot = -5197, init = 5296, finish = 0
+ INFO [2025-12-30 19:08:08,043] ({Executor task launch worker for task 0.0 in stage 10.0 (TID 80)} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 10.0 (TID 80). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:08,045] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 0.0 in stage 10.0 (TID 80) in 163 ms on spark-sharedprocess-atqpiv (executor driver) (4/8)
+ INFO [2025-12-30 19:08:08,045] ({Executor task launch worker for task 5.0 in stage 10.0 (TID 85)} Logging.scala[logInfo]:60) - Times: total = 105, boot = -5190, init = 5295, finish = 0
+ INFO [2025-12-30 19:08:08,046] ({Executor task launch worker for task 7.0 in stage 10.0 (TID 87)} Logging.scala[logInfo]:60) - Times: total = 104, boot = -5189, init = 5293, finish = 0
+ INFO [2025-12-30 19:08:08,047] ({Executor task launch worker for task 5.0 in stage 10.0 (TID 85)} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 10.0 (TID 85). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:08,048] ({Executor task launch worker for task 6.0 in stage 10.0 (TID 86)} Logging.scala[logInfo]:60) - Times: total = 107, boot = -5197, init = 5296, finish = 8
+ INFO [2025-12-30 19:08:08,135] ({Executor task launch worker for task 6.0 in stage 10.0 (TID 86)} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 10.0 (TID 86). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:08,137] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 5.0 in stage 10.0 (TID 85) in 252 ms on spark-sharedprocess-atqpiv (executor driver) (5/8)
+ INFO [2025-12-30 19:08:08,138] ({task-result-getter-3} Logging.scala[logInfo]:60) - Finished task 6.0 in stage 10.0 (TID 86) in 253 ms on spark-sharedprocess-atqpiv (executor driver) (6/8)
+ INFO [2025-12-30 19:08:08,138] ({Executor task launch worker for task 4.0 in stage 10.0 (TID 84)} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 10.0 (TID 84). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:08,139] ({Executor task launch worker for task 7.0 in stage 10.0 (TID 87)} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 10.0 (TID 87). 1303 bytes result sent to driver
+ INFO [2025-12-30 19:08:08,140] ({task-result-getter-2} Logging.scala[logInfo]:60) - Finished task 7.0 in stage 10.0 (TID 87) in 254 ms on spark-sharedprocess-atqpiv (executor driver) (7/8)
+ INFO [2025-12-30 19:08:08,141] ({task-result-getter-1} Logging.scala[logInfo]:60) - Finished task 4.0 in stage 10.0 (TID 84) in 257 ms on spark-sharedprocess-atqpiv (executor driver) (8/8)
+ INFO [2025-12-30 19:08:08,141] ({task-result-getter-1} Logging.scala[logInfo]:60) - Removed TaskSet 10.0, whose tasks have all completed, from pool default
+ INFO [2025-12-30 19:08:08,147] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - ResultStage 10 (count at /tmp/ipykernel_230/393626415.py:6) finished in 0.272 s
+ INFO [2025-12-30 19:08:08,147] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Job 10 is finished. Cancelling potential speculative or zombie tasks for this job
+ INFO [2025-12-30 19:08:08,147] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Killing all running tasks in stage 10: Stage finished
+ INFO [2025-12-30 19:08:08,150] ({Thread-19} Logging.scala[logInfo]:60) - Job 10 finished: count at /tmp/ipykernel_230/393626415.py:6, took 0.277587 s
+ INFO [2025-12-30 19:08:13,257] ({Thread-19} Logging.scala[logInfo]:60) - Starting job: count at /tmp/ipykernel_230/393626415.py:6
+ INFO [2025-12-30 19:08:13,258] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Got job 11 (count at /tmp/ipykernel_230/393626415.py:6) with 8 output partitions
+ INFO [2025-12-30 19:08:13,258] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Final stage: ResultStage 11 (count at /tmp/ipykernel_230/393626415.py:6)
+ INFO [2025-12-30 19:08:13,258] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Parents of final stage: List()
+ INFO [2025-12-30 19:08:13,258] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Missing parents: List()
+ INFO [2025-12-30 19:08:13,259] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting ResultStage 11 (PythonRDD[12] at count at /tmp/ipykernel_230/393626415.py:6), which has no missing parents
+ INFO [2025-12-30 19:08:13,262] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_11 stored as values in memory (estimated size 7.9 KiB, free 1398.3 MiB)
+ INFO [2025-12-30 19:08:13,264] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Block broadcast_11_piece0 stored as bytes in memory (estimated size 4.9 KiB, free 1398.3 MiB)
+ INFO [2025-12-30 19:08:13,265] ({dispatcher-BlockManagerMaster} Logging.scala[logInfo]:60) - Added broadcast_11_piece0 in memory on spark-sharedprocess-atqpiv:39109 (size: 4.9 KiB, free: 1398.4 MiB)
+ INFO [2025-12-30 19:08:13,265] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Created broadcast 11 from broadcast at DAGScheduler.scala:1611
+ INFO [2025-12-30 19:08:13,266] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Submitting 8 missing tasks from ResultStage 11 (PythonRDD[12] at count at /tmp/ipykernel_230/393626415.py:6) (first 15 tasks are for partitions Vector(0, 1, 2, 3, 4, 5, 6, 7))
+ INFO [2025-12-30 19:08:13,266] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Adding task set 11.0 with 8 tasks resource profile 0
+ INFO [2025-12-30 19:08:13,267] ({dag-scheduler-event-loop} Logging.scala[logInfo]:60) - Added task set TaskSet_11.0 tasks to pool default
+ INFO [2025-12-30 19:08:13,268] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 0.0 in stage 11.0 (TID 88) (spark-sharedprocess-atqpiv, executor driver, partition 0, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:13,268] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 1.0 in stage 11.0 (TID 89) (spark-sharedprocess-atqpiv, executor driver, partition 1, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:13,269] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 2.0 in stage 11.0 (TID 90) (spark-sharedprocess-atqpiv, executor driver, partition 2, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:13,269] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 3.0 in stage 11.0 (TID 91) (spark-sharedprocess-atqpiv, executor driver, partition 3, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:13,269] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 4.0 in stage 11.0 (TID 92) (spark-sharedprocess-atqpiv, executor driver, partition 4, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:13,270] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 5.0 in stage 11.0 (TID 93) (spark-sharedprocess-atqpiv, executor driver, partition 5, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:13,270] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 6.0 in stage 11.0 (TID 94) (spark-sharedprocess-atqpiv, executor driver, partition 6, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:13,271] ({dispatcher-event-loop-4} Logging.scala[logInfo]:60) - Starting task 7.0 in stage 11.0 (TID 95) (spark-sharedprocess-atqpiv, executor driver, partition 7, PROCESS_LOCAL, 9180 bytes) 
+ INFO [2025-12-30 19:08:13,272] ({Executor task launch worker for task 0.0 in stage 11.0 (TID 88)} Logging.scala[logInfo]:60) - Running task 0.0 in stage 11.0 (TID 88)
+ INFO [2025-12-30 19:08:13,272] ({Executor task launch worker for task 1.0 in stage 11.0 (TID 89)} Logging.scala[logInfo]:60) - Running task 1.0 in stage 11.0 (TID 89)
+ INFO [2025-12-30 19:08:13,272] ({Executor task launch worker for task 2.0 in stage 11.0 (TID 90)} Logging.scala[logInfo]:60) - Running task 2.0 in stage 11.0 (TID 90)
+ INFO [2025-12-30 19:08:13,334] ({Executor task launch worker for task 3.0 in stage 11.0 (TID 91)} Logging.scala[logInfo]:60) - Running task 3.0 in stage 11.0 (TID 91)
+ INFO [2025-12-30 19:08:13,335] ({Executor task launch worker for task 4.0 in stage 11.0 (TID 92)} Logging.scala[logInfo]:60) - Running task 4.0 in stage 11.0 (TID 92)
+ INFO [2025-12-30 19:08:13,335] ({Executor task launch worker for task 5.0 in stage 11.0 (TID 93)} Logging.scala[logInfo]:60) - Running task 5.0 in stage 11.0 (TID 93)

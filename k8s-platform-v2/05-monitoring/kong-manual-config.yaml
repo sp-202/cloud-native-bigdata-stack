@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-dbless-config
+  namespace: kubernetes-dashboard
+data:
+  kong.yml: |
+    _format_version: "1.1"
+    services:
+    - name: kubernetes-dashboard-web
+      url: http://kubernetes-dashboard-web.kubernetes-dashboard.svc.cluster.local:8000
+      routes:
+      - name: web-route
+        paths:
+        - /
+        strip_path: false
+    - name: kubernetes-dashboard-api
+      url: http://kubernetes-dashboard-api.kubernetes-dashboard.svc.cluster.local:8000
+      routes:
+      - name: api-route
+        paths:
+        - /api
+        strip_path: false

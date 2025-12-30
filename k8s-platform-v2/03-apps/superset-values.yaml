@@ -1,0 +1,73 @@
+postgresql:
+  enabled: false
+supersetNode:
+  connections:
+    db_host: postgres.default.svc.cluster.local
+    db_port: "5432"
+    db_user: superset
+    db_pass: superset
+    db_name: superset
+  secret_key: "superset_secret_key_change_me_in_prod"
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "1000m"
+extraPyPIPackages:
+  - pyhive
+  - thrift
+  - sasl
+  - thrift_sasl
+  - psycopg2-binary
+redis:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: library/redis
+    tag: 7.2
+  master:
+    command: ["redis-server"]
+    args: ["--protected-mode", "no"]
+    livenessProbe:
+      enabled: true
+      exec:
+        command: ["redis-cli", "ping"]
+    readinessProbe:
+      enabled: true
+      exec:
+        command: ["redis-cli", "ping"]
+service:
+  type: ClusterIP
+  port: 8088
+ingress:
+  enabled: false
+init:
+  enabled: true
+  loadExamples: true
+  createAdmin: true
+  adminUser:
+    username: admin
+    firstname: Superset
+    lastname: Admin
+    email: admin@superset.com
+    password: admin
+configOverrides:
+  enable_hive: |
+    SECRET_KEY = "superset_secret_key_change_me_in_prod_12345"
+    from flask_appbuilder.security.manager import AUTH_DB
+    AUTH_TYPE = AUTH_DB
+    CSV_EXTENSIONS = {"csv", "tsv", "txt"}
+    FEATURE_FLAGS = {
+        "ENABLE_TEMPLATE_PROCESSING": True,
+    }
+    CACHE_CONFIG = {
+        "CACHE_TYPE": "RedisCache",
+        "CACHE_DEFAULT_TIMEOUT": 300,
+        "CACHE_KEY_PREFIX": "superset_",
+        "CACHE_REDIS_HOST": "superset-redis-master",
+        "CACHE_REDIS_PORT": 6379,
+        "CACHE_REDIS_DB": 1,
+        "CACHE_REDIS_URL": "redis://superset-redis-master:6379/1"
+    }

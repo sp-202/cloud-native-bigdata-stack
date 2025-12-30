@@ -1,0 +1,2616 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubernetes-dashboard
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/instance: spark-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: spark-operator
+    app.kubernetes.io/version: v1beta2-1.3.8-3.1.1
+    helm.sh/chart: spark-operator-1.1.27
+  name: spark-operator-spark
+  namespace: default
+---
+apiVersion: v1
+automountServiceAccountToken: true
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/instance: superset
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    helm.sh/chart: redis-17.9.4
+  name: superset-redis
+  namespace: default
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/instance: traefik-default
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: traefik
+    helm.sh/chart: traefik-26.0.0
+  name: traefik
+  namespace: default
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: zeppelin-server
+  namespace: default
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    helm.sh/hook: pre-install, pre-upgrade
+    helm.sh/hook-delete-policy: hook-failed, before-hook-creation
+    helm.sh/hook-weight: "-10"
+  labels:
+    app.kubernetes.io/instance: spark-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: spark-operator
+    app.kubernetes.io/version: v1beta2-1.3.8-3.1.1
+    helm.sh/chart: spark-operator-1.1.27
+  name: spark-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/instance: spark-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: spark-operator
+    app.kubernetes.io/version: v1beta2-1.3.8-3.1.1
+    helm.sh/chart: spark-operator-1.1.27
+  name: spark-role
+  namespace: default
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  verbs:
+  - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    helm.sh/hook: pre-install, pre-upgrade
+    helm.sh/hook-delete-policy: hook-failed, before-hook-creation
+    helm.sh/hook-weight: "-10"
+  labels:
+    app.kubernetes.io/instance: spark-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: spark-operator
+    app.kubernetes.io/version: v1beta2-1.3.8-3.1.1
+    helm.sh/chart: spark-operator-1.1.27
+  name: spark-operator
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - configmaps
+  - secrets
+  verbs:
+  - create
+  - get
+  - delete
+  - update
+- apiGroups:
+  - extensions
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - create
+  - get
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - update
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - resourcequotas
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - create
+  - get
+  - update
+  - delete
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  - validatingwebhookconfigurations
+  verbs:
+  - create
+  - get
+  - update
+  - delete
+- apiGroups:
+  - sparkoperator.k8s.io
+  resources:
+  - sparkapplications
+  - sparkapplications/status
+  - scheduledsparkapplications
+  - scheduledsparkapplications/status
+  verbs:
+  - '*'
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/instance: traefik-default
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: traefik
+    helm.sh/chart: traefik-26.0.0
+  name: traefik-default
+rules:
+- apiGroups:
+  - extensions
+  - networking.k8s.io
+  resources:
+  - ingressclasses
+  - ingresses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - endpoints
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extensions
+  - networking.k8s.io
+  resources:
+  - ingresses/status
+  verbs:
+  - update
+- apiGroups:
+  - traefik.io
+  - traefik.containo.us
+  resources:
+  - ingressroutes
+  - ingressroutetcps
+  - ingressrouteudps
+  - middlewares
+  - middlewaretcps
+  - tlsoptions
+  - tlsstores
+  - traefikservices
+  - serverstransports
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/instance: spark-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: spark-operator
+    app.kubernetes.io/version: v1beta2-1.3.8-3.1.1
+    helm.sh/chart: spark-operator-1.1.27
+  name: spark
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: spark-role
+subjects:
+- kind: ServiceAccount
+  name: spark-operator-spark
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations:
+    helm.sh/hook: pre-install, pre-upgrade
+    helm.sh/hook-delete-policy: hook-failed, before-hook-creation
+    helm.sh/hook-weight: "-10"
+  labels:
+    app.kubernetes.io/instance: spark-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: spark-operator
+    app.kubernetes.io/version: v1beta2-1.3.8-3.1.1
+    helm.sh/chart: spark-operator-1.1.27
+  name: spark-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: spark-operator
+subjects:
+- kind: ServiceAccount
+  name: spark-operator
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/instance: traefik-default
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: traefik
+    helm.sh/chart: traefik-26.0.0
+  name: traefik-default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: traefik-default
+subjects:
+- kind: ServiceAccount
+  name: traefik
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: zeppelin-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: zeppelin-server
+  namespace: default
+---
+apiVersion: v1
+data:
+  master.conf: |-
+    dir /data
+    # User-supplied master configuration:
+    rename-command FLUSHDB ""
+    rename-command FLUSHALL ""
+    # End of master configuration
+  redis.conf: |-
+    # User-supplied common configuration:
+    # Enable AOF https://redis.io/topics/persistence#append-only-file
+    appendonly yes
+    # Disable RDB persistence, AOF persistence already enabled.
+    save ""
+    # End of common configuration
+  replica.conf: |-
+    dir /data
+    # User-supplied replica configuration:
+    rename-command FLUSHDB ""
+    rename-command FLUSHALL ""
+    # End of replica configuration
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/instance: superset
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    helm.sh/chart: redis-17.9.4
+  name: superset-redis-configuration
+  namespace: default
+---
+apiVersion: v1
+data:
+  ping_liveness_local.sh: |-
+    #!/bin/bash
+
+    [[ -f $REDIS_PASSWORD_FILE ]] && export REDIS_PASSWORD="$(< "${REDIS_PASSWORD_FILE}")"
+    [[ -n "$REDIS_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_PASSWORD"
+    response=$(
+      timeout -s 15 $1 \
+      redis-cli \
+        -h localhost \
+        -p $REDIS_PORT \
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    responseFirstWord=$(echo $response | head -n1 | awk '{print $1;}')
+    if [ "$response" != "PONG" ] && [ "$responseFirstWord" != "LOADING" ] && [ "$responseFirstWord" != "MASTERDOWN" ]; then
+      echo "$response"
+      exit 1
+    fi
+  ping_liveness_local_and_master.sh: |-
+    script_dir="$(dirname "$0")"
+    exit_status=0
+    "$script_dir/ping_liveness_local.sh" $1 || exit_status=$?
+    "$script_dir/ping_liveness_master.sh" $1 || exit_status=$?
+    exit $exit_status
+  ping_liveness_master.sh: |-
+    #!/bin/bash
+
+    [[ -f $REDIS_MASTER_PASSWORD_FILE ]] && export REDIS_MASTER_PASSWORD="$(< "${REDIS_MASTER_PASSWORD_FILE}")"
+    [[ -n "$REDIS_MASTER_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_MASTER_PASSWORD"
+    response=$(
+      timeout -s 15 $1 \
+      redis-cli \
+        -h $REDIS_MASTER_HOST \
+        -p $REDIS_MASTER_PORT_NUMBER \
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    responseFirstWord=$(echo $response | head -n1 | awk '{print $1;}')
+    if [ "$response" != "PONG" ] && [ "$responseFirstWord" != "LOADING" ]; then
+      echo "$response"
+      exit 1
+    fi
+  ping_readiness_local.sh: |-
+    #!/bin/bash
+
+    [[ -f $REDIS_PASSWORD_FILE ]] && export REDIS_PASSWORD="$(< "${REDIS_PASSWORD_FILE}")"
+    [[ -n "$REDIS_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_PASSWORD"
+    response=$(
+      timeout -s 15 $1 \
+      redis-cli \
+        -h localhost \
+        -p $REDIS_PORT \
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    if [ "$response" != "PONG" ]; then
+      echo "$response"
+      exit 1
+    fi
+  ping_readiness_local_and_master.sh: |-
+    script_dir="$(dirname "$0")"
+    exit_status=0
+    "$script_dir/ping_readiness_local.sh" $1 || exit_status=$?
+    "$script_dir/ping_readiness_master.sh" $1 || exit_status=$?
+    exit $exit_status
+  ping_readiness_master.sh: |-
+    #!/bin/bash
+
+    [[ -f $REDIS_MASTER_PASSWORD_FILE ]] && export REDIS_MASTER_PASSWORD="$(< "${REDIS_MASTER_PASSWORD_FILE}")"
+    [[ -n "$REDIS_MASTER_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_MASTER_PASSWORD"
+    response=$(
+      timeout -s 15 $1 \
+      redis-cli \
+        -h $REDIS_MASTER_HOST \
+        -p $REDIS_MASTER_PORT_NUMBER \
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    if [ "$response" != "PONG" ]; then
+      echo "$response"
+      exit 1
+    fi
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/instance: superset
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    helm.sh/chart: redis-17.9.4
+  name: superset-redis-health
+  namespace: default
+---
+apiVersion: v1
+data:
+  start-master.sh: |
+    #!/bin/bash
+
+    [[ -f $REDIS_PASSWORD_FILE ]] && export REDIS_PASSWORD="$(< "${REDIS_PASSWORD_FILE}")"
+    if [[ -f /opt/bitnami/redis/mounted-etc/master.conf ]];then
+        cp /opt/bitnami/redis/mounted-etc/master.conf /opt/bitnami/redis/etc/master.conf
+    fi
+    if [[ -f /opt/bitnami/redis/mounted-etc/redis.conf ]];then
+        cp /opt/bitnami/redis/mounted-etc/redis.conf /opt/bitnami/redis/etc/redis.conf
+    fi
+    ARGS=("--port" "${REDIS_PORT}")
+    ARGS+=("--protected-mode" "no")
+    ARGS+=("--include" "/opt/bitnami/redis/etc/redis.conf")
+    ARGS+=("--include" "/opt/bitnami/redis/etc/master.conf")
+    exec [redis-server] "${ARGS[@]}"
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/instance: superset
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    helm.sh/chart: redis-17.9.4
+  name: superset-redis-scripts
+  namespace: default
+---
+apiVersion: v1
+data:
+  INGRESS_DOMAIN: 127.0.0.1.sslip.io
+  MINIO_ENDPOINT: http://minio.default.svc.cluster.local:9000
+  POSTGRES_HOST: postgres.default.svc.cluster.local
+kind: ConfigMap
+metadata:
+  name: global-config-k8hbb6kcm8
+---
+apiVersion: v1
+data:
+  hive-site.xml: |
+    <configuration>
+        <property>
+            <name>javax.jdo.option.ConnectionURL</name>
+            <!-- Updated host to 'postgres' (K8s Service Name) -->
+            <value>jdbc:postgresql://postgres.default.svc.cluster.local:5432/metastore</value>
+        </property>
+        <property>
+            <name>javax.jdo.option.ConnectionDriverName</name>
+            <value>org.postgresql.Driver</value>
+        </property>
+        <property>
+            <name>javax.jdo.option.ConnectionUserName</name>
+            <value>hive</value>
+        </property>
+        <property>
+            <name>javax.jdo.option.ConnectionPassword</name>
+            <value>hive</value>
+        </property>
+        <property>
+            <name>hive.metastore.warehouse.dir</name>
+            <value>s3a://warehouse/</value>
+        </property>
+        <property>
+            <name>fs.s3a.endpoint</name>
+            <value>http://minio.default.svc.cluster.local:9000</value>
+        </property>
+        <property>
+            <name>fs.s3a.access.key</name>
+            <value>minioadmin</value>
+        </property>
+        <property>
+            <name>fs.s3a.secret.key</name>
+            <value>minioadmin</value>
+        </property>
+        <property>
+            <name>fs.s3a.path.style.access</name>
+            <value>true</value>
+        </property>
+        <property>
+            <name>fs.s3a.impl</name>
+            <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+        </property>
+        <property>
+            <name>hive.metastore.schema.verification</name>
+            <value>false</value>
+        </property>
+        <property>
+            <name>hive.server2.enable.doAs</name>
+            <value>false</value>
+        </property>
+        <property>
+            <name>hive.server2.thrift.bind.host</name>
+            <value>0.0.0.0</value>
+        </property>
+        <property>
+            <name>hive.server2.transport.mode</name>
+            <value>binary</value>
+        </property>
+        <property>
+            <name>hive.server2.authentication</name>
+            <value>NOSASL</value>
+        </property>
+        <!-- Optimization for Single Node/Container -->
+        <property>
+            <name>hive.exec.mode.local.auto</name>
+            <value>true</value>
+        </property>
+        <property>
+            <name>hive.vectorized.execution.enabled</name>
+            <value>false</value>
+        </property>
+        <property>
+            <name>mapreduce.framework.name</name>
+            <value>local</value>
+        </property>
+    </configuration>
+kind: ConfigMap
+metadata:
+  name: hive-config-bth8gd7d8t
+---
+apiVersion: v1
+data:
+  create-buckets.sh: |
+    #!/bin/bash
+    # Wait for MinIO to be ready
+    echo "Waiting for MinIO..."
+    # Attempt to set alias until successful (serves as readiness check)
+    until /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin; do
+      echo "MinIO not ready, retrying in 2s..."
+      sleep 2
+    done
+
+    # Configure MC and Create Buckets
+    /usr/bin/mc mb myminio/warehouse;
+    /usr/bin/mc mb myminio/data;
+    /usr/bin/mc mb myminio/dags;
+    /usr/bin/mc mb myminio/notebooks;
+    /usr/bin/mc mb myminio/test-bucket;
+    /usr/bin/mc mb myminio/taxi-data;
+    /usr/bin/mc mb myminio/spark-logs;
+
+    # Set Public Policies
+    /usr/bin/mc policy set public myminio/warehouse;
+    /usr/bin/mc policy set public myminio/data;
+    /usr/bin/mc policy set public myminio/dags;
+    /usr/bin/mc policy set public myminio/notebooks;
+    /usr/bin/mc policy set public myminio/test-bucket;
+    /usr/bin/mc policy set public myminio/taxi-data;
+    /usr/bin/mc policy set public myminio/spark-logs;
+    # Create spark-events directory explicitly
+    echo "Creating spark-events directory..."
+    /usr/bin/mc pipe myminio/spark-logs/spark-events/.keep < /dev/null
+    echo "Buckets created."
+    exit 0
+kind: ConfigMap
+metadata:
+  name: minio-scripts-72t7ghk66t
+---
+apiVersion: v1
+data:
+  init-dbs.sh: |
+    #!/bin/bash
+    set -e
+    echo "Creating databases for Hive and Airflow..."
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+        CREATE USER hive WITH PASSWORD 'hive';
+        CREATE DATABASE metastore OWNER hive;
+        CREATE USER airflow WITH PASSWORD 'airflow';
+        CREATE DATABASE airflow OWNER airflow;
+        CREATE USER superset WITH PASSWORD 'superset';
+        CREATE DATABASE superset OWNER superset;
+        GRANT ALL PRIVILEGES ON DATABASE metastore TO hive;
+        GRANT ALL PRIVILEGES ON DATABASE airflow TO airflow;
+        GRANT ALL PRIVILEGES ON DATABASE superset TO superset;
+    EOSQL
+    echo "Databases created."
+kind: ConfigMap
+metadata:
+  name: postgres-init-ck7cgh8g2c
+---
+apiVersion: v1
+data:
+  spark-defaults.conf: |
+    # Default Spark Configuration for Kubernetes
+    # This file is mounted into the Zeppelin and Spark pods via ConfigMap.
+
+    # Master Address (K8s: spark-master service)
+    # Master Address (Spark on Kubernetes)
+    spark.master                     k8s://https://kubernetes.default.svc
+
+    # Resource Allocation (Dynamic Scaling)
+    # Starts with 1 executor and scales up to 4 based on workload.
+    spark.dynamicAllocation.enabled          true
+    spark.dynamicAllocation.shuffleTracking.enabled true
+    spark.dynamicAllocation.minExecutors     1
+    spark.dynamicAllocation.maxExecutors     4
+    spark.dynamicAllocation.executorIdleTimeout 60s
+    spark.dynamicAllocation.schedulerBacklogTimeout 1s
+
+    # Per-Executor Resources
+    spark.executor.cores             4
+    spark.executor.memory            4g
+    spark.driver.cores               1
+    spark.driver.memory              2g
+
+    # Event Logging
+    # Disabled to avoid errors with missing directories on ephemeral K8s storage.
+    # For production usage, point this to S3 or a PVC-mounted directory.
+    spark.eventLog.enabled           false
+    # spark.eventLog.dir               hdfs://namenode:8021/directory
+    # spark.serializer                 org.apache.spark.serializer.KryoSerializer
+    # spark.driver.memory              5g
+    # spark.executor.extraJavaOptions  -XX:+PrintGCDetails -Dkey=value -Dnumbers="one two three"
+
+    # Kubernetes Configuration
+    spark.kubernetes.container.image subhodeep2022/spark-bigdata:spark-3.5.7-fixed-v2
+    spark.kubernetes.namespace       default
+    spark.kubernetes.authenticate.driver.serviceAccountName zeppelin-server
+
+    # S3 & Hive Configuration
+    # (Currently commented out for initial development/stability)
+    # Uncomment these sections when MinIO and Hive Metastore are ready.
+    # S3 & Hive Configuration
+    # Enabled for Full Stack Architecture
+    spark.hadoop.fs.s3a.impl                 org.apache.hadoop.fs.s3a.S3AFileSystem
+    spark.hadoop.fs.s3a.endpoint             http://minio.default.svc.cluster.local:9000
+    spark.hadoop.fs.s3a.access.key           minioadmin
+    spark.hadoop.fs.s3a.secret.key           minioadmin
+    spark.hadoop.fs.s3a.path.style.access    true
+    spark.hadoop.fs.s3a.connection.ssl.enabled false
+    spark.hadoop.fs.s3a.aws.credentials.provider org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
+
+    # Delta Lake Configuration
+    # spark.sql.extensions                     io.delta.sql.DeltaSparkSessionExtension
+    # spark.sql.catalog.spark_catalog          org.apache.spark.sql.delta.catalog.DeltaCatalog
+
+    # Hive Metastore Configuration
+    # Uses direct Thrift connection to Hive Metastore Service
+    spark.sql.catalogImplementation          hive
+    spark.hadoop.hive.metastore.uris         thrift://hive-metastore.default.svc.cluster.local:9083
+
+    # Driver & Executor Config
+    spark.driver.extraClassPath              /opt/spark/custom-jars/postgresql-42.6.0.jar
+    spark.executor.extraClassPath            /opt/spark/custom-jars/postgresql-42.6.0.jar
+    spark.driver.extraJavaOptions            -Djava.net.preferIPv4Stack=true -Djava.security.egd=file:/dev/./urandom -XX:+TieredCompilation -XX:TieredStopAtLevel=1
+    spark.executor.extraJavaOptions          -Djava.net.preferIPv4Stack=true -Djava.security.egd=file:/dev/./urandom -XX:+TieredCompilation -XX:TieredStopAtLevel=1
+
+    # Performance Tuning
+    spark.cores.max                          4
+    spark.sql.shuffle.partitions             200
+    spark.sql.adaptive.enabled               true
+    spark.memory.fraction                    0.8
+    spark.sql.inMemoryColumnarStorage.compressed true
+kind: ConfigMap
+metadata:
+  name: spark-config-ft54bht9c4
+---
+apiVersion: v1
+data:
+  executor-template.yaml: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: spark-executor
+      labels:
+        app: spark-executor
+    spec:
+      containers:
+      - name: spark-kubernetes-executor
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          value: "minioadmin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "minioadmin"
+        - name: SPARK_CONF_DIR
+          value: "/spark/conf"
+        volumeMounts:
+        - name: spark-config
+          mountPath: /spark/conf/spark-defaults.conf
+          subPath: spark-defaults.conf
+      volumes:
+      - name: spark-config
+        configMap:
+          name: spark-config
+  interpreter-template.yaml: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: spark-driver
+      labels:
+        app: spark-driver
+    spec:
+      containers:
+      - name: zeppelin
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          value: "minioadmin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "minioadmin"
+        - name: SPARK_CONF_DIR
+          value: "/spark/conf"
+        volumeMounts:
+        - name: spark-config
+          mountPath: /spark/conf/spark-defaults.conf
+          subPath: spark-defaults.conf
+      - name: spark-kubernetes-driver
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          value: "minioadmin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "minioadmin"
+        - name: SPARK_CONF_DIR
+          value: "/spark/conf"
+        volumeMounts:
+        - name: spark-config
+          mountPath: /spark/conf/spark-defaults.conf
+          subPath: spark-defaults.conf
+      volumes:
+      - name: spark-config
+        configMap:
+          name: spark-config
+kind: ConfigMap
+metadata:
+  name: spark-templates-dccd57c54g
+---
+apiVersion: v1
+data:
+  interpreter-spec.yaml: "#\n# Licensed to the Apache Software Foundation (ASF) under
+    one or more\n# contributor license agreements.  See the NOTICE file distributed
+    with\n# this work for additional information regarding copyright ownership.\n#
+    The ASF licenses this file to You under the Apache License, Version 2.0\n# (the
+    \"License\"); you may not use this file except in compliance with\n# the License.
+    \ You may obtain a copy of the License at\n#\n#    http://www.apache.org/licenses/LICENSE-2.0\n#\n#
+    Unless required by applicable law or agreed to in writing, software\n# distributed
+    under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES
+    OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the
+    specific language governing permissions and\n# limitations under the License.\n#\nkind:
+    Pod\napiVersion: v1\nmetadata:\n  namespace: {{zeppelin.k8s.interpreter.namespace}}\n
+    \ name: {{zeppelin.k8s.interpreter.pod.name}}\n  labels:\n    app: {{zeppelin.k8s.interpreter.pod.name}}\n
+    \   interpreterGroupId: {{zeppelin.k8s.interpreter.group.id}}\n    interpreterSettingName:
+    {{zeppelin.k8s.interpreter.setting.name}}\n    spark-role: driver\n    user: {{
+    zeppelin.k8s.interpreter.user }}\n  {% if zeppelin.k8s.server.uid is defined %}\n
+    \ ownerReferences:\n  - apiVersion: v1\n    controller: false\n    blockOwnerDeletion:
+    false\n    kind: Pod\n    name: {{zeppelin.k8s.server.pod.name}}\n    uid: {{zeppelin.k8s.server.uid}}\n
+    \ {% endif %}\nspec:\n  serviceAccountName: {{zeppelin.k8s.interpreter.serviceAccount}}\n
+    \ {% if zeppelin.k8s.interpreter.group.name == \"spark\" %}\n  automountServiceAccountToken:
+    true\n  {% else %}\n  automountServiceAccountToken: false\n  {% endif %}\n  restartPolicy:
+    Never\n  terminationGracePeriodSeconds: 30\n  containers:\n  - name: {{zeppelin.k8s.interpreter.container.name}}\n
+    \   image: {{zeppelin.k8s.interpreter.container.image}}\n    {% if zeppelin.k8s.interpreter.container.imagePullPolicy
+    is defined %}\n    imagePullPolicy: {{zeppelin.k8s.interpreter.container.imagePullPolicy}}\n
+    \   {% endif %}\n    args:\n      - \"$(ZEPPELIN_HOME)/bin/interpreter.sh\"\n
+    \     - \"-d\"\n      - \"$(ZEPPELIN_HOME)/interpreter/{{zeppelin.k8s.interpreter.group.name}}\"\n
+    \     - \"-r\"\n      - \"{{zeppelin.k8s.interpreter.rpc.portRange}}\"\n      -
+    \"-c\"\n      - \"{{zeppelin.k8s.server.rpc.service}}\"\n      - \"-p\"\n      -
+    \"{{zeppelin.k8s.server.rpc.portRange}}\"\n      - \"-i\"\n      - \"{{zeppelin.k8s.interpreter.group.id}}\"\n
+    \     - \"-l\"\n      - \"{{zeppelin.k8s.interpreter.localRepo}}/{{zeppelin.k8s.interpreter.setting.name}}\"\n
+    \     - \"-g\"\n      - \"{{zeppelin.k8s.interpreter.setting.name}}\"\n    env:\n
+    \ {% for key, value in zeppelin.k8s.envs.items() %}\n    - name: {{key}}\n      value:
+    {{value}}\n  {% endfor %}\n    # INJECTED AWS CREDENTIALS\n    - name: AWS_ACCESS_KEY_ID\n
+    \     value: \"minioadmin\"\n    - name: AWS_SECRET_ACCESS_KEY\n      value: \"minioadmin\"\n
+    \   - name: SPARK_CONF_DIR\n      value: \"/spark/conf\"\n  {% if zeppelin.k8s.interpreter.cores
+    is defined and zeppelin.k8s.interpreter.memory is defined %}\n    resources:\n
+    \     requests:\n        memory: \"{{zeppelin.k8s.interpreter.memory}}\"\n        cpu:
+    \"{{zeppelin.k8s.interpreter.cores}}\"\n{# limits.memory is not set because of
+    a potential OOM-Killer. https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#requests-and-limits
+    #}\n      limits:\n        cpu: \"{{zeppelin.k8s.interpreter.cores}}\"\n        {%
+    if zeppelin.k8s.interpreter.gpu.type is defined and zeppelin.k8s.interpreter.gpu.nums
+    is defined %}\n        {{zeppelin.k8s.interpreter.gpu.type}}: \"{{zeppelin.k8s.interpreter.gpu.nums}}\"\n
+    \       {% endif %}\n  {% else %}\n  {% if zeppelin.k8s.interpreter.gpu.type is
+    defined and zeppelin.k8s.interpreter.gpu.nums is defined %}\n    resources:\n
+    \     limits:  \n        {{zeppelin.k8s.interpreter.gpu.type}}: \"{{zeppelin.k8s.interpreter.gpu.nums}}\"\n
+    \ {% endif %}\n  {% endif %}\n  {% if zeppelin.k8s.interpreter.group.name == \"spark\"
+    %}\n    volumeMounts:\n    - name: spark-home\n      mountPath: /spark\n    #
+    INJECTED CONFIG MOUNT\n    - name: spark-config\n      mountPath: /spark/conf/spark-defaults.conf\n
+    \     subPath: spark-defaults.conf\n  initContainers:\n  - name: spark-home-init\n
+    \   image: {{zeppelin.k8s.spark.container.image}}\n    {% if zeppelin.k8s.spark.container.imagePullPolicy
+    is defined %}\n    imagePullPolicy: {{zeppelin.k8s.spark.container.imagePullPolicy}}\n
+    \   {% endif %}\n    command: [\"sh\", \"-c\", \"cp -r /opt/spark/* /spark/\"]\n
+    \   volumeMounts:\n    - name: spark-home\n      mountPath: /spark\n  {% if zeppelin.k8s.interpreter.imagePullSecrets
+    is defined %}\n  imagePullSecrets:\n  {% for secret in zeppelin.k8s.interpreter.imagePullSecrets.split(',')
+    %}\n  - name: {{secret}}\n  {% endfor %}\n  {% endif %}\n  volumes:\n  - name:
+    spark-home\n    emptyDir: {}\n  # INJECTED CONFIG VOLUME\n  - name: spark-config\n
+    \   configMap:\n      name: spark-config\n  {% endif %}\n---\nkind: Service\napiVersion:
+    v1\nmetadata:\n  namespace: {{zeppelin.k8s.interpreter.namespace}}\n  name: {{zeppelin.k8s.interpreter.pod.name}}
+    \            # keep Service name the same to Pod name.\n  {% if zeppelin.k8s.server.uid
+    is defined %}\n  ownerReferences:\n  - apiVersion: v1\n    controller: false\n
+    \   blockOwnerDeletion: false\n    kind: Pod\n    name: {{zeppelin.k8s.server.pod.name}}\n
+    \   uid: {{zeppelin.k8s.server.uid}}\n  {% endif %}\nspec:\n  clusterIP: None\n
+    \ ports:\n    - name: intp\n      port: 12321\n    {% if zeppelin.k8s.interpreter.group.name
+    == \"spark\" %}\n    - name: spark-driver\n      port: 22321\n    - name: spark-blockmanager\n
+    \     port: 22322\n    - name: spark-ui\n      port: 4040\n    {% endif %}\n  selector:\n
+    \   app: {{zeppelin.k8s.interpreter.pod.name}}\n{% if zeppelin.k8s.interpreter.group.name
+    == \"spark\" %}\n---\nkind: Role\napiVersion: rbac.authorization.k8s.io/v1\nmetadata:\n
+    \ name: {{zeppelin.k8s.interpreter.pod.name}}\n  namespace: {{zeppelin.k8s.interpreter.namespace}}\n
+    \ {% if zeppelin.k8s.server.uid is defined %}\n  ownerReferences:\n  - apiVersion:
+    v1\n    controller: false\n    blockOwnerDeletion: false\n    kind: Pod\n    name:
+    {{zeppelin.k8s.server.pod.name}}\n    uid: {{zeppelin.k8s.server.uid}}\n  {% endif
+    %}\nrules:\n- apiGroups: [\"\"]\n  resources: [\"pods\", \"services\", \"configmaps\"]\n
+    \ verbs: [\"create\", \"get\", \"update\", \"list\", \"delete\", \"watch\" ]\n---\nkind:
+    RoleBinding\napiVersion: rbac.authorization.k8s.io/v1\nmetadata:\n  name: {{zeppelin.k8s.interpreter.pod.name}}\n
+    \ namespace: {{zeppelin.k8s.interpreter.namespace}}\n  {% if zeppelin.k8s.server.uid
+    is defined %}\n  ownerReferences:\n  - apiVersion: v1\n    controller: false\n
+    \   blockOwnerDeletion: false\n    kind: Pod\n    name: {{zeppelin.k8s.server.pod.name}}\n
+    \   uid: {{zeppelin.k8s.server.uid}}\n  {% endif %}\nsubjects:\n- kind: ServiceAccount\n
+    \ name: {{zeppelin.k8s.interpreter.serviceAccount}}\nroleRef:\n  kind: Role\n
+    \ name: {{zeppelin.k8s.interpreter.pod.name}}\n  apiGroup: rbac.authorization.k8s.io\n{%
+    if zeppelin.k8s.spark.useIngress is defined and zeppelin.k8s.spark.useIngress
+    == \"true\" %}\n---\n# create ingress of spark UI\napiVersion: networking.k8s.io/v1\nkind:
+    Ingress\nmetadata:\n  name: spark-ui-{{zeppelin.k8s.interpreter.pod.name}}\n  namespace:
+    {{zeppelin.k8s.interpreter.namespace}}\n  {% if zeppelin.k8s.server.uid is defined
+    %}\n  ownerReferences:\n  - apiVersion: v1\n    controller: false\n    blockOwnerDeletion:
+    false\n    kind: Pod\n    name: {{zeppelin.k8s.server.pod.name}}\n    uid: {{zeppelin.k8s.server.uid}}\n
+    \ {% endif %}\nspec:\n  rules:\n  - host: {{zeppelin.k8s.spark.ingress.host}}\n
+    \   http:\n      paths:\n      - pathType: Prefix\n        path: \"/\"\n        backend:\n
+    \         service:\n            name: {{zeppelin.k8s.interpreter.pod.name}}\n
+    \           port:\n              number: 4040\n{% endif %} \n{% endif %}\n"
+kind: ConfigMap
+metadata:
+  name: zeppelin-interpreter-spec-m89d59f7b7
+---
+apiVersion: v1
+data:
+  zeppelin-site.xml: |
+    <?xml version="1.0"?>
+    <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+    <!--
+       Licensed to the Apache Software Foundation (ASF) under one or more
+       contributor license agreements.  See the NOTICE file distributed with
+       this work for additional information regarding copyright ownership.
+       The ASF licenses this file to You under the Apache License, Version 2.0
+       (the "License"); you may not use this file except in compliance with
+       the License.  You may obtain a copy of the License at
+
+           http://www.apache.org/licenses/LICENSE-2.0
+
+       Unless required by applicable law or agreed to in writing, software
+       distributed under the License is distributed on an "AS IS" BASIS,
+       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+       See the License for the specific language governing permissions and
+       limitations under the License.
+    -->
+
+    <configuration>
+
+    <!-- Lifecycle Manager Configuration (Auto-Shutdown) -->
+    <property>
+      <name>zeppelin.interpreter.lifecyclemanager.class</name>
+      <value>org.apache.zeppelin.interpreter.lifecycle.TimeoutLifecycleManager</value>
+      <description>This enables the TimeoutLifecycleManager to terminate idle interpreters.</description>
+    </property>
+
+    <property>
+      <name>zeppelin.interpreter.lifecyclemanager.timeout.threshold</name>
+      <value>60000</value>
+      <description>Timeout threshold.
+      TESTING: 60000 (60 seconds)
+      PRODUCTION: 1200000 (20 minutes) - Change this back for production usage!
+      </description>
+    </property>
+
+    <property>
+      <name>zeppelin.k8s.interpreter.pod.template.file</name>
+      <value>/opt/zeppelin/k8s/interpreter-template.yaml</value>
+      <description>File path of the interpreter pod template.</description>
+    </property>
+
+    <property>
+      <name>spark.kubernetes.driver.podTemplateFile</name>
+      <value>/opt/zeppelin/k8s/interpreter-template.yaml</value>
+      <description>Driver pod template file.</description>
+    </property>
+
+    <property>
+      <name>spark.kubernetes.executor.podTemplateFile</name>
+      <value>/opt/zeppelin/k8s/executor-template.yaml</value>
+      <description>Executor pod template file.</description>
+    </property>
+
+    <property>
+      <name>zeppelin.interpreter.env.AWS_ACCESS_KEY_ID</name>
+      <value>minioadmin</value>
+      <description>AWS Access Key for MinIO</description>
+    </property>
+
+    <property>
+      <name>zeppelin.interpreter.env.AWS_SECRET_ACCESS_KEY</name>
+      <value>minioadmin</value>
+      <description>AWS Secret Key for MinIO</description>
+    </property>
+
+    <property>
+      <name>zeppelin.interpreter.lifecyclemanager.timeout.checkinterval</name>
+      <value>60000</value>
+      <description>Check every 1 minute.</description>
+    </property>
+
+    <!-- Standard Defaults (Preserved from Template) -->
+    <property>
+      <name>zeppelin.server.addr</name>
+      <value>0.0.0.0</value>
+      <description>Server address</description>
+    </property>
+
+    <property>
+      <name>zeppelin.server.port</name>
+      <value>8080</value>
+      <description>Server port.</description>
+    </property>
+
+    <property>
+      <name>zeppelin.server.ssl.port</name>
+      <value>8443</value>
+      <description>Server ssl port. (used when ssl.enabled is set to true)</description>
+    </property>
+
+    <property>
+      <name>zeppelin.server.context.path</name>
+      <value>/</value>
+      <description>Context Path of the Web Application</description>
+    </property>
+
+    <property>
+      <name>zeppelin.war.temp.dir</name>
+      <value>webapps</value>
+      <description>Location of jetty temporary directory</description>
+    </property>
+
+    <property>
+      <name>zeppelin.notebook.dir</name>
+      <value>notebook</value>
+      <description>path or URI for notebook persistence</description>
+    </property>
+
+    <property>
+      <name>zeppelin.notebook.homescreen</name>
+      <value></value>
+      <description>id of notebook to be displayed in homescreen. ex) 2A94M5J1Z</description>
+    </property>
+    <property>
+      <name>zeppelin.notebook.homescreen.hide</name>
+      <value>false</value>
+      <description>hide homescreen notebook from list when this value set to true</description>
+    </property>
+
+    <property>
+      <name>zeppelin.notebook.s3.bucket</name>
+      <value>zeppelin</value>
+      <description>bucket name for notebook storage</description>
+    </property>
+
+    <property>
+      <name>zeppelin.notebook.s3.user</name>
+      <value>user</value>
+      <description>user name for notebook storage</description>
+    </property>
+
+    <property>
+      <name>zeppelin.notebook.s3.endpoint</name>
+      <value>http://minio.default.svc.cluster.local:9000</value>
+      <description>endpoint for s3 bucket</description>
+    </property>
+
+    <property>
+      <name>zeppelin.notebook.s3.kmsKeyID</name>
+      <value></value>
+      <description>AWS KMS Key ID to use for encrypting data in S3 (optional)</description>
+    </property>
+
+    <property>
+      <name>zeppelin.notebook.s3.kmsKeyRegion</name>
+      <value></value>
+      <description>AWS KMS Key Region to use for encrypting data in S3 (optional)</description>
+    </property>
+
+    <!-- Important for K8s Mode -->
+    <property>
+      <name>zeppelin.run.mode</name>
+      <value>k8s</value>
+      <description>'auto|local|k8s|docker'</description>
+    </property>
+
+    <property>
+      <name>zeppelin.k8s.portforward</name>
+      <value>false</value>
+      <description>Port forward to interpreter rpc port.</description>
+    </property>
+
+    <property>
+      <name>zeppelin.k8s.container.image</name>
+      <value>subhodeep2022/spark-bigdata:zeppelin-0.12.0</value>
+      <description>Docker image for interpreters (default)</description>
+    </property>
+
+    <property>
+      <name>zeppelin.k8s.spark.container.image</name>
+      <value>subhodeep2022/spark-bigdata:spark-3.5.7-fixed-v2</value>
+      <description>Docker image for Spark executors</description>
+    </property>
+
+    </configuration>
+kind: ConfigMap
+metadata:
+  name: zeppelin-site-t72cmd54mk
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app: superset
+    chart: superset-0.12.0
+    heritage: Helm
+    release: superset
+  name: superset-config
+  namespace: default
+stringData:
+  superset_bootstrap.sh: |
+    #!/bin/bash
+    if [ ! -f ~/bootstrap ]; then echo "Running Superset with uid 0" > ~/bootstrap; fi
+  superset_config.py: |2
+
+    import os
+    from flask_caching.backends.rediscache import RedisCache
+
+    def env(key, default=None):
+        return os.getenv(key, default)
+
+    MAPBOX_API_KEY = env('MAPBOX_API_KEY', '')
+    CACHE_CONFIG = {
+          'CACHE_TYPE': 'RedisCache',
+          'CACHE_DEFAULT_TIMEOUT': 300,
+          'CACHE_KEY_PREFIX': 'superset_',
+          'CACHE_REDIS_HOST': env('REDIS_HOST'),
+          'CACHE_REDIS_PORT': env('REDIS_PORT'),
+          'CACHE_REDIS_PASSWORD': env('REDIS_PASSWORD'),
+          'CACHE_REDIS_DB': env('REDIS_DB', 1),
+    }
+    DATA_CACHE_CONFIG = CACHE_CONFIG
+
+    SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{env('DB_USER')}:{env('DB_PASS')}@{env('DB_HOST')}:{env('DB_PORT')}/{env('DB_NAME')}"
+    SQLALCHEMY_TRACK_MODIFICATIONS = True
+
+    class CeleryConfig:
+      imports  = ("superset.sql_lab", )
+      broker_url = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/0"
+      result_backend = f"redis://{env('REDIS_HOST')}:{env('REDIS_PORT')}/0"
+
+    CELERY_CONFIG = CeleryConfig
+    RESULTS_BACKEND = RedisCache(
+          host=env('REDIS_HOST'),
+          port=env('REDIS_PORT'),
+          key_prefix='superset_results'
+    )
+
+
+    # Overrides
+    # enable_hive
+    SECRET_KEY = "superset_secret_key_change_me_in_prod_12345"
+    from flask_appbuilder.security.manager import AUTH_DB
+    AUTH_TYPE = AUTH_DB
+    CSV_EXTENSIONS = {"csv", "tsv", "txt"}
+    FEATURE_FLAGS = {
+        "ENABLE_TEMPLATE_PROCESSING": True,
+    }
+    CACHE_CONFIG = {
+        "CACHE_TYPE": "RedisCache",
+        "CACHE_DEFAULT_TIMEOUT": 300,
+        "CACHE_KEY_PREFIX": "superset_",
+        "CACHE_REDIS_HOST": "superset-redis-master",
+        "CACHE_REDIS_PORT": 6379,
+        "CACHE_REDIS_DB": 1,
+        "CACHE_REDIS_URL": "redis://superset-redis-master:6379/1"
+    }
+  superset_init.sh: |
+    #!/bin/sh
+    set -eu
+    echo "Upgrading DB schema..."
+    superset db upgrade
+    echo "Initializing roles..."
+    superset init
+
+    echo "Creating admin user..."
+    superset fab create-admin \
+                    --username admin \
+                    --firstname Superset \
+                    --lastname Admin \
+                    --email admin@superset.com \
+                    --password admin \
+                    || true
+
+    echo "Loading examples..."
+    superset load_examples
+    if [ -f "/app/configs/import_datasources.yaml" ]; then
+      echo "Importing database connections.... "
+      superset import_datasources -p /app/configs/import_datasources.yaml
+    fi
+type: Opaque
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app: superset
+    chart: superset-0.12.0
+    heritage: Helm
+    release: superset
+  name: superset-env
+  namespace: default
+stringData:
+  DB_HOST: postgres.default.svc.cluster.local
+  DB_NAME: superset
+  DB_PASS: superset
+  DB_PORT: "5432"
+  DB_USER: superset
+  REDIS_HOST: superset-redis-headless
+  REDIS_PORT: "6379"
+type: Opaque
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-webserver
+  namespace: default
+spec:
+  ports:
+  - name: web
+    port: 8080
+    targetPort: 8080
+  selector:
+    app: airflow-webserver
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive-metastore
+  namespace: default
+spec:
+  ports:
+  - name: metastore
+    port: 9083
+    targetPort: 9083
+  - name: hiveserver2
+    port: 10000
+    targetPort: 10000
+  selector:
+    app: hive-metastore
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: default
+spec:
+  ports:
+  - name: api
+    port: 9000
+    targetPort: 9000
+  - name: console
+    port: 9001
+    targetPort: 9001
+  selector:
+    app: minio
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: superset
+    chart: superset-0.12.0
+    heritage: Helm
+    release: superset
+  name: superset
+  namespace: default
+spec:
+  ports:
+  - name: http
+    port: 8088
+    protocol: TCP
+    targetPort: http
+  selector:
+    app: superset
+    release: superset
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/instance: superset
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    helm.sh/chart: redis-17.9.4
+  name: superset-redis-headless
+  namespace: default
+spec:
+  clusterIP: None
+  ports:
+  - name: tcp-redis
+    port: 6379
+    targetPort: redis
+  selector:
+    app.kubernetes.io/instance: superset
+    app.kubernetes.io/name: redis
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: master
+    app.kubernetes.io/instance: superset
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    helm.sh/chart: redis-17.9.4
+  name: superset-redis-master
+  namespace: default
+spec:
+  internalTrafficPolicy: Cluster
+  ports:
+  - name: tcp-redis
+    nodePort: null
+    port: 6379
+    targetPort: redis
+  selector:
+    app.kubernetes.io/component: master
+    app.kubernetes.io/instance: superset
+    app.kubernetes.io/name: redis
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/instance: traefik-default
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: traefik
+    helm.sh/chart: traefik-26.0.0
+  name: traefik
+  namespace: default
+spec:
+  ports:
+  - name: web
+    port: 80
+    protocol: TCP
+    targetPort: web
+  - name: websecure
+    port: 443
+    protocol: TCP
+    targetPort: websecure
+  selector:
+    app.kubernetes.io/instance: traefik-default
+    app.kubernetes.io/name: traefik
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zeppelin
+  namespace: default
+spec:
+  ports:
+  - name: web
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  - name: spark-ui
+    port: 4040
+    protocol: TCP
+    targetPort: 4040
+  selector:
+    app: zeppelin
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zeppelin-server
+  namespace: default
+spec:
+  clusterIP: None
+  ports:
+  - name: rpc
+    port: 12323
+  selector:
+    app: zeppelin
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/instance: spark-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: spark-operator
+    app.kubernetes.io/version: v1beta2-1.3.8-3.1.1
+    helm.sh/chart: spark-operator-1.1.27
+  name: spark-operator-webhook
+spec:
+  ports:
+  - name: webhook
+    port: 443
+    targetPort: 8080
+  selector:
+    app.kubernetes.io/instance: spark-operator
+    app.kubernetes.io/name: spark-operator
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-data-pvc
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data-pvc
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-scheduler
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-scheduler
+  template:
+    metadata:
+      labels:
+        app: airflow-scheduler
+    spec:
+      containers:
+      - args:
+        - scheduler
+        env:
+        - name: AIRFLOW__CORE__EXECUTOR
+          value: LocalExecutor
+        - name: AIRFLOW__CORE__SQL_ALCHEMY_CONN
+          value: postgresql+psycopg2://airflow:airflow@postgres.default.svc.cluster.local/airflow
+        - name: AIRFLOW__CORE__FERNET_KEY
+          value: 46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+        - name: AIRFLOW__CORE__LOAD_EXAMPLES
+          value: "True"
+        image: apache/airflow:2.7.1
+        name: airflow-scheduler
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+        volumeMounts:
+        - mountPath: /opt/airflow/dags
+          name: dags
+      - args:
+        - |
+          mc alias set myminio http://minio.default.svc.cluster.local:9000 minioadmin minioadmin;
+          while true; do
+            mc mirror --overwrite myminio/dags /opt/airflow/dags;
+            sleep 60;
+          done
+        command:
+        - /bin/sh
+        - -c
+        image: minio/mc
+        name: minio-sync
+        volumeMounts:
+        - mountPath: /opt/airflow/dags
+          name: dags
+      volumes:
+      - emptyDir: {}
+        name: dags
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-webserver
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-webserver
+  template:
+    metadata:
+      labels:
+        app: airflow-webserver
+    spec:
+      containers:
+      - args:
+        - webserver
+        env:
+        - name: AIRFLOW__CORE__EXECUTOR
+          value: LocalExecutor
+        - name: AIRFLOW__CORE__SQL_ALCHEMY_CONN
+          value: postgresql+psycopg2://airflow:airflow@postgres.default.svc.cluster.local/airflow
+        - name: AIRFLOW__CORE__FERNET_KEY
+          value: 46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+        - name: AIRFLOW__CORE__LOAD_EXAMPLES
+          value: "True"
+        - name: _AIRFLOW_DB_UPGRADE
+          value: "true"
+        - name: _AIRFLOW_WWW_USER_CREATE
+          value: "true"
+        - name: _AIRFLOW_WWW_USER_USERNAME
+          value: admin
+        - name: _AIRFLOW_WWW_USER_PASSWORD
+          value: admin
+        image: apache/airflow:2.7.1
+        name: airflow-webserver
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+        volumeMounts:
+        - mountPath: /opt/airflow/dags
+          name: dags
+      - args:
+        - |
+          mc alias set myminio http://minio.default.svc.cluster.local:9000 minioadmin minioadmin;
+          while true; do
+            mc mirror --overwrite myminio/dags /opt/airflow/dags;
+            sleep 60;
+          done
+        command:
+        - /bin/sh
+        - -c
+        image: minio/mc
+        name: minio-sync
+        volumeMounts:
+        - mountPath: /opt/airflow/dags
+          name: dags
+      volumes:
+      - emptyDir: {}
+        name: dags
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-metastore
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hive-metastore
+  template:
+    metadata:
+      labels:
+        app: hive-metastore
+    spec:
+      containers:
+      - args:
+        - |
+          /opt/hive/bin/schematool -dbType postgres -validate || /opt/hive/bin/schematool -dbType postgres -initSchema
+          /opt/hive/bin/hive --service metastore
+        command:
+        - /bin/bash
+        - -c
+        env:
+        - name: HADOOP_OPTS
+          value: -Dhive.log.level=INFO
+        image: subhodeep2022/spark-bigdata:hive-3.1.3-custom
+        imagePullPolicy: Always
+        name: hive-metastore
+        ports:
+        - containerPort: 9083
+        volumeMounts:
+        - mountPath: /opt/hive/conf/hive-site.xml
+          name: hive-config
+          subPath: hive-site.xml
+        - mountPath: /tmp/hive
+          name: hive-scratch
+      - args:
+        - /opt/hive/bin/hive --service hiveserver2
+        command:
+        - /bin/bash
+        - -c
+        env:
+        - name: HADOOP_OPTS
+          value: -Dhive.log.level=INFO
+        - name: HADOOP_HEAPSIZE
+          value: "2048"
+        image: subhodeep2022/spark-bigdata:hive-3.1.3-custom
+        imagePullPolicy: Always
+        name: hive-server
+        ports:
+        - containerPort: 10000
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 3Gi
+          requests:
+            cpu: 500m
+            memory: 2Gi
+        volumeMounts:
+        - mountPath: /opt/hive/conf/hive-site.xml
+          name: hive-config
+          subPath: hive-site.xml
+        - mountPath: /tmp/hive
+          name: hive-scratch
+      initContainers:
+      - args:
+        - mkdir -p /tmp/hive && chmod 777 /tmp/hive
+        command:
+        - /bin/bash
+        - -c
+        image: subhodeep2022/spark-bigdata:hive-3.1.3-custom
+        name: init-permissions
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - mountPath: /tmp/hive
+          name: hive-scratch
+      volumes:
+      - configMap:
+          name: hive-config-bth8gd7d8t
+        name: hive-config
+      - emptyDir: {}
+        name: hive-scratch
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+      - args:
+        - server
+        - /data
+        - --console-address
+        - :9001
+        env:
+        - name: MINIO_ROOT_USER
+          value: minioadmin
+        - name: MINIO_ROOT_PASSWORD
+          value: minioadmin
+        - name: MINIO_SERVER_URL
+          value: http://minio:9000
+        - name: MINIO_BROWSER_REDIRECT_URL
+          value: http://minio:9001
+        image: minio/minio:latest
+        name: minio
+        ports:
+        - containerPort: 9000
+        - containerPort: 9001
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+        volumeMounts:
+        - mountPath: /data
+          name: storage
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: minio-data-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - env:
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_PASSWORD
+          value: password
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        image: postgres:13
+        name: postgres
+        ports:
+        - containerPort: 5432
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: storage
+        - mountPath: /docker-entrypoint-initdb.d
+          name: init-scripts
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: postgres-data-pvc
+      - configMap:
+          name: postgres-init-ck7cgh8g2c
+        name: init-scripts
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: superset
+    chart: superset-0.12.0
+    heritage: Helm
+    release: superset
+  name: superset
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: superset
+      release: superset
+  template:
+    metadata:
+      annotations:
+        checksum/configOverrides: e638d22b9aa095d22e8176549182dca402d4b5a2f151115b700a58b7ffd51f4c
+        checksum/configOverridesFiles: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+        checksum/connections: e7f30467cae4a759489d5401c10d9353b502ede8f01ac87d3eec37d257175218
+        checksum/extraConfigs: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+        checksum/extraSecretEnv: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+        checksum/extraSecrets: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+        checksum/superset_bootstrap.sh: dc9a47141051ced34960c313860a55e03eb48c1fa36a0ed25c03ad60cd3b5c48
+        checksum/superset_config.py: bd8a4acaf626264c22c62782c49eb27406453be62a05d5e8ce6dc371bc8b91ae
+        checksum/superset_init.sh: 8f292dbc07bf626a68a4c98ab8d90ed7cdddd486aa6418760384880cfeedfac1
+      labels:
+        app: superset
+        release: superset
+    spec:
+      containers:
+      - command:
+        - /bin/sh
+        - -c
+        - . /app/pythonpath/superset_bootstrap.sh; /usr/bin/run-server.sh
+        env:
+        - name: SUPERSET_PORT
+          value: "8088"
+        envFrom:
+        - secretRef:
+            name: superset-env
+        image: apachesuperset.docker.scarf.sh/apache/superset:3.1.0
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 15
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: superset
+        ports:
+        - containerPort: 8088
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 15
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 4Gi
+          requests:
+            cpu: 500m
+            memory: 2Gi
+        startupProbe:
+          failureThreshold: 60
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        volumeMounts:
+        - mountPath: /app/pythonpath
+          name: superset-config
+          readOnly: true
+      initContainers:
+      - command:
+        - /bin/sh
+        - -c
+        - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -timeout 120s
+        envFrom:
+        - secretRef:
+            name: superset-env
+        image: apache/superset:dockerize
+        imagePullPolicy: IfNotPresent
+        name: wait-for-postgres
+      securityContext:
+        runAsUser: 0
+      volumes:
+      - name: superset-config
+        secret:
+          secretName: superset-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: superset-worker
+    chart: superset-0.12.0
+    heritage: Helm
+    release: superset
+  name: superset-worker
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: superset-worker
+      release: superset
+  template:
+    metadata:
+      annotations:
+        checksum/configOverrides: e638d22b9aa095d22e8176549182dca402d4b5a2f151115b700a58b7ffd51f4c
+        checksum/configOverridesFiles: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+        checksum/connections: e7f30467cae4a759489d5401c10d9353b502ede8f01ac87d3eec37d257175218
+        checksum/extraConfigs: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+        checksum/extraSecretEnv: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+        checksum/extraSecrets: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+        checksum/superset_bootstrap.sh: dc9a47141051ced34960c313860a55e03eb48c1fa36a0ed25c03ad60cd3b5c48
+        checksum/superset_config.py: bd8a4acaf626264c22c62782c49eb27406453be62a05d5e8ce6dc371bc8b91ae
+      labels:
+        app: superset-worker
+        release: superset
+    spec:
+      containers:
+      - command:
+        - /bin/sh
+        - -c
+        - . /app/pythonpath/superset_bootstrap.sh; celery --app=superset.tasks.celery_app:app
+          worker
+        env:
+        - name: SUPERSET_PORT
+          value: "8088"
+        envFrom:
+        - secretRef:
+            name: superset-env
+        image: apachesuperset.docker.scarf.sh/apache/superset:3.1.0
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - celery -A superset.tasks.celery_app:app inspect ping -d celery@$HOSTNAME
+          failureThreshold: 3
+          initialDelaySeconds: 120
+          periodSeconds: 60
+          successThreshold: 1
+          timeoutSeconds: 60
+        name: superset
+        resources: {}
+        volumeMounts:
+        - mountPath: /app/pythonpath
+          name: superset-config
+          readOnly: true
+      initContainers:
+      - command:
+        - /bin/sh
+        - -c
+        - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -wait "tcp://$REDIS_HOST:$REDIS_PORT"
+          -timeout 120s
+        envFrom:
+        - secretRef:
+            name: superset-env
+        image: apache/superset:dockerize
+        imagePullPolicy: IfNotPresent
+        name: wait-for-postgres-redis
+      securityContext:
+        runAsUser: 0
+      volumes:
+      - name: superset-config
+        secret:
+          secretName: superset-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/instance: traefik-default
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: traefik
+    helm.sh/chart: traefik-26.0.0
+  name: traefik
+  namespace: default
+spec:
+  minReadySeconds: 0
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: traefik-default
+      app.kubernetes.io/name: traefik
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9100"
+        prometheus.io/scrape: "true"
+      labels:
+        app.kubernetes.io/instance: traefik-default
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: traefik
+        helm.sh/chart: traefik-26.0.0
+    spec:
+      containers:
+      - args:
+        - --global.checknewversion
+        - --global.sendanonymoususage
+        - --entrypoints.metrics.address=:9100/tcp
+        - --entrypoints.traefik.address=:9000/tcp
+        - --entrypoints.web.address=:8000/tcp
+        - --entrypoints.websecure.address=:8443/tcp
+        - --api.dashboard=true
+        - --ping=true
+        - --metrics.prometheus=true
+        - --metrics.prometheus.entrypoint=metrics
+        - --providers.kubernetescrd
+        - --providers.kubernetesingress
+        - --entrypoints.websecure.http.tls=true
+        - --serverstransport.insecureSkipVerify=true
+        - --api.insecure=true
+        - --api.dashboard=true
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        image: docker.io/traefik:v2.10.6
+        imagePullPolicy: IfNotPresent
+        lifecycle: null
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /ping
+            port: 9000
+            scheme: HTTP
+          initialDelaySeconds: 2
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 2
+        name: traefik
+        ports:
+        - containerPort: 9100
+          name: metrics
+          protocol: TCP
+        - containerPort: 9000
+          name: traefik
+          protocol: TCP
+        - containerPort: 8000
+          name: web
+          protocol: TCP
+        - containerPort: 8443
+          name: websecure
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 1
+          httpGet:
+            path: /ping
+            port: 9000
+            scheme: HTTP
+          initialDelaySeconds: 2
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 2
+        resources: null
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /data
+          name: data
+        - mountPath: /tmp
+          name: tmp
+      hostNetwork: false
+      securityContext:
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+      serviceAccountName: traefik
+      terminationGracePeriodSeconds: 60
+      volumes:
+      - emptyDir: {}
+        name: data
+      - emptyDir: {}
+        name: tmp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: zeppelin
+  name: zeppelin
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zeppelin
+  template:
+    metadata:
+      labels:
+        app: zeppelin
+        spark-role: driver
+    spec:
+      containers:
+      - env:
+        - name: ZEPPELIN_PORT
+          value: "8080"
+        - name: ZEPPELIN_ADDR
+          value: 0.0.0.0
+        - name: ZEPPELIN_MEM
+          value: -Xms1024m -Xmx4096m -XX:MaxMetaspaceSize=512m
+        - name: ZEPPELIN_NOTEBOOK_STORAGE
+          value: org.apache.zeppelin.notebook.repo.S3NotebookRepo
+        - name: ZEPPELIN_NOTEBOOK_S3_ENDPOINT
+          value: http://minio.default.svc.cluster.local:9000
+        - name: ZEPPELIN_NOTEBOOK_S3_BUCKET
+          value: notebooks
+        - name: ZEPPELIN_NOTEBOOK_S3_USER
+          value: minioadmin
+        - name: ZEPPELIN_NOTEBOOK_S3_PATH_STYLE_ACCESS
+          value: "true"
+        - name: AWS_ACCESS_KEY_ID
+          value: minioadmin
+        - name: AWS_SECRET_ACCESS_KEY
+          value: minioadmin
+        - name: SPARK_HOME
+          value: /spark
+        - name: ZEPPELIN_K8S_CONTAINER_IMAGE
+          value: subhodeep2022/spark-bigdata:zeppelin-0.12.0
+        - name: ZEPPELIN_K8S_SPARK_CONTAINER_IMAGE
+          value: subhodeep2022/spark-bigdata:spark-3.5.7-fixed-v2
+        - name: ZEPPELIN_K8S_SPARK_HOME
+          value: /spark
+        - name: ZEPPELIN_K8S_CONTAINER_IMAGE_PULL_POLICY
+          value: Always
+        - name: ZEPPELIN_K8S_SERVICE_ACCOUNT
+          value: zeppelin-server
+        - name: ZEPPELIN_INTERPRETER_LIFECYCLEMANAGER_CLASS
+          value: org.apache.zeppelin.interpreter.lifecycle.TimeoutLifecycleManager
+        - name: ZEPPELIN_INTERPRETER_LIFECYCLEMANAGER_TIMEOUT_THRESHOLD
+          value: "600000"
+        image: subhodeep2022/spark-bigdata:zeppelin-0.12.0
+        name: zeppelin
+        ports:
+        - containerPort: 8080
+          name: web
+        - containerPort: 4040
+          name: spark-ui
+        resources:
+          limits:
+            cpu: 2000m
+            memory: 8Gi
+          requests:
+            cpu: 1000m
+            memory: 4Gi
+        volumeMounts:
+        - mountPath: /spark/conf/spark-defaults.conf
+          name: spark-config
+          subPath: spark-defaults.conf
+        - mountPath: /opt/zeppelin/conf/zeppelin-site.xml
+          name: zeppelin-site
+          subPath: zeppelin-site.xml
+        - mountPath: /spark
+          name: spark-home
+        - mountPath: /opt/zeppelin/k8s/interpreter-template.yaml
+          name: interpreter-template
+          subPath: interpreter-template.yaml
+        - mountPath: /opt/zeppelin/k8s/executor-template.yaml
+          name: executor-template
+          subPath: executor-template.yaml
+        - mountPath: /opt/zeppelin/k8s/interpreter/100-interpreter-spec.yaml
+          name: interpreter-spec
+          subPath: interpreter-spec.yaml
+      initContainers:
+      - command:
+        - sh
+        - -c
+        - cp -r /opt/spark/* /spark/
+        image: subhodeep2022/spark-bigdata:spark-3.5.7-fixed-v2
+        name: spark-home-init
+        volumeMounts:
+        - mountPath: /spark
+          name: spark-home
+      serviceAccountName: zeppelin-server
+      volumes:
+      - configMap:
+          name: spark-config-ft54bht9c4
+        name: spark-config
+      - configMap:
+          name: zeppelin-site-t72cmd54mk
+        name: zeppelin-site
+      - configMap:
+          name: spark-templates-dccd57c54g
+        name: interpreter-template
+      - configMap:
+          name: spark-templates-dccd57c54g
+        name: executor-template
+      - configMap:
+          name: zeppelin-interpreter-spec-m89d59f7b7
+        name: interpreter-spec
+      - emptyDir: {}
+        name: spark-home
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/instance: spark-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: spark-operator
+    app.kubernetes.io/version: v1beta2-1.3.8-3.1.1
+    helm.sh/chart: spark-operator-1.1.27
+  name: spark-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: spark-operator
+      app.kubernetes.io/name: spark-operator
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "10254"
+        prometheus.io/scrape: "true"
+      labels:
+        app.kubernetes.io/instance: spark-operator
+        app.kubernetes.io/name: spark-operator
+    spec:
+      containers:
+      - args:
+        - -v=2
+        - -logtostderr
+        - -namespace=
+        - -enable-ui-service=true
+        - -ingress-url-format=
+        - -controller-threads=10
+        - -resync-interval=30
+        - -enable-batch-scheduler=false
+        - -label-selector-filter=
+        - -enable-metrics=true
+        - -metrics-labels=app_type
+        - -metrics-port=10254
+        - -metrics-endpoint=/metrics
+        - -metrics-prefix=
+        - -enable-webhook=true
+        - -webhook-svc-namespace=default
+        - -webhook-port=8080
+        - -webhook-timeout=30
+        - -webhook-svc-name=spark-operator-webhook
+        - -webhook-config-name=spark-operator-webhook-config
+        - -webhook-namespace-selector=
+        - -enable-resource-quota-enforcement=false
+        image: ghcr.io/googlecloudplatform/spark-operator:v1beta2-1.3.8-3.1.1
+        imagePullPolicy: IfNotPresent
+        name: spark-operator
+        ports:
+        - containerPort: 10254
+          name: metrics
+        resources: {}
+        securityContext: {}
+        volumeMounts:
+        - mountPath: /etc/webhook-certs
+          name: webhook-certs
+      securityContext: {}
+      serviceAccountName: spark-operator
+      volumes:
+      - name: webhook-certs
+        secret:
+          secretName: spark-operator-webhook-certs
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/component: master
+    app.kubernetes.io/instance: superset
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    helm.sh/chart: redis-17.9.4
+  name: superset-redis-master
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: master
+      app.kubernetes.io/instance: superset
+      app.kubernetes.io/name: redis
+  serviceName: superset-redis-headless
+  template:
+    metadata:
+      annotations:
+        checksum/configmap: 64f39ac249d0c7b1302bb993299537f2776b54020b64f9b98c9f481759adacad
+        checksum/health: c67d1f0e1314a2ed864f62819e17233bfb7c2c75333dd3326983379b2721364e
+        checksum/scripts: 42c226b98a82e44cb3cb9fd8c02d36583f5a6efd18625015593bab8399e7d1c6
+        checksum/secret: 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+      labels:
+        app.kubernetes.io/component: master
+        app.kubernetes.io/instance: superset
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: redis
+        helm.sh/chart: redis-17.9.4
+    spec:
+      affinity:
+        nodeAffinity: null
+        podAffinity: null
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/component: master
+                  app.kubernetes.io/instance: superset
+                  app.kubernetes.io/name: redis
+              topologyKey: kubernetes.io/hostname
+            weight: 1
+      containers:
+      - args:
+        - --protected-mode
+        - "no"
+        command:
+        - redis-server
+        env:
+        - name: BITNAMI_DEBUG
+          value: "false"
+        - name: REDIS_REPLICATION_MODE
+          value: master
+        - name: ALLOW_EMPTY_PASSWORD
+          value: "yes"
+        - name: REDIS_TLS_ENABLED
+          value: "no"
+        - name: REDIS_PORT
+          value: "6379"
+        image: docker.io/library/redis:7.2
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - /health/ping_liveness_local.sh 5
+          failureThreshold: 5
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 6
+        name: redis
+        ports:
+        - containerPort: 6379
+          name: redis
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - /health/ping_readiness_local.sh 1
+          failureThreshold: 5
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 2
+        resources:
+          limits: {}
+          requests: {}
+        securityContext:
+          runAsUser: 1001
+        volumeMounts:
+        - mountPath: /opt/bitnami/scripts/start-scripts
+          name: start-scripts
+        - mountPath: /health
+          name: health
+        - mountPath: /data
+          name: redis-data
+        - mountPath: /opt/bitnami/redis/mounted-etc
+          name: config
+        - mountPath: /opt/bitnami/redis/etc/
+          name: redis-tmp-conf
+        - mountPath: /tmp
+          name: tmp
+      securityContext:
+        fsGroup: 1001
+      serviceAccountName: superset-redis
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - configMap:
+          defaultMode: 493
+          name: superset-redis-scripts
+        name: start-scripts
+      - configMap:
+          defaultMode: 493
+          name: superset-redis-health
+        name: health
+      - configMap:
+          name: superset-redis-configuration
+        name: config
+      - emptyDir: {}
+        name: redis-tmp-conf
+      - emptyDir: {}
+        name: tmp
+      - emptyDir: {}
+        name: redis-data
+  updateStrategy:
+    type: RollingUpdate
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-create-buckets
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - command:
+        - /bin/bash
+        - /scripts/create-buckets.sh
+        image: minio/mc:latest
+        name: create-buckets
+        volumeMounts:
+        - mountPath: /scripts
+          name: scripts
+      restartPolicy: OnFailure
+      volumes:
+      - configMap:
+          defaultMode: 511
+          name: minio-scripts-72t7ghk66t
+        name: scripts
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+  name: superset-init-db
+  namespace: default
+spec:
+  template:
+    metadata:
+      name: superset-init-db
+    spec:
+      containers:
+      - command:
+        - /bin/sh
+        - -c
+        - . /app/pythonpath/superset_bootstrap.sh; . /app/pythonpath/superset_init.sh
+        envFrom:
+        - secretRef:
+            name: superset-env
+        image: apachesuperset.docker.scarf.sh/apache/superset:3.1.0
+        imagePullPolicy: IfNotPresent
+        name: superset-init-db
+        resources: {}
+        volumeMounts:
+        - mountPath: /app/pythonpath
+          name: superset-config
+          readOnly: true
+      initContainers:
+      - command:
+        - /bin/sh
+        - -c
+        - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -timeout 120s
+        envFrom:
+        - secretRef:
+            name: superset-env
+        image: apache/superset:dockerize
+        imagePullPolicy: IfNotPresent
+        name: wait-for-postgres
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 0
+      volumes:
+      - name: superset-config
+        secret:
+          secretName: superset-config
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    helm.sh/hook: pre-delete, pre-upgrade
+    helm.sh/hook-delete-policy: hook-succeeded
+  labels:
+    app.kubernetes.io/instance: spark-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: spark-operator
+    app.kubernetes.io/version: v1beta2-1.3.8-3.1.1
+    helm.sh/chart: spark-operator-1.1.27
+  name: spark-operator-webhook-cleanup
+spec:
+  template:
+    metadata:
+      name: spark-operator-webhook-cleanup
+    spec:
+      containers:
+      - command:
+        - /bin/sh
+        - -c
+        - 'curl -ik -X DELETE -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+          -H "Accept: application/json" -H "Content-Type: application/json" https://kubernetes.default.svc/api/v1/namespaces/default/secrets/spark-operator-webhook-certs
+          && curl -ik -X DELETE -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+          -H "Accept: application/json" -H "Content-Type: application/json" --data
+          "{\"kind\":\"DeleteOptions\",\"apiVersion\":\"batch/v1\",\"propagationPolicy\":\"Foreground\"}"
+          https://kubernetes.default.svc/apis/batch/v1/namespaces/default/jobs/spark-operator-webhook-init'
+        image: ghcr.io/googlecloudplatform/spark-operator:v1beta2-1.3.8-3.1.1
+        imagePullPolicy: IfNotPresent
+        name: clean-secret
+        securityContext: {}
+      restartPolicy: OnFailure
+      serviceAccountName: spark-operator
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    helm.sh/hook: pre-install, pre-upgrade
+    helm.sh/hook-weight: "50"
+  labels:
+    app.kubernetes.io/instance: spark-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: spark-operator
+    app.kubernetes.io/version: v1beta2-1.3.8-3.1.1
+    helm.sh/chart: spark-operator-1.1.27
+  name: spark-operator-webhook-init
+spec:
+  template:
+    metadata:
+      name: spark-operator-webhook-init
+    spec:
+      containers:
+      - command:
+        - /usr/bin/gencerts.sh
+        - -n
+        - default
+        - -s
+        - spark-operator-webhook
+        - -r
+        - spark-operator-webhook-certs
+        - -p
+        image: ghcr.io/googlecloudplatform/spark-operator:v1beta2-1.3.8-3.1.1
+        imagePullPolicy: IfNotPresent
+        name: main
+        securityContext: {}
+      restartPolicy: OnFailure
+      serviceAccountName: spark-operator
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+  name: centralized-ingress
+  namespace: default
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: airflow.127.0.0.1.sslip.io
+    http:
+      paths:
+      - backend:
+          service:
+            name: airflow-webserver
+            port:
+              name: web
+        path: /
+        pathType: Prefix
+  - host: minio.127.0.0.1.sslip.io
+    http:
+      paths:
+      - backend:
+          service:
+            name: minio
+            port:
+              name: console
+        path: /
+        pathType: Prefix
+  - host: s3.127.0.0.1.sslip.io
+    http:
+      paths:
+      - backend:
+          service:
+            name: minio
+            port:
+              name: api
+        path: /
+        pathType: Prefix
+  - host: superset.127.0.0.1.sslip.io
+    http:
+      paths:
+      - backend:
+          service:
+            name: superset
+            port:
+              name: http
+        path: /
+        pathType: Prefix
+  - host: zeppelin.127.0.0.1.sslip.io
+    http:
+      paths:
+      - backend:
+          service:
+            name: zeppelin
+            port:
+              name: web
+        path: /
+        pathType: Prefix
+  - host: spark.127.0.0.1.sslip.io
+    http:
+      paths:
+      - backend:
+          service:
+            name: zeppelin
+            port:
+              name: spark-ui
+        path: /
+        pathType: Prefix
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: traefik-dashboard-ingress
+  namespace: default
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: traefik.127.0.0.1.sslip.io
+    http:
+      paths:
+      - backend:
+          service:
+            name: traefik
+            port:
+              name: traefik
+        path: /
+        pathType: Prefix
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  annotations:
+    ingressclass.kubernetes.io/is-default-class: "true"
+  labels:
+    app.kubernetes.io/instance: traefik-default
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: traefik
+    helm.sh/chart: traefik-26.0.0
+  name: traefik
+spec:
+  controller: traefik.io/ingress-controller
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  labels:
+    app.kubernetes.io/instance: traefik-default
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: traefik
+    helm.sh/chart: traefik-26.0.0
+  name: traefik-dashboard
+  namespace: default
+spec:
+  entryPoints:
+  - traefik
+  routes:
+  - kind: Rule
+    match: PathPrefix(`/dashboard`) || PathPrefix(`/api`)
+    services:
+    - kind: TraefikService
+      name: api@internal
+---
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: insecure-transport
+  namespace: kubernetes-dashboard
+spec:
+  insecureSkipVerify: true
