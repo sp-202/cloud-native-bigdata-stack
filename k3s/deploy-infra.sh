@@ -12,6 +12,29 @@ export PATH=$PWD:$PATH
 if ! kubectl cluster-info > /dev/null 2>&1; then
     echo "Error: kubectl is not connected to a cluster."
     exit 1
+    exit 1
+fi
+
+# K3s Auto-Context Fix (Common issue: kubectl points to localhost:8080 instead of k3s socket)
+if [ -f "/etc/rancher/k3s/k3s.yaml" ]; then
+    echo "Detected K3s config. Exporting KUBECONFIG..."
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    # Fix permissions if needed
+    if [ ! -r "/etc/rancher/k3s/k3s.yaml" ]; then
+        echo "Need sudo to read k3s.yaml..."
+        sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+    fi
+fi
+
+
+# Resource Capacity Check (User mentioned 16 Core / 32GB)
+echo "Checking Cluster Capacity..."
+TOTAL_MEM_KB=$(kubectl get nodes -o jsonpath='{.items[*].status.capacity.memory}' | sed 's/Ki//g' | awk '{s+=$1} END {print s}')
+TOTAL_MEM_GB=$((TOTAL_MEM_KB / 1024 / 1024))
+if [ $TOTAL_MEM_GB -lt 24 ]; then
+    echo "WARNING: Detected < 24GB RAM ($TOTAL_MEM_GB GB). This is a High-Spec deployment (Spark Execs=8GB)."
+    echo "You might experience OOM kills. Recommend >= 32GB."
+    sleep 5
 fi
 
 # Cleanup Previous Deployment
