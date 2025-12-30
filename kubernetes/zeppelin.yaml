@@ -14,6 +14,7 @@ spec:
     metadata:
       labels:
         app: zeppelin
+        spark-role: driver
     spec:
       # Init Container: Copies Spark binaries to /spark to standardise paths
       # regardless of the underlying image structure (/opt/spark vs /spark).
@@ -40,6 +41,22 @@ spec:
         - name: ZEPPELIN_ADDR
           value: "0.0.0.0"
         
+        # S3 Notebook Storage (MinIO)
+        - name: ZEPPELIN_NOTEBOOK_STORAGE
+          value: "org.apache.zeppelin.notebook.repo.S3NotebookRepo"
+        - name: ZEPPELIN_NOTEBOOK_S3_ENDPOINT
+          value: "http://minio:9000"
+        - name: ZEPPELIN_NOTEBOOK_S3_BUCKET
+          value: "notebooks"
+        - name: ZEPPELIN_NOTEBOOK_S3_USER
+          value: "minioadmin"
+        - name: ZEPPELIN_NOTEBOOK_S3_PATH_STYLE_ACCESS
+          value: "true"
+        - name: AWS_ACCESS_KEY_ID
+          value: "minioadmin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "minioadmin"
+
         # Spark Path Configuration (Server side)
         - name: SPARK_HOME
           value: "/spark"
@@ -57,19 +74,18 @@ spec:
           value: "zeppelin-server" # Grant permissions for Driver Pods (Interpreters) to create Executors
         
         # Lifecycle Management (Auto-Shutdown)
-        # Shuts down interpreter pods after inactivity.
-        # ALLOWED VALUES:
-        # - TESTING: 60000 (60s)
-        # - PRODUCTION: 1200000 (20m)
         - name: ZEPPELIN_INTERPRETER_LIFECYCLEMANAGER_CLASS
           value: "org.apache.zeppelin.interpreter.lifecycle.TimeoutLifecycleManager"
         - name: ZEPPELIN_INTERPRETER_LIFECYCLEMANAGER_TIMEOUT_THRESHOLD
-          value: "60000"
+          value: "600000"
 
         resources:
           requests:
-            memory: "2Gi"
+            memory: "4Gi"
             cpu: "1000m"
+          limits:
+             memory: "8Gi"
+             cpu: "2000m"
         
         volumeMounts:
         # Mount custom Spark config (disables event logs, etc.)
@@ -80,9 +96,6 @@ spec:
         - name: zeppelin-site
           mountPath: /opt/zeppelin/conf/zeppelin-site.xml
           subPath: zeppelin-site.xml
-        # Persistent Storage for Notebooks
-        - name: notebook-storage
-          mountPath: /opt/zeppelin/notebook
         # Shared volume for Spark binaries
         - name: spark-home
           mountPath: /spark
@@ -96,7 +109,7 @@ spec:
         # MOUNT OVERRIDE FOR DEFAULT SPEC
         - name: interpreter-spec
           mountPath: /opt/zeppelin/k8s/interpreter/100-interpreter-spec.yaml
-          subPath: 100-interpreter-spec.yaml
+          subPath: interpreter-spec.yaml
       
       serviceAccountName: zeppelin-server
       volumes:
@@ -118,9 +131,6 @@ spec:
       - name: interpreter-spec
         configMap:
           name: zeppelin-interpreter-spec
-      - name: notebook-storage
-        persistentVolumeClaim:
-          claimName: zeppelin-notebook-pvc
       - name: spark-home
         emptyDir: {}
 ---

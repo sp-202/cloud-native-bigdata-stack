@@ -1,44 +1,50 @@
-#!/bin/bash
-
-# Create archive directory
-mkdir -p archive
-
-echo "Archiving Legacy and Temporary Files..."
-
-# Move Legacy Docker Compose Files
-mv docker-compose.yml archive/ 2>/dev/null || true
-mv docker-compose-superset.yml archive/ 2>/dev/null || true
-
-# Move Logs
-mv *.log archive/ 2>/dev/null || true
-mv *.txt archive/ 2>/dev/null || true
-
-# Move Miscellaneous Scripts
-mv batch-upload.sh archive/ 2>/dev/null || true
-mv download-taxi-data*.sh archive/ 2>/dev/null || true
-mv mc-upload.sh archive/ 2>/dev/null || true
-mv upload-to-minio*.sh archive/ 2>/dev/null || true
-
-# Move Test Artifacts
-mv sample.json archive/ 2>/dev/null || true
-mv test_hive.py archive/ 2>/dev/null || true
-
-# Move Dashboard artifacts (if not strictly needed in root)
-mv dashboard-access.service archive/ 2>/dev/null || true
-mv dashboard-admin.yaml archive/ 2>/dev/null || true
-
-# Check if superset folder is needed. 
-# deploy.sh uses remote chart, but local folder caused issues. 
-# Moving it to archive prevents Helm collision safely.
-if [ -d "superset" ]; then
-    echo "Moving superset/ directory to archive/..."
-    mv superset archive/
+# Check for Destructive Flag
+DESTROY_ALL=false
+if [[ "$1" == "--destroy-all" ]]; then
+  DESTROY_ALL=true
+  echo "⚠️  WARNING: DESTRUCTIVE DATA WIPE MODE ENABLED ⚠️"
+  echo "This will delete ALL data (PVCs), Databases, and Monitoring Stacks."
+  echo "Starting in 5 seconds..."
+  sleep 5
+else
+  echo "ℹ️  SAFE MODE: Deleting Applications Only (Keeping Data/Infra)"
+  echo "To delete everything (including data), run: ./cleanup.sh --destroy-all"
 fi
 
-if [ -d "helm-charts" ]; then
-    echo "Moving helm-charts/ directory to archive/..."
-    mv helm-charts archive/
+# Uninstall Stateless Applications
+echo "Uninstalling Applications..."
+helm uninstall superset || true
+kubectl delete deployment airflow-webserver airflow-scheduler zeppelin || true
+kubectl delete svc airflow-webserver zeppelin zeppelin-server superset superset-redis-headless superset-redis-master || true
+kubectl delete job minio-create-buckets superset-init-db || true
+kubectl delete statefulset superset-redis-master || true
+
+if [ "$DESTROY_ALL" = true ]; then
+  echo "Uninstalling Infrastructure & Data..."
+  helm uninstall traefik || true
+  helm uninstall spark-operator -n spark-operator || true
+  helm uninstall spark-operator || true
+  helm uninstall kubernetes-dashboard -n kubernetes-dashboard || true
+  helm uninstall kube-prometheus-stack || true
+  
+  kubectl delete deployment hive-metastore minio postgres || true
+  kubectl delete svc minio hive-metastore postgres traefik || true
+  kubectl delete secret superset-env superset-config || true
+  
+  # Delete PVCs (DATA LOSS)
+  echo "Deleting PVCs (Data Wipe)..."
+  kubectl delete pvc minio-data-pvc postgres-data-pvc zeppelin-notebook-pvc || true
+  kubectl delete pvc -l app.kubernetes.io/name=prometheus || true
+  kubectl delete pvc -l app.kubernetes.io/instance=kube-prometheus-stack || true
+  kubectl delete pvc -l app.kubernetes.io/instance=superset || true
+  
+  kubectl delete namespace spark-operator || true
+  kubectl delete namespace kubernetes-dashboard || true
+  kubectl delete clusterrolebinding admin-user || true
+  kubectl delete serverstransport -n default insecure-transport || true
 fi
 
-echo "Cleanup Complete. Legacy files moved to archive/."
-ls -F
+# Delete ConfigMaps (Safe to recreate)
+kubectl delete cm airflow-dags hive-config spark-config spark-templates zeppelin-interpreter-spec zeppelin-site || true
+
+echo "Cleanup Complete."

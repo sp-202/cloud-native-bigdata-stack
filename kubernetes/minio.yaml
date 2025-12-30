@@ -17,14 +17,23 @@ data:
     # Configure MC and Create Buckets
     /usr/bin/mc mb myminio/warehouse;
     /usr/bin/mc mb myminio/data;
+    /usr/bin/mc mb myminio/dags;
+    /usr/bin/mc mb myminio/notebooks;
     /usr/bin/mc mb myminio/test-bucket;
     /usr/bin/mc mb myminio/taxi-data;
+    /usr/bin/mc mb myminio/spark-logs;
     
     # Set Public Policies
     /usr/bin/mc policy set public myminio/warehouse;
     /usr/bin/mc policy set public myminio/data;
+    /usr/bin/mc policy set public myminio/dags;
+    /usr/bin/mc policy set public myminio/notebooks;
     /usr/bin/mc policy set public myminio/test-bucket;
     /usr/bin/mc policy set public myminio/taxi-data;
+    /usr/bin/mc policy set public myminio/spark-logs;
+    # Create spark-events directory explicitly
+    echo "Creating spark-events directory..."
+    /usr/bin/mc pipe myminio/spark-logs/spark-events/.keep < /dev/null
     echo "Buckets created."
     exit 0
 
@@ -54,9 +63,16 @@ spec:
         - name: MINIO_ROOT_PASSWORD
           value: "minioadmin"
         - name: MINIO_SERVER_URL
-          value: "http://minio-api.44.220.60.20.sslip.io" # Traefik Ingress URL (Port 80)
+          value: "http://minio:9000" # Internal Service
         - name: MINIO_BROWSER_REDIRECT_URL
-          value: "http://minio-console.44.220.60.20.sslip.io" # Traefik Ingress URL (Port 80)
+          value: "http://minio:9001" # Internal Service
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
         ports:
         - containerPort: 9000
         - containerPort: 9001
@@ -75,6 +91,7 @@ metadata:
   name: minio
   namespace: default
 spec:
+  # type: LoadBalancer
   ports:
   - name: api
     port: 9000
@@ -84,36 +101,6 @@ spec:
     targetPort: 9001
   selector:
     app: minio
-
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: minio-ingress
-  namespace: default
-spec:
-  rules:
-  - host: minio-api.44.220.60.20.sslip.io
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: minio
-            port:
-              number: 9000
-  - host: minio-console.44.220.60.20.sslip.io
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: minio
-            port:
-              number: 9001
-
 
 ---
 apiVersion: batch/v1
