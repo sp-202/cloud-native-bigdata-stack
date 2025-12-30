@@ -114,6 +114,17 @@ while [ -z "$EXTERNAL_IP" ]; do
   fi
 done
 
+# Try to get Public IP (for External Access) - Best Effort
+PUBLIC_IP=$(curl -s --connect-timeout 2 ifconfig.me || true)
+
+if [ -n "$PUBLIC_IP" ] && [[ "$PUBLIC_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Detected Public IP: $PUBLIC_IP"
+    echo "Using Public IP for Ingress Domain..."
+    EXTERNAL_IP=$PUBLIC_IP
+else
+    echo "Could not detect Public IP (or running in restricted/internal network)."
+    echo "Falling back to Cluster IP: $EXTERNAL_IP"
+fi
 
 
 echo "Traefik IP Assigned: $EXTERNAL_IP"
@@ -127,6 +138,10 @@ cat kubernetes/traefik-dashboard-ingress.yaml | sed "s/INGRESS_DOMAIN/$INGRESS_D
 helm repo add spark-operator https://kubeflow.github.io/spark-operator
 helm upgrade --install spark-operator spark-operator/spark-operator --timeout 10m
 
+# Patch Traefik Service to expose Dashboard port (9000 -> 8080)
+echo "Patching Traefik Service for Dashboard access..."
+kubectl patch svc traefik -n kube-system --type='json' -p='[{"op": "add", "path": "/spec/ports/-", "value": {"name": "traefik", "port": 9000, "protocol": "TCP", "targetPort": 8080}}]' || true
+
 # Apply transport for SSL Bypass
 kubectl apply -f kubernetes/traefik-transport.yaml
 
@@ -139,6 +154,20 @@ kubectl apply -f kubernetes/zeppelin.yaml
 echo "Updating Ingress Rules..."
 cat kubernetes/ingress.yaml | sed "s/INGRESS_DOMAIN/$INGRESS_DOMAIN/g" | kubectl apply -f -
 
+# Patch Kubernetes Dashboard Ingress (if it exists)
+echo "Patching Kubernetes Dashboard Ingress..."
+kubectl patch ingress dashboard-ingress -n kubernetes-dashboard --type='json' -p="[{\"op\": \"replace\", \"path\": \"/spec/rules/0/host\", \"value\": \"dashboard.$INGRESS_DOMAIN\"}]" || true
+# Annotate Ingress to use Insecure Transport (Fix 500 Error)
+kubectl annotate ingress dashboard-ingress -n kubernetes-dashboard traefik.ingress.kubernetes.io/service.serverstransport=kubernetes-dashboard-insecure-transport@kubernetescrd --overwrite || true
+# Annotate Service as well (Redundancy)
+kubectl annotate service kubernetes-dashboard-kong-proxy -n kubernetes-dashboard traefik.ingress.kubernetes.io/service.serverstransport=kubernetes-dashboard-insecure-transport@kubernetescrd --overwrite || true
+# Ensure TLS Host is also updated
+kubectl patch ingress dashboard-ingress -n kubernetes-dashboard --type='json' -p="[{\"op\": \"replace\", \"path\": \"/spec/tls/0/hosts/0\", \"value\": \"dashboard.$INGRESS_DOMAIN\"}]" || true
+
+# Patch Grafana Ingress (if it exists)
+echo "Patching Grafana Ingress..."
+kubectl patch ingress grafana-ingress -n default --type='json' -p="[{\"op\": \"replace\", \"path\": \"/spec/rules/0/host\", \"value\": \"grafana.$INGRESS_DOMAIN\"}]" || true
+
 # Superset (Helm Upgrade is safe for Apps)
 echo "Installing/Updating Superset..."
 if [ ! -d "superset" ]; then
@@ -149,7 +178,7 @@ echo "Updating Chart Dependencies..."
 helm dependency update ./superset/helm/superset
 # helm repo add superset https://apache.github.io/superset
 # Install without waiting for pods to be ready (allows script to finish)
-helm upgrade --install superset ./superset/helm/superset --namespace default -f kubernetes/superset-values.yaml --wait=false
+helm upgrade --install superset ./superset/helm/superset --namespace default -f kubernetes/superset-values.yaml --wait=false --cleanup-on-fail
 
 echo "Application Deployment Complete!"
 echo "=============================================="
