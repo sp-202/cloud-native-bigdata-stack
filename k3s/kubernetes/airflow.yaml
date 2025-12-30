@@ -35,7 +35,6 @@ spec:
         - name: _AIRFLOW_WWW_USER_PASSWORD
           value: "admin"
         resources:
-        resources:
           requests:
             memory: "1Gi"
             cpu: "500m"

@@ -83,11 +83,11 @@ spec:
 
         resources:
           requests:
-            memory: "4Gi"
-            cpu: "1000m"
+            memory: "8Gi"
+            cpu: "2000m"
           limits:
-             memory: "8Gi"
-             cpu: "2000m"
+             memory: "12Gi"
+             cpu: "4000m"
         
         volumeMounts:
         # Mount custom Spark config (disables event logs, etc.)

@@ -15,7 +15,15 @@ if ! kubectl cluster-info > /dev/null 2>&1; then
 fi
 
 # Fetch Traefik IP for Ingress Rules
-EXTERNAL_IP=$(kubectl get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+# Fetch Traefik IP for Ingress Rules (Check default first, then kube-system for K3s)
+EXTERNAL_IP=$(kubectl get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+if [ -z "$EXTERNAL_IP" ]; then
+    EXTERNAL_IP=$(kubectl get svc -n kube-system traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+fi
+if [ -z "$EXTERNAL_IP" ]; then
+    # Fallback to Node IP for HostPath/NodePort setups
+    EXTERNAL_IP=$(kubectl get node -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+fi
 if [ -z "$EXTERNAL_IP" ]; then
   echo "Error: Traefik IP not found. Is Infrastructure deployed?"
   exit 1
@@ -48,24 +56,25 @@ echo "[4/6] Deploying Compute (Zeppelin)..."
 kubectl apply -f kubernetes/zeppelin.yaml
 
 echo "[5/6] Installing Infrastructure (Traefik, Spark Operator, Dashboard)..."
-# Install Traefik
-helm repo add traefik https://traefik.github.io/charts
-helm repo update
-helm upgrade --install traefik traefik/traefik \
-  --set ports.web.nodePort=null \
-  --set ports.websecure.nodePort=null \
-  --set global.checkNewVersion=false \
-  --set global.sendAnonymousUsage=false \
-  --set "additionalArguments={--api.insecure=true,--api.dashboard=true}" \
-  --timeout 10m
-# Manually expose Traefik API port 9000 -> 8080 (Traefik internal)
-kubectl patch svc traefik -p '{"spec":{"ports":[{"name":"traefik","port":9000,"targetPort":8080}]}}' || true
+# Skipping Traefik Install (Using K3s Bundled Traefik)
+# helm upgrade --install traefik ...
 
 # Wait for Traefik LoadBalancer IP
 echo "Waiting for Traefik LoadBalancer IP..."
 EXTERNAL_IP=""
 while [ -z "$EXTERNAL_IP" ]; do
-  EXTERNAL_IP=$(kubectl get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  # Check default first
+  EXTERNAL_IP=$(kubectl get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+  
+  # Check kube-system (K3s default)
+  if [ -z "$EXTERNAL_IP" ]; then
+      EXTERNAL_IP=$(kubectl get svc -n kube-system traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+  fi
+  
+  # Fallback: Node IP
+  if [ -z "$EXTERNAL_IP" ]; then
+       EXTERNAL_IP=$(kubectl get node -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+  fi
   if [ -z "$EXTERNAL_IP" ]; then
     echo "Waiting for IP..."
     sleep 10
