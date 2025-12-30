@@ -131,8 +131,14 @@ kubectl apply -f kubernetes/zeppelin.yaml
 
 # Superset (Helm Upgrade is safe for Apps)
 echo "Installing/Updating Superset..."
-helm repo add superset https://apache.github.io/superset
-helm upgrade --install superset superset/superset --namespace default -f kubernetes/superset-values.yaml
+if [ ! -d "superset" ]; then
+    echo "Cloning Superset repository..."
+    git clone --depth 1 https://github.com/apache/superset.git
+fi
+echo "Updating Chart Dependencies..."
+helm dependency update ./superset/helm/superset
+# helm repo add superset https://apache.github.io/superset
+helm upgrade --install superset ./superset/helm/superset --namespace default -f kubernetes/superset-values.yaml
 
 # Apply Ingress Rules for Apps (Update Domain)
 echo "Updating Ingress Rules..."

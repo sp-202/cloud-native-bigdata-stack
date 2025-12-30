@@ -17,3 +17,6 @@ __pycache__/
 
 airflow/*.db
 airflow/*.pid
+
+# Ignore k3s auto-downloaded dependencies
+k3s/superset/
