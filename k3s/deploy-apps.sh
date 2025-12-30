@@ -46,9 +46,9 @@ fi
 
 # Fetch Traefik IP for Ingress Rules
 # Fetch Traefik IP for Ingress Rules (Check default first, then kube-system for K3s)
-EXTERNAL_IP=$(kubectl get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+EXTERNAL_IP=$(kubectl get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
 if [ -z "$EXTERNAL_IP" ]; then
-    EXTERNAL_IP=$(kubectl get svc -n kube-system traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+    EXTERNAL_IP=$(kubectl get svc -n kube-system traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
 fi
 if [ -z "$EXTERNAL_IP" ]; then
     # Fallback to Node IP for HostPath/NodePort setups
@@ -94,11 +94,11 @@ echo "Waiting for Traefik LoadBalancer IP..."
 EXTERNAL_IP=""
 while [ -z "$EXTERNAL_IP" ]; do
   # Check default first
-  EXTERNAL_IP=$(kubectl get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+  EXTERNAL_IP=$(kubectl get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
   
   # Check kube-system (K3s default)
   if [ -z "$EXTERNAL_IP" ]; then
-      EXTERNAL_IP=$(kubectl get svc -n kube-system traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+      EXTERNAL_IP=$(kubectl get svc -n kube-system traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
   fi
   
   # Fallback: Node IP
