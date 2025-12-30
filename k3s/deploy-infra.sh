@@ -8,13 +8,6 @@ echo "=============================================="
 # Add current directory to PATH for local helm binary
 export PATH=$PWD:$PATH
 
-# Check if kubectl is connected
-if ! kubectl cluster-info > /dev/null 2>&1; then
-    echo "Error: kubectl is not connected to a cluster."
-    exit 1
-    exit 1
-fi
-
 # K3s Auto-Context Fix (Common issue: kubectl points to localhost:8080 instead of k3s socket)
 if [ -f "/etc/rancher/k3s/k3s.yaml" ]; then
     echo "Detected K3s config. Exporting KUBECONFIG..."
@@ -24,6 +17,12 @@ if [ -f "/etc/rancher/k3s/k3s.yaml" ]; then
         echo "Need sudo to read k3s.yaml..."
         sudo chmod 644 /etc/rancher/k3s/k3s.yaml
     fi
+fi
+
+# Check if kubectl is connected
+if ! kubectl cluster-info > /dev/null 2>&1; then
+    echo "Error: kubectl is not connected to a cluster."
+    exit 1
 fi
 
 
