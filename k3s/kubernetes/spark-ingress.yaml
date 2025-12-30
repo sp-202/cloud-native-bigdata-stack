@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: spark-ingress
+  namespace: default
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: spark.INGRESS_DOMAIN
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: zeppelin
+            port:
+              number: 4040

@@ -1,0 +1,41 @@
+# PVC for Zeppelin Notebooks (REMOVED - Using MinIO S3 Backend)
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: zeppelin-notebook-pvc
+#   namespace: default
+# spec:
+#   accessModes:
+#     - ReadWriteOnce
+#   resources:
+#     requests:
+#       storage: 5Gi
+  storageClassName: local-path # K3s Default
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path # K3s Default
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-data-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path # K3s Default
