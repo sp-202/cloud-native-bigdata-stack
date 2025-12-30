@@ -18,7 +18,15 @@ fi
 
 # Check if kubectl is connected
 if ! kubectl cluster-info > /dev/null 2>&1; then
-    echo "Error: kubectl is not connected to a cluster."
+    echo "❌ Error: kubectl is NOT connected to a cluster."
+    echo "Diagnostics:"
+    echo "  - KUBECONFIG: ${KUBECONFIG:-'Not Set'}"
+    echo "  - Host: $(hostname)"
+    echo ""
+    echo "Fix:"
+    echo "  1. If running on the K3s Server: Ensure '/etc/rancher/k3s/k3s.yaml' exists and is readable."
+    echo "  2. If running remotely (Mac/PC): Copy the kubeconfig from the server and run:"
+    echo "     export KUBECONFIG=/path/to/k3s.yaml"
     exit 1
 fi
 
