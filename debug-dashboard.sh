@@ -27,12 +27,22 @@ if [ -z "$INGRESS_DOMAIN" ]; then
    echo "[WARN] Traefik Ingress not found or cannot parse host."
 else
    echo "Traefik URL: http://$INGRESS_DOMAIN/dashboard/"
-   # Simple curl check
+   # Verbose check
+   echo "--- Curling /dashboard/ ---"
+   curl -I "http://$INGRESS_DOMAIN/dashboard/"
+   
+   echo "--- Curling /api/rawdata ---"
+   RESP_API=$(curl -s -o /dev/null -w "%{http_code}" "http://$INGRESS_DOMAIN/api/rawdata")
+   echo "API Response: $RESP_API"
+   
    RESP=$(curl -s -o /dev/null -w "%{http_code}" "http://$INGRESS_DOMAIN/dashboard/")
    if [ "$RESP" == "200" ] || [ "$RESP" == "302" ] || [ "$RESP" == "304" ]; then
        echo "[OK] Traefik Dashboard reachable (HTTP $RESP)."
    else
        echo "[FAIL] Traefik Dashboard returned HTTP $RESP."
+       echo "--- Body Snippet (First 200 chars) ---"
+       curl -s "http://$INGRESS_DOMAIN/dashboard/" | head -c 200
+       echo ""
    fi
 fi
 
