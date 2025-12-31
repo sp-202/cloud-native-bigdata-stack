@@ -34,7 +34,7 @@ helmCharts:
     repo: https://kubernetes.github.io/dashboard/
     releaseName: kubernetes-dashboard
     namespace: kubernetes-dashboard
-    version: 7.0.0
+    version: 7.5.0
     valuesInline:
       app:
         ingress:

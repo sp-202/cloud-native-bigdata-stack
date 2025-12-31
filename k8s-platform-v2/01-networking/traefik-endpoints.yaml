@@ -17,7 +17,7 @@ metadata:
   namespace: default
 subsets:
   - addresses:
-      - ip: 10.43.137.189
+      - ip: TRAEFIK_IP_PLACEHOLDER
     ports:
       - name: dashboard
         port: 9000
