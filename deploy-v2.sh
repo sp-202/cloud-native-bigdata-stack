@@ -36,8 +36,20 @@ kubectl delete svc kubernetes-dashboard-web kubernetes-dashboard-api kubernetes-
 # Optional: Clear dashboard namespace if it's stuck or broken
 # kubectl delete ns kubernetes-dashboard 2>/dev/null || true
 
-# Traefik IP Injection removed in favor of ExternalName service (v2.1)
-# The Service traefik-external now points to traefik.kube-system.svc.cluster.local via DNS
+# Dynamic IP injection for Traefik Dashboard (User Request: No hardcoding)
+echo "Resolving Traefik Internal IP..."
+# CRITICAL: Get the POD IP, not the Service ClusterIP.
+TRAEFIK_IP=$(kubectl get pods -n kube-system -l app.kubernetes.io/name=traefik -o jsonpath='{.items[0].status.podIP}')
+if [ -z "$TRAEFIK_IP" ]; then
+    echo "Error: Could not find Traefik pod in kube-system!"
+    exit 1
+fi
+echo "Found Traefik Pod IP: $TRAEFIK_IP"
+# Inject Pod IP
+sed -i "s/ip: .*/ip: $TRAEFIK_IP/" ./k8s-platform-v2/01-networking/traefik-endpoints.yaml
+# Update Port to 8080 (Container Port) inside the generated endpoints because we are hitting Pod direct
+sed -i "s/port: 9000/port: 8080/g" ./k8s-platform-v2/01-networking/traefik-endpoints.yaml
+
 
 
 # Verify Domain
