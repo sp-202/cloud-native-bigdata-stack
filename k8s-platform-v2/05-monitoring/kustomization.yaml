@@ -6,6 +6,7 @@ resources:
   - grafana-ingress.yaml
   - admin-user.yaml
   - kong-manual-config.yaml
+  - dashboard-transport.yaml
 
 helmCharts:
   - name: kube-prometheus-stack

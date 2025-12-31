@@ -5,6 +5,7 @@ resources:
   - airflow.yaml
   - hive.yaml
   - zeppelin.yaml
+  - spark-ui-service.yaml
 
 configMapGenerator:
   - name: spark-config
