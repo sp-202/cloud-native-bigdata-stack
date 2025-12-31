@@ -8,14 +8,14 @@ data:
     _format_version: "1.1"
     services:
     - name: kubernetes-dashboard-web
-      url: http://kubernetes-dashboard-web.kubernetes-dashboard.svc.cluster.local:8000
+      url: http://kubernetes-dashboard-web:8000
       routes:
       - name: web-route
         paths:
         - /
         strip_path: false
     - name: kubernetes-dashboard-api
-      url: http://kubernetes-dashboard-api.kubernetes-dashboard.svc.cluster.local:8000
+      url: http://kubernetes-dashboard-api:8000
       routes:
       - name: api-route
         paths:

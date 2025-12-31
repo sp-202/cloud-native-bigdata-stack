@@ -23,6 +23,17 @@ fi
 echo "Cluster Connected!"
 
 # Deploy
+
+# Safe Cleanup (Network & Dashboard only)
+echo "Performing Network Cleanup (Preserving DB/MinIO)..."
+kubectl delete service traefik-external -n default 2>/dev/null || true
+kubectl delete endpoints traefik-external -n default 2>/dev/null || true
+kubectl delete ingress traefik-dashboard-ingress -n default 2>/dev/null || true
+kubectl delete ingress kubernetes-dashboard -n kubernetes-dashboard 2>/dev/null || true
+# Optional: Clear dashboard namespace if it's stuck or broken
+# kubectl delete ns kubernetes-dashboard 2>/dev/null || true
+
+# Dynamic IP injection for Traefik Dashboard (User Request: No hardcoding)
 # Dynamic IP injection for Traefik Dashboard (User Request: No hardcoding)
 echo "Resolving Traefik Internal IP..."
 TRAEFIK_IP=$(kubectl get svc -n kube-system traefik -o jsonpath='{.spec.clusterIP}')
@@ -60,6 +71,9 @@ echo "Waiting for Resources..."
 kubectl wait --for=condition=available --timeout=300s deployment/minio -n default || echo "MinIO wait timed out"
 kubectl wait --for=condition=available --timeout=300s deployment/postgres -n default || echo "Postgres wait timed out"
 kubectl wait --for=condition=available --timeout=300s deployment/traefik -n kube-system || echo "Traefik wait timed out (might be Helm managed or DaemonSet)"
+
+echo "Restarting Dashboard Gateway to apply configurations..."
+kubectl rollout restart deployment kubernetes-dashboard-kong -n kubernetes-dashboard || true
 
 echo "Deployment Complete!"
 echo "Check status with: kubectl get pods"
