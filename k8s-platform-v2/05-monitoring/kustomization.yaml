@@ -33,7 +33,7 @@ helmCharts:
   - name: kubernetes-dashboard
     repo: https://kubernetes.github.io/dashboard/
     releaseName: kubernetes-dashboard
-    namespace: kubernetes-dashboard
+    namespace: default
     version: 7.5.0
     valuesInline:
       app:

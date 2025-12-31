@@ -1,0 +1,129 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "6"
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"api","app.kubernetes.io/instance":"kubernetes-dashboard","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"kubernetes-dashboard-api","app.kubernetes.io/part-of":"kubernetes-dashboard","app.kubernetes.io/version":"1.7.0","helm.sh/chart":"kubernetes-dashboard-7.5.0"},"name":"kubernetes-dashboard-api","namespace":"default"},"spec":{"replicas":1,"revisionHistoryLimit":10,"selector":{"matchLabels":{"app.kubernetes.io/instance":"kubernetes-dashboard","app.kubernetes.io/name":"kubernetes-dashboard-api","app.kubernetes.io/part-of":"kubernetes-dashboard"}},"template":{"metadata":{"annotations":{"checksum/config":"685780332c0e3e86cfc9cf993d038aa4edd364042a920fe9bfc2b34fcbf2a0c5"},"labels":{"app.kubernetes.io/component":"api","app.kubernetes.io/instance":"kubernetes-dashboard","app.kubernetes.io/managed-by":"Helm","app.kubernetes.io/name":"kubernetes-dashboard-api","app.kubernetes.io/part-of":"kubernetes-dashboard","app.kubernetes.io/version":"1.7.0","helm.sh/chart":"kubernetes-dashboard-7.5.0"}},"spec":{"automountServiceAccountToken":true,"containers":[{"args":["--namespace=default","--metrics-scraper-service-name=kubernetes-dashboard-metrics-scraper"],"env":[{"name":"CSRF_KEY","valueFrom":{"secretKeyRef":{"key":"private.key","name":"kubernetes-dashboard-csrf"}}},{"name":"GOMAXPROCS","valueFrom":{"resourceFieldRef":{"resource":"limits.cpu"}}},{"name":"GOMEMLIMIT","valueFrom":{"resourceFieldRef":{"resource":"limits.memory"}}}],"image":"docker.io/kubernetesui/dashboard-api:1.7.0","imagePullPolicy":"IfNotPresent","name":"kubernetes-dashboard-api","ports":[{"containerPort":8000,"name":"api","protocol":"TCP"}],"resources":{"limits":{"cpu":"250m","memory":"400Mi"},"requests":{"cpu":"100m","memory":"200Mi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true,"runAsGroup":2001,"runAsUser":1001},"volumeMounts":[{"mountPath":"/tmp","name":"tmp-volume"}]}],"securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}},"serviceAccountName":"kubernetes-dashboard-api","volumes":[{"emptyDir":{},"name":"tmp-volume"}]}}}}
+  creationTimestamp: "2025-12-30T18:27:56Z"
+  generation: 6
+  labels:
+    app.kubernetes.io/component: api
+    app.kubernetes.io/instance: kubernetes-dashboard
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: kubernetes-dashboard-api
+    app.kubernetes.io/part-of: kubernetes-dashboard
+    app.kubernetes.io/version: 1.7.0
+    helm.sh/chart: kubernetes-dashboard-7.5.0
+  name: kubernetes-dashboard-api
+  namespace: default
+  resourceVersion: "39505"
+  uid: 9f1a3b06-de01-408c-aa8a-8aa2d79b412f
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: kubernetes-dashboard
+      app.kubernetes.io/name: kubernetes-dashboard-api
+      app.kubernetes.io/part-of: kubernetes-dashboard
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        checksum/config: 685780332c0e3e86cfc9cf993d038aa4edd364042a920fe9bfc2b34fcbf2a0c5
+      creationTimestamp: null
+      labels:
+        app.kubernetes.io/component: api
+        app.kubernetes.io/instance: kubernetes-dashboard
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: kubernetes-dashboard-api
+        app.kubernetes.io/part-of: kubernetes-dashboard
+        app.kubernetes.io/version: 1.7.0
+        helm.sh/chart: kubernetes-dashboard-7.5.0
+    spec:
+      automountServiceAccountToken: true
+      containers:
+      - args:
+        - --namespace=default
+        - --metrics-scraper-service-name=kubernetes-dashboard-metrics-scraper
+        env:
+        - name: CSRF_KEY
+          valueFrom:
+            secretKeyRef:
+              key: private.key
+              name: kubernetes-dashboard-csrf
+        - name: GOMAXPROCS
+          valueFrom:
+            resourceFieldRef:
+              divisor: "0"
+              resource: limits.cpu
+        - name: GOMEMLIMIT
+          valueFrom:
+            resourceFieldRef:
+              divisor: "0"
+              resource: limits.memory
+        image: docker.io/kubernetesui/dashboard-api:1.7.0
+        imagePullPolicy: IfNotPresent
+        name: kubernetes-dashboard-api
+        ports:
+        - containerPort: 8000
+          name: api
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 250m
+            memory: 400Mi
+          requests:
+            cpu: 100m
+            memory: 200Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsGroup: 2001
+          runAsUser: 1001
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp-volume
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccount: kubernetes-dashboard-api
+      serviceAccountName: kubernetes-dashboard-api
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - emptyDir: {}
+        name: tmp-volume
+status:
+  availableReplicas: 1
+  conditions:
+  - lastTransitionTime: "2025-12-31T04:35:48Z"
+    lastUpdateTime: "2025-12-31T04:35:48Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - lastTransitionTime: "2025-12-30T18:27:56Z"
+    lastUpdateTime: "2025-12-31T07:44:17Z"
+    message: ReplicaSet "kubernetes-dashboard-api-7c7557d987" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  observedGeneration: 6
+  readyReplicas: 1
+  replicas: 1
+  updatedReplicas: 1
