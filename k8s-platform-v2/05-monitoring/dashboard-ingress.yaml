@@ -6,6 +6,8 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/service.serverscheme: https
+    traefik.ingress.kubernetes.io/service.serverscheme: https
 spec:
   rules:
   - host: dashboard.136.119.249.178.sslip.io
