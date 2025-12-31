@@ -9,10 +9,18 @@ spec:
   - host: traefik.$(INGRESS_DOMAIN)
     http:
       paths:
-      - path: /
+      - path: /dashboard
         pathType: Prefix
         backend:
           service:
             name: traefik-external
             port:
               number: 9000
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: traefik-external
+            port:
+              number: 9000
+
