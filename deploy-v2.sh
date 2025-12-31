@@ -47,8 +47,8 @@ fi
 echo "Found Traefik Pod IP: $TRAEFIK_IP"
 # Inject Pod IP
 sed -i "s/ip: .*/ip: $TRAEFIK_IP/" ./k8s-platform-v2/01-networking/traefik-endpoints.yaml
-# Update Port to 8080 (Container Port) inside the generated endpoints because we are hitting Pod direct
-sed -i "s/port: 9000/port: 8080/g" ./k8s-platform-v2/01-networking/traefik-endpoints.yaml
+# Port is already correctly set to 8080 in the endpoints file
+
 
 
 
