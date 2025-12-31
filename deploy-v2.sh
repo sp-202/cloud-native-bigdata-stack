@@ -36,18 +36,9 @@ kubectl delete svc kubernetes-dashboard-web kubernetes-dashboard-api kubernetes-
 # Optional: Clear dashboard namespace if it's stuck or broken
 # kubectl delete ns kubernetes-dashboard 2>/dev/null || true
 
-# Dynamic IP injection for Traefik Dashboard (User Request: No hardcoding)
-echo "Resolving Traefik Internal IP..."
-# CRITICAL: Get the POD IP, not the Service ClusterIP.
-TRAEFIK_IP=$(kubectl get pods -n kube-system -l app.kubernetes.io/name=traefik -o jsonpath='{.items[0].status.podIP}')
-if [ -z "$TRAEFIK_IP" ]; then
-    echo "Error: Could not find Traefik pod in kube-system!"
-    exit 1
-fi
-echo "Found Traefik Pod IP: $TRAEFIK_IP"
-# Inject Pod IP
-sed -i "s/ip: .*/ip: $TRAEFIK_IP/" ./k8s-platform-v2/01-networking/traefik-endpoints.yaml
-# Port is already correctly set to 8080 in the endpoints file
+# Traefik Dashboard is now handled by Native IngressRoute (migrated in v2.2)
+# No dynamic IP injection needed as it uses the internal api@internal service.
+
 
 
 

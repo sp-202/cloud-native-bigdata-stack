@@ -27,7 +27,10 @@ if [ -z "$INGRESS_DOMAIN" ]; then
    echo "[WARN] Traefik Ingress not found or cannot parse host."
 else
    echo "Traefik URL: http://$INGRESS_DOMAIN/dashboard/"
-   # Verbose check
+   echo "--- Curling /ping ---"
+   RESP_PING=$(curl -s -o /dev/null -w "%{http_code}" "http://$INGRESS_DOMAIN/ping")
+   echo "Ping Response: $RESP_PING"
+   
    echo "--- Curling /dashboard/ ---"
    curl -I "http://$INGRESS_DOMAIN/dashboard/"
    
