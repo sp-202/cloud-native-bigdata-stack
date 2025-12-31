@@ -3,7 +3,7 @@ kind: Kustomization
 
 resources:
   - traefik-dashboard.yaml
-  - traefik-endpoints.yaml
+  - traefik-service.yaml
   - traefik-transport.yaml
 
 
