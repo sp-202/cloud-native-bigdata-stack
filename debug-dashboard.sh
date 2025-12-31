@@ -59,8 +59,8 @@ echo "5. Testing Internal DNS (if possible)..."
 KONG_POD=$(kubectl get pod -n kubernetes-dashboard -l app.kubernetes.io/name=kong -o jsonpath='{.items[0].metadata.name}')
 echo "Kong Pod: $KONG_POD"
 # Try resolving short name
-echo "Resolving 'kubernetes-dashboard-web' inside Kong..."
-if kubectl exec -n kubernetes-dashboard $KONG_POD -- getent hosts kubernetes-dashboard-web > /dev/null 2>&1; then
+echo "Resolving 'kubernetes-dashboard-web.default.svc.cluster.local' inside Kong..."
+if kubectl exec -n kubernetes-dashboard $KONG_POD -- getent hosts kubernetes-dashboard-web.default.svc.cluster.local > /dev/null 2>&1; then
    echo "[OK] DNS Resolution worked."
 else
    echo "[FAIL] DNS Resolution FAILED inside Kong pod."
