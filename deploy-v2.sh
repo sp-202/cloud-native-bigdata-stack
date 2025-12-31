@@ -31,7 +31,24 @@ if [ -z "$TRAEFIK_IP" ]; then
     exit 1
 fi
 echo "Found Traefik IP: $TRAEFIK_IP"
-sed -i "s/TRAEFIK_IP_PLACEHOLDER/$TRAEFIK_IP/g" ./k8s-platform-v2/01-networking/traefik-endpoints.yaml
+sed -i "s/ip: .*/ip: $TRAEFIK_IP/" ./k8s-platform-v2/01-networking/traefik-endpoints.yaml
+
+# Verify Domain
+if [ -f "k8s-platform-v2/04-configs/global-config.env" ]; then
+    source k8s-platform-v2/04-configs/global-config.env
+    echo "---------------------------------------------------"
+    echo "DEPLOYMENT TARGET: $INGRESS_DOMAIN"
+    echo "TRAEFIK INTERNAL IP: $TRAEFIK_IP"
+    echo "---------------------------------------------------"
+    read -p "Is this specific configuration correct for this server? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborted by user."
+        exit 1
+    fi
+else
+    echo "Warning: global-config.env not found!"
+fi
 
 # Deploy
 echo "Deploying Stack..."
