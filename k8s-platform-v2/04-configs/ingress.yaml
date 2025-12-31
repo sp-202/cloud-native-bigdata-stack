@@ -71,6 +71,6 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: zeppelin
+            name: spark-ui
             port:
               name: spark-ui

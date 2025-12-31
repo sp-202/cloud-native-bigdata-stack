@@ -42,7 +42,7 @@ kubectl kustomize --enable-helm ./k8s-platform-v2 | kubectl apply -f -
 echo "Waiting for Resources..."
 kubectl wait --for=condition=available --timeout=300s deployment/minio -n default || echo "MinIO wait timed out"
 kubectl wait --for=condition=available --timeout=300s deployment/postgres -n default || echo "Postgres wait timed out"
-kubectl wait --for=condition=available --timeout=300s deployment/trafik -n default || echo "Traefik wait timed out (might be Helm managed)"
+kubectl wait --for=condition=available --timeout=300s deployment/traefik -n kube-system || echo "Traefik wait timed out (might be Helm managed or DaemonSet)"
 
 echo "Deployment Complete!"
 echo "Check status with: kubectl get pods"
