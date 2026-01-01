@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: spark-monitor
+  namespace: default
+  labels:
+    release: kube-prometheus-stack
+spec:
+  jobLabel: spark-app-selector
+  podMetricsEndpoints:
+  - port: spark-ui
+    targetPort: 4040
+    path: /metrics/prometheus
+    interval: 10s
+    honorLabels: true
+  selector:
+    matchExpressions:
+      - {key: spark-role, operator: In, values: [driver, executor]}
+  namespaceSelector:
+    matchNames:
+      - default
