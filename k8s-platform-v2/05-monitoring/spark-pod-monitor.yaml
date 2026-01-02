@@ -6,11 +6,10 @@ metadata:
   labels:
     release: kube-prometheus-stack
 spec:
-  jobLabel: spark-app-selector
+  jobLabel: app
   podMetricsEndpoints:
-  - port: spark-ui
-    targetPort: 4040
-    path: /metrics/prometheus
+  - targetPort: 4040
+    path: /metrics/prometheus/
     interval: 10s
     honorLabels: true
   selector:

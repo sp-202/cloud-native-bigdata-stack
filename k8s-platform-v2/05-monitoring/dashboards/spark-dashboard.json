@@ -75,7 +75,7 @@
             "pluginVersion": "7.5.5",
             "targets": [
                 {
-                    "expr": "count({__name__=~\"spark_driver_executor_cpuTime_Count\"})",
+                    "expr": "count({__name__=~\"metrics_spark_driver_executor_cpuTime_Count\"})",
                     "interval": "",
                     "legendFormat": "",
                     "refId": "A"
@@ -128,7 +128,7 @@
             "pluginVersion": "7.5.5",
             "targets": [
                 {
-                    "expr": "count({__name__=~\"spark_driver_executor_cpuTime_Count\"})",
+                    "expr": "count({__name__=~\"metrics_spark_driver_executor_cpuTime_Count\"})",
                     "interval": "",
                     "legendFormat": "",
                     "refId": "A"
@@ -169,13 +169,13 @@
             },
             "targets": [
                 {
-                    "expr": "rate({__name__=~\"spark_driver_executor_shuffleBytesWritten_Count\"}[1m])",
+                    "expr": "rate({__name__=~\"metrics_spark_driver_executor_shuffleBytesWritten_Count\"}[1m])",
                     "interval": "",
                     "legendFormat": "Shuffle Write",
                     "refId": "A"
                 },
                 {
-                    "expr": "rate({__name__=~\"spark_driver_executor_shuffleTotalBytesRead_Count\"}[1m])",
+                    "expr": "rate({__name__=~\"metrics_spark_driver_executor_shuffleTotalBytesRead_Count\"}[1m])",
                     "interval": "",
                     "legendFormat": "Shuffle Read",
                     "refId": "B"
@@ -216,13 +216,13 @@
             },
             "targets": [
                 {
-                    "expr": "rate({__name__=~\"spark_driver_executor_shuffleRecordsWritten_Count\"}[1m])",
+                    "expr": "rate({__name__=~\"metrics_spark_driver_executor_shuffleRecordsWritten_Count\"}[1m])",
                     "interval": "",
                     "legendFormat": "Recs Written",
                     "refId": "A"
                 },
                 {
-                    "expr": "rate({__name__=~\"spark_driver_executor_shuffleRecordsRead_Count\"}[1m])",
+                    "expr": "rate({__name__=~\"metrics_spark_driver_executor_shuffleRecordsRead_Count\"}[1m])",
                     "interval": "",
                     "legendFormat": "Recs Read",
                     "refId": "B"
@@ -312,7 +312,7 @@
             },
             "targets": [
                 {
-                    "expr": "{__name__=~\"spark_driver_ExecutorMetrics_JVMHeapMemory_Value\"}",
+                    "expr": "{__name__=~\"metrics_spark_driver_ExecutorMetrics_JVMHeapMemory_Value\"}",
                     "interval": "",
                     "legendFormat": "{{pod}} ({{role}})",
                     "refId": "A"
@@ -369,7 +369,7 @@
             },
             "targets": [
                 {
-                    "expr": "rate({__name__=~\"spark_driver_ExecutorMetrics_MajorGCCount_Value\"}[1m])",
+                    "expr": "rate({__name__=~\"metrics_spark_driver_ExecutorMetrics_MajorGCCount_Value\"}[1m])",
                     "interval": "",
                     "legendFormat": "{{pod}} GC Rate",
                     "refId": "A"
@@ -414,7 +414,7 @@
             },
             "targets": [
                 {
-                    "expr": "rate({__name__=~\"spark_driver_JVMCPU_jvmCpuTime_Value\"}[1m]) / 1000000000",
+                    "expr": "rate({__name__=~\"metrics_spark_driver_JVMCPU_jvmCpuTime_Value\"}[1m]) / 1000000000",
                     "interval": "",
                     "legendFormat": "{{pod}} CPU Cores",
                     "refId": "A"

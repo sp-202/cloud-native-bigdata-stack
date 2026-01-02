@@ -72,7 +72,7 @@ kubectl wait --for=condition=available --timeout=300s deployment/postgres -n def
 kubectl wait --for=condition=available --timeout=300s deployment/traefik -n kube-system || echo "Traefik wait timed out (might be Helm managed or DaemonSet)"
 
 echo "Restarting Dashboard Gateway to apply configurations..."
-kubectl rollout restart deployment kubernetes-dashboard-kong -n kubernetes-dashboard || true
+kubectl rollout restart deployment kubernetes-dashboard-kong -n default || true
 
 echo "Deployment Complete!"
 echo "Check status with: kubectl get pods"
