@@ -1,0 +1,181 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"app":"zeppelin"},"name":"zeppelin","namespace":"default"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"zeppelin"}},"template":{"metadata":{"labels":{"app":"zeppelin","spark-role":"driver"}},"spec":{"containers":[{"env":[{"name":"ZEPPELIN_PORT","value":"8080"},{"name":"ZEPPELIN_ADDR","value":"0.0.0.0"},{"name":"ZEPPELIN_MEM","value":"-Xms1024m -Xmx2048m -XX:MaxMetaspaceSize=512m"},{"name":"ZEPPELIN_NOTEBOOK_STORAGE","value":"org.apache.zeppelin.notebook.repo.S3NotebookRepo"},{"name":"ZEPPELIN_NOTEBOOK_S3_ENDPOINT","value":"http://minio.default.svc.cluster.local:9000"},{"name":"ZEPPELIN_NOTEBOOK_S3_BUCKET","value":"notebooks"},{"name":"ZEPPELIN_NOTEBOOK_S3_USER","value":"minioadmin"},{"name":"ZEPPELIN_NOTEBOOK_S3_PATH_STYLE_ACCESS","value":"true"},{"name":"AWS_ACCESS_KEY_ID","value":"minioadmin"},{"name":"AWS_SECRET_ACCESS_KEY","value":"minioadmin"},{"name":"SPARK_HOME","value":"/spark"},{"name":"ZEPPELIN_K8S_CONTAINER_IMAGE","value":"subhodeep2022/spark-bigdata:zeppelin-0.12.0"},{"name":"ZEPPELIN_K8S_SPARK_CONTAINER_IMAGE","value":"subhodeep2022/spark-bigdata:spark-3.5.7-fixed-v2"},{"name":"ZEPPELIN_K8S_SPARK_HOME","value":"/spark"},{"name":"ZEPPELIN_K8S_CONTAINER_IMAGE_PULL_POLICY","value":"Always"},{"name":"ZEPPELIN_K8S_SERVICE_ACCOUNT","value":"zeppelin-server"},{"name":"ZEPPELIN_INTERPRETER_LIFECYCLEMANAGER_CLASS","value":"org.apache.zeppelin.interpreter.lifecycle.TimeoutLifecycleManager"},{"name":"ZEPPELIN_INTERPRETER_LIFECYCLEMANAGER_TIMEOUT_THRESHOLD","value":"600000"}],"image":"subhodeep2022/spark-bigdata:zeppelin-0.12.0","name":"zeppelin","ports":[{"containerPort":8080,"name":"web"},{"containerPort":4040,"name":"spark-ui"}],"resources":{"limits":{"cpu":"2000m","memory":"8Gi"},"requests":{"cpu":"1000m","memory":"4Gi"}},"volumeMounts":[{"mountPath":"/spark/conf/spark-defaults.conf","name":"spark-config","subPath":"spark-defaults.conf"},{"mountPath":"/opt/zeppelin/conf/zeppelin-site.xml","name":"zeppelin-site","subPath":"zeppelin-site.xml"},{"mountPath":"/spark","name":"spark-home"},{"mountPath":"/opt/zeppelin/k8s/interpreter-template.yaml","name":"interpreter-template","subPath":"interpreter-template.yaml"},{"mountPath":"/opt/zeppelin/k8s/executor-template.yaml","name":"executor-template","subPath":"executor-template.yaml"},{"mountPath":"/opt/zeppelin/k8s/interpreter/100-interpreter-spec.yaml","name":"interpreter-spec","subPath":"interpreter-spec.yaml"}]}],"initContainers":[{"command":["sh","-c","cp -r /opt/spark/* /spark/"],"image":"subhodeep2022/spark-bigdata:spark-3.5.7-fixed-v2","name":"spark-home-init","volumeMounts":[{"mountPath":"/spark","name":"spark-home"}]}],"serviceAccountName":"zeppelin-server","volumes":[{"configMap":{"name":"spark-config"},"name":"spark-config"},{"configMap":{"name":"zeppelin-site"},"name":"zeppelin-site"},{"configMap":{"name":"spark-templates"},"name":"interpreter-template"},{"configMap":{"name":"spark-templates"},"name":"executor-template"},{"configMap":{"name":"zeppelin-interpreter-spec"},"name":"interpreter-spec"},{"emptyDir":{},"name":"spark-home"}]}}}}
+  creationTimestamp: "2026-01-02T06:19:13Z"
+  generation: 1
+  labels:
+    app: zeppelin
+  name: zeppelin
+  namespace: default
+  resourceVersion: "3062"
+  uid: 6dcd1f80-ecbc-4a5e-88fc-8c2295a10377
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: zeppelin
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: zeppelin
+        spark-role: driver
+    spec:
+      containers:
+      - env:
+        - name: ZEPPELIN_PORT
+          value: "8080"
+        - name: ZEPPELIN_ADDR
+          value: 0.0.0.0
+        - name: ZEPPELIN_MEM
+          value: -Xms1024m -Xmx2048m -XX:MaxMetaspaceSize=512m
+        - name: ZEPPELIN_NOTEBOOK_STORAGE
+          value: org.apache.zeppelin.notebook.repo.S3NotebookRepo
+        - name: ZEPPELIN_NOTEBOOK_S3_ENDPOINT
+          value: http://minio.default.svc.cluster.local:9000
+        - name: ZEPPELIN_NOTEBOOK_S3_BUCKET
+          value: notebooks
+        - name: ZEPPELIN_NOTEBOOK_S3_USER
+          value: minioadmin
+        - name: ZEPPELIN_NOTEBOOK_S3_PATH_STYLE_ACCESS
+          value: "true"
+        - name: AWS_ACCESS_KEY_ID
+          value: minioadmin
+        - name: AWS_SECRET_ACCESS_KEY
+          value: minioadmin
+        - name: SPARK_HOME
+          value: /spark
+        - name: ZEPPELIN_K8S_CONTAINER_IMAGE
+          value: subhodeep2022/spark-bigdata:zeppelin-0.12.0
+        - name: ZEPPELIN_K8S_SPARK_CONTAINER_IMAGE
+          value: subhodeep2022/spark-bigdata:spark-3.5.7-fixed-v2
+        - name: ZEPPELIN_K8S_SPARK_HOME
+          value: /spark
+        - name: ZEPPELIN_K8S_CONTAINER_IMAGE_PULL_POLICY
+          value: Always
+        - name: ZEPPELIN_K8S_SERVICE_ACCOUNT
+          value: zeppelin-server
+        - name: ZEPPELIN_INTERPRETER_LIFECYCLEMANAGER_CLASS
+          value: org.apache.zeppelin.interpreter.lifecycle.TimeoutLifecycleManager
+        - name: ZEPPELIN_INTERPRETER_LIFECYCLEMANAGER_TIMEOUT_THRESHOLD
+          value: "600000"
+        image: subhodeep2022/spark-bigdata:zeppelin-0.12.0
+        imagePullPolicy: IfNotPresent
+        name: zeppelin
+        ports:
+        - containerPort: 8080
+          name: web
+          protocol: TCP
+        - containerPort: 4040
+          name: spark-ui
+          protocol: TCP
+        resources:
+          limits:
+            cpu: "2"
+            memory: 8Gi
+          requests:
+            cpu: "1"
+            memory: 4Gi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - name: spark-log4j
+          mountPath: /opt/spark/conf/log4j.properties
+          subPath: log4j.properties
+        - mountPath: /spark/conf/spark-defaults.conf
+          name: spark-config
+          subPath: spark-defaults.conf
+        - mountPath: /opt/zeppelin/conf/zeppelin-site.xml
+          name: zeppelin-site
+          subPath: zeppelin-site.xml
+        - mountPath: /spark
+          name: spark-home
+        - mountPath: /opt/zeppelin/k8s/interpreter-template.yaml
+          name: interpreter-template
+          subPath: interpreter-template.yaml
+        - mountPath: /opt/zeppelin/k8s/executor-template.yaml
+          name: executor-template
+          subPath: executor-template.yaml
+        - mountPath: /opt/zeppelin/k8s/interpreter/100-interpreter-spec.yaml
+          name: interpreter-spec
+          subPath: interpreter-spec.yaml
+      dnsPolicy: ClusterFirst
+      initContainers:
+      - command:
+        - sh
+        - -c
+        - cp -r /opt/spark/* /spark/
+        image: subhodeep2022/spark-bigdata:spark-3.5.7-fixed-v2
+        imagePullPolicy: IfNotPresent
+        name: spark-home-init
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - name: spark-log4j
+          mountPath: /opt/spark/conf/log4j.properties
+          subPath: log4j.properties
+        - mountPath: /spark
+          name: spark-home
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: zeppelin-server
+      serviceAccountName: zeppelin-server
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: spark-log4j
+        configMap:
+          name: spark-log4j
+      - configMap:
+          defaultMode: 420
+          name: spark-config
+        name: spark-config
+      - configMap:
+          defaultMode: 420
+          name: zeppelin-site
+        name: zeppelin-site
+      - configMap:
+          defaultMode: 420
+          name: spark-templates
+        name: interpreter-template
+      - configMap:
+          defaultMode: 420
+          name: spark-templates
+        name: executor-template
+      - configMap:
+          defaultMode: 420
+          name: zeppelin-interpreter-spec
+        name: interpreter-spec
+      - emptyDir: {}
+        name: spark-home
+status:
+  availableReplicas: 1
+  conditions:
+  - lastTransitionTime: "2026-01-02T06:19:14Z"
+    lastUpdateTime: "2026-01-02T06:23:26Z"
+    message: ReplicaSet "zeppelin-7c66db888d" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  - lastTransitionTime: "2026-01-02T06:35:47Z"
+    lastUpdateTime: "2026-01-02T06:35:47Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  observedGeneration: 1
+  readyReplicas: 1
+  replicas: 1
+  updatedReplicas: 1
