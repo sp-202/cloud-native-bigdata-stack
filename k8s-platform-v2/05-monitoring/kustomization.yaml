@@ -7,7 +7,8 @@ resources:
   - admin-user.yaml
   - kong-manual-config.yaml
   - dashboard-transport.yaml
-  - spark-pod-monitor.yaml
+  - spark-ui-service.yaml
+  - spark-service-monitor.yaml
 
 configMapGenerator:
   - name: spark-grafana-dashboard
