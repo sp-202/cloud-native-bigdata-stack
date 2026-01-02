@@ -17,6 +17,12 @@ configMapGenerator:
     options:
       labels:
         grafana_dashboard: "1"
+  - name: loki-logs-dashboard
+    files:
+      - dashboards/loki-logs-dashboard.json
+    options:
+      labels:
+        grafana_dashboard: "1"
 
 helmCharts:
   - name: kube-prometheus-stack
@@ -27,6 +33,15 @@ helmCharts:
     valuesInline:
       grafana:
         adminPassword: prom-operator
+        additionalDataSources:
+          - name: Loki
+            type: loki
+            url: http://loki-stack.default.svc.cluster.local:3100
+            access: proxy
+            isDefault: false
+            jsonData:
+              maxLines: 1000
+
       prometheus:
         prometheusSpec:
           podMonitorSelectorNilUsesHelmValues: false
@@ -40,6 +55,25 @@ helmCharts:
                 resources:
                   requests:
                     storage: 10Gi
+  - name: loki-stack
+    repo: https://grafana.github.io/helm-charts
+    releaseName: loki-stack
+    namespace: default
+    version: 2.10.2
+    valuesInline:
+      loki:
+        isDefault: false
+        config:
+          table_manager:
+            retention_deletes_enabled: true
+            retention_period: 168h
+      promtail:
+        enabled: true
+      grafana:
+        enabled: false
+        sidecar:
+          datasources:
+            enabled: false
   - name: kubernetes-dashboard
     repo: https://kubernetes.github.io/dashboard/
     releaseName: kubernetes-dashboard
