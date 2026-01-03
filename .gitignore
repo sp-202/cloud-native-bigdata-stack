@@ -20,3 +20,9 @@ airflow/*.pid
 
 # Ignore k3s auto-downloaded dependencies
 k3s/superset/
+
+# Binaries and Archives
+helm
+*.tar.gz
+linux-amd64/
+logs-from-spark*
