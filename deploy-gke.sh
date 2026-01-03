@@ -20,14 +20,18 @@ echo "[1/4] Deploying Infrastructure (Traefik, Spark Operator)..."
 echo "Installing Traefik..."
 helm repo add traefik https://traefik.github.io/charts
 helm repo update traefik
-helm upgrade --install traefik traefik/traefik \
-  --namespace kube-system \
-  --set ports.web.nodePort=null \
-  --set ports.websecure.nodePort=null \
-  --set global.checkNewVersion=false \
-  --set global.sendAnonymousUsage=false \
-  --set "additionalArguments={--api.insecure=true,--api.dashboard=true}" \
-  --timeout 10m
+if helm list -n kube-system | grep -q traefik; then
+  echo "Traefik is already installed. Skipping..."
+else
+  helm upgrade --install traefik traefik/traefik \
+    --namespace kube-system \
+    --set ports.web.nodePort=null \
+    --set ports.websecure.nodePort=null \
+    --set global.checkNewVersion=false \
+    --set global.sendAnonymousUsage=false \
+    --set "additionalArguments={--api.insecure=true,--api.dashboard=true}" \
+    --timeout 10m
+fi
 
 # Manually expose Traefik API port 9000 -> 8080
 kubectl patch svc traefik -n kube-system -p '{"spec":{"ports":[{"name":"traefik","port":9000,"targetPort":8080}]}}' || true
@@ -36,9 +40,13 @@ kubectl patch svc traefik -n kube-system -p '{"spec":{"ports":[{"name":"traefik"
 echo "Installing Spark Operator..."
 helm repo add spark-operator https://kubeflow.github.io/spark-operator
 helm repo update spark-operator
-helm upgrade --install spark-operator spark-operator/spark-operator \
+if helm list -n default | grep -q spark-operator; then
+  echo "Spark Operator is already installed. Skipping..."
+else
+  helm upgrade --install spark-operator spark-operator/spark-operator \
   --namespace default \
   --timeout 10m
+fi
 
 echo "[2/4] Waiting for LoadBalancer IP..."
 EXTERNAL_IP=""
