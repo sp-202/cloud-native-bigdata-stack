@@ -41,6 +41,10 @@ helmCharts:
             isDefault: false
             jsonData:
               maxLines: 1000
+        grafana.ini:
+          server:
+            root_url: http://grafana.$(INGRESS_DOMAIN)
+            serve_from_sub_path: true
 
       prometheus:
         prometheusSpec:
@@ -50,7 +54,7 @@ helmCharts:
           storageSpec:
             volumeClaimTemplate:
               spec:
-                storageClassName: local-path
+                storageClassName: standard
                 accessModes: ["ReadWriteOnce"]
                 resources:
                   requests:
@@ -100,3 +104,7 @@ helmCharts:
             nodePort: null
           tls:
             enabled: false
+        env:
+          proxy_listen: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
+          admin_listen: "0.0.0.0:8001, 0.0.0.0:8444 ssl"
+          status_listen: "0.0.0.0:8100"
