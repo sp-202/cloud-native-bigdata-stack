@@ -10,32 +10,6 @@ This platform is architected for **statelessness**, **scalability**, and **cost-
 *   **Cloud-Native Storage**: Uses Standard (HDD) Persistent Disks for cost-effective storage of Metastore/Postgres data, and S3/MinIO for object storage.
 *   **Unified Ingress**: Single LoadBalancer entrypoint via Traefik.
 
-```mermaid
-graph TD
-    User[User] -->|"Ingress (Traefik)"| Airflow
-
-    User -->|Ingress| Zeppelin
-    User -->|Ingress| Superset
-    
-    subgraph "Application Layer"
-        Airflow -->|Submit Job| SparkOp[Spark Operator]
-        Zeppelin -->|Interactive| SparkOp
-        Superset -->|Query| Hive
-    end
-    
-    subgraph "Compute Layer"
-        SparkOp -.->|Spawns| Driver[Spark Driver]
-        Driver -.->|Spawns| Exec[Spark Executors]
-    end
-    
-    subgraph "Infrastructure Layer"
-        Hive -->|Metastore| Postgres
-        Driver -->|Read/Write| MinIO["MinIO (S3)"]
-
-        Exec -->|Read/Write| MinIO
-    end
-```
-
 ## 🛠 Tech Stack
 
 | Component | Role | Version |
