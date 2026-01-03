@@ -12,7 +12,8 @@ This platform is architected for **statelessness**, **scalability**, and **cost-
 
 ```mermaid
 graph TD
-    User[User] -->|Ingress (Traefik)| Airflow
+    User[User] -->|"Ingress (Traefik)"| Airflow
+
     User -->|Ingress| Zeppelin
     User -->|Ingress| Superset
     
@@ -29,7 +30,8 @@ graph TD
     
     subgraph "Infrastructure Layer"
         Hive -->|Metastore| Postgres
-        Driver -->|Read/Write| MinIO[MinIO (S3)]
+        Driver -->|Read/Write| MinIO["MinIO (S3)"]
+
         Exec -->|Read/Write| MinIO
     end
 ```
