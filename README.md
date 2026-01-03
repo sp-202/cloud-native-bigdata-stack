@@ -51,7 +51,7 @@ graph TD
 ### Prerequisites
 *   Google Kubernetes Engine (GKE) Cluster (Standard or Autopilot)
 *   `kubectl` connected to the cluster
-*   `helm` installed (Script will attempt to install locally if missing)
+*   `helm` installed (Required: `curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash`)
 
 ### Quick Start
 Run the unified deployment script. This script handles:
