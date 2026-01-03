@@ -2,20 +2,20 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: kubernetes-dashboard
-  namespace: kubernetes-dashboard
+  namespace: default
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
     traefik.ingress.kubernetes.io/service.serverstransport: insecure-transport@kubernetescrd
 spec:
   rules:
-  - host: dashboard.$(INGRESS_DOMAIN)
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: kubernetes-dashboard-kong-proxy
-            port:
-              number: 80
+    - host: dashboard.$(INGRESS_DOMAIN)
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kubernetes-dashboard-kong-proxy
+                port:
+                  number: 80
