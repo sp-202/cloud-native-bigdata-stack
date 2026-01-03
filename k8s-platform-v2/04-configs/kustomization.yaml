@@ -3,9 +3,11 @@ kind: Kustomization
 
 resources:
   - ingress.yaml
-  - spark-log4j.yaml
 
 configMapGenerator:
   - name: global-config
     envs:
       - global-config.env
+  - name: spark-log4j
+    files:
+      - log4j.properties
