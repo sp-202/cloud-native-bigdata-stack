@@ -3,6 +3,8 @@
 > A production-grade, scalable Big Data stack featuring **Spark 3.5**, **Airflow 2.x**, **Zeppelin**, and **Superset**, optimized for Google Kubernetes Engine (GKE).
 
 ## 🏗 Architecture
+![GKE Platform Architecture](k8s_diagram.drawio.svg)
+
 This platform is architected for **statelessness**, **scalability**, and **cost-efficiency**.
 
 *   **Split Architecture**: Infrastructure (Data/PVCs) is separated from Applications (Stateless).
