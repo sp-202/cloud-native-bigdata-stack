@@ -1,36 +1,61 @@
-# 🔍 Monitoring - Detailed Guide
+# 🔍 Prometheus & Grafana Guide
 
-## 1. The Stack: Prometheus Operator
-We use the **Kube Prometheus Stack**. It installs:
-*   **Prometheus**: Time-series database.
-*   **Grafana**: Visualization.
-*   **AlertManager**: Alerting (not fully configured).
-*   **Operator**: Manages CRDs (`ServiceMonitor`, `PodMonitor`).
+The platform uses the **Kube-Prometheus-Stack** (CoreOS) to provide comprehensive observability.
 
-## 2. Custom Resource Definitions (CRDs)
-This is how we scrape metrics without editing `prometheus.yaml` manually.
+---
 
-### PodMonitor (`kubernetes/monitor-spark.yaml`)
-*   **What it does**: Tells Prometheus "Look for Pods with label `spark-role: driver`".
-*   **Endpoint**: Scrapes port `4040` at path `/metrics/prometheus`.
-*   **Why PodMonitor?**: Spark Pods spin up and down dynamically. A ServiceMonitor requires a Service, but Spark Executors don't always have one. PodMonitor directly watches the Pod List.
+## 1. Architecture
 
-### ServiceMonitor
-*   **Target**: `zeppelin`.
-*   **Reason**: Zeppelin is a stable Deployment with a Service.
+### Prometheus Operator
+We do not configure `prometheus.yaml` manually. Instead, we use Kubernetes **Custom Resources**:
+*   **`ServiceMonitor`**: Tells Prometheus to scrape a Kubernetes Service (e.g., Zeppelin, Superset).
+*   **`PodMonitor`**: Tells Prometheus to scrape Pods directly (crucial for **Spark**, which uses headless services or ephemeral executor pods).
 
-## 3. Data Retention
-*   **Config**: `prometheus.prometheusSpec.storageSpec` in `deploy-infra.sh` (Helm values).
-*   **Size**: `10Gi` PVC.
-*   **Duration**: ~7 Days (depending on metric volume).
-*   **Persistence**: If you delete the Prometheus Pod, the PVC remains, so data survives.
+### The Flow
+1.  **Spark Pod** start up.
+2.  **Prometheus Operator** detects the pod labels (`spark-role: driver`).
+3.  **Prometheus Server** starts scraping `http://<pod-ip>:4040/metrics/prometheus`.
+4.  **Grafana** queries Prometheus to draw charts.
 
-## 4. Grafana Dashboards
-*   **Admin Password**: `prom-operator` (set in `deploy-infra.sh`).
-*   **Data Source**: URL `http://prometheus-operated:9090`.
-*   **Spark Dashboard**: Included JSON imports Metrics like `jvm_memory_bytes_used` and `spark_job_executor_active_tasks`.
+---
 
-## 5. Troubleshooting
-*   **"No Data" in Grafana**:
-    1.  Check Prometheus Targets: port-forward prometheus (`kubectl port-forward svc/prometheus-operated 9090`) and go to `Status` -> `Targets`.
-    2.  Are the targets "UP"? If "Down", check network. If missing, check labels on the `PodMonitor`.
+## 2. Grafana Dashboards
+
+We pre-inject standard dashboards via ConfigMaps.
+
+### ⚡ Spark Dashboard
+*   **Driver Heap usage**: Critical for OOM debugging.
+*   **Executor Count**: Verifies dynamic allocation scaling.
+*   **Active Tasks**: Shows concurrency.
+*   **Shuffle I/O**: High shuffle read/write indicates inefficient joins/aggregations.
+
+### 🪵 Loki / Logs Dashboard
+*   Allows viewing logs side-by-side with metrics (Split view).
+
+---
+
+## 3. Alerting (AlertManager)
+
+The stack includes **AlertManager**. By default, it contains standard K8s alerts (NodeDown, KubeletDown).
+*   **Config**: `k8s-platform-v2/05-monitoring/charts/kube-prometheus-stack/values.yaml` (inside the Kustomize helmCharts block).
+*   **Adding Alerts**: You can define `PrometheusRule` CRDs in the `05-monitoring` folder.
+
+---
+
+## 4. Troubleshooting
+
+### "No Data" in Grafana
+1.  **Check Targets**: Port-forward Prometheus and check the "Targets" page.
+    ```bash
+    kubectl port-forward svc/prometheus-operated 9090:9090
+    # Open http://localhost:9090/targets
+    ```
+2.  **Check Labels**: The `PodMonitor` selects pods by **Label**. Ensure your Spark Application has the correct labels:
+    ```yaml
+    spark-role: driver
+    ```
+    (This is handled automatically by the Spark Operator, but good to verify).
+
+---
+
+[⬅ Back to README](../README.md)
