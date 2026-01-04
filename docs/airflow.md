@@ -1,36 +1,66 @@
-# 🌬 Apache Airflow - Detailed Guide
+# 🌬 Apache Airflow on GKE - Detailed Guide
 
-## 1. Architecture: The "Sidecar" Sync Pattern
-Standard Airflow relies on a shared file system (NFS/EFS) for DAGs. In our cloud-native GKE setup, we use **MinIO (S3)** as the source of truth to avoid complex storage drivers.
+This guide explains the **architecture**, **synchronization**, and **operational patterns** for running Airflow in our Cloud-Native environment.
 
-### How it Works (`kubernetes/airflow.yaml`)
-1.  **User Action**: You upload `my_dag.py` to MinIO bucket `dags`.
-2.  **Sidecar Container**: Inside the Airflow Pod, a container named `minio-sync` runs `mc mirror` every 60 seconds.
-3.  **Local Volume**: Use an `emptyDir` volume shared between the Sidecar and the Airflow Scheduler/Webserver.
-4.  **Result**: Airflow sees the file as if it were local.
+---
 
-**Why?**: This makes the cluster "Stateless". You can delete the Airflow Pods, and they will re-download the DAGs from MinIO on startup.
+## 1. Architecture: The GitOps "Sidecar" Pattern
 
-## 2. Configuration (Environment Variables)
-Airflow is configured entirely via Environment Variables in `kubernetes/airflow.yaml`.
+In traditional Airflow, you often need a shared filesystem (NFS/EFS) to share DAG files between the Scheduler, Webserver, and Workers. In Kubernetes, we prefer a **Stateless** approach using Object Storage (MinIO).
 
-| Variable | Value | Explanation |
-| :--- | :--- | :--- |
-| `AIRFLOW__CORE__EXECUTOR` | `LocalExecutor` | We run a single Scheduler/Worker pod for simplicity. For scale, switch to `KubernetesExecutor`. |
-| `AIRFLOW__CORE__SQL_ALCHEMY_CONN` | `postgresql://...` | Connection string to the `postgres` service. |
-| `AIRFLOW__CORE__FERNET_KEY` | `...` | Encryption key for passwords in the DB. **Must be consistent across restarts.** |
-| `_AIRFLOW_WWW_USER_CREATE` | `true` | Auto-creates the Admin user on startup. |
+### How Sync Works
+We use a "Sidecar" container pattern to sync DAGs from MinIO to the Airflow pod's local volume.
 
-## 3. Resource Tuning
-*   **Webserver**: The UI is heavy. We bumped limits to `2Gi` RAM.
-    *   **Symptom**: "Airflow UI is white/blank" -> OOM (Out Of Memory).
-    *   **Fix**: Increase `resources.limits.memory`.
-*   **Scheduler**: Needs CPU. If tasks are late, increase `cpu: 1000m`.
+1.  **Storage**: DAGs are stored in the `dags` bucket in MinIO.
+2.  **Sync**: A sidecar container (`minio-sync`) runs alongside the Airflow Scheduler.
+3.  **Action**: Every 60 seconds (configurable), it runs `mc mirror` to pull changes from MinIO -> Local Pod Volume.
+4.  **Result**: The Scheduler sees the files as if they were local.
 
-## 4. Common Issues
-*   **DAG not showing up**:
-    1.  Check Sidecar logs: `kubectl logs -l app=airflow-scheduler -c minio-sync`.
-    2.  Check MinIO bucket: Is the file actually there?
-*   **"Task stuck in Queued"**:
-    1.  Check Scheduler logs: `kubectl logs -l app=airflow-scheduler -c airflow-scheduler`.
-    2.  Is the DB full? (Unlikely with 10GB PVC).
+**Why?**
+*   **No NFS required**: Cheaper and simpler.
+*   **Version Control**: You can treat MinIO as a build artifact repository.
+*   **Stateless**: You can kill the Airflow pod, and it recovers full state on restart.
+
+---
+
+## 2. Configuration (`kubernetes/airflow.yaml`)
+
+Airflow 2.0+ is configured almost entirely via Environment Variables.
+
+| Variable                          | Value               | Purpose                                                                                 |
+| :-------------------------------- | :------------------ | :-------------------------------------------------------------------------------------- |
+| `AIRFLOW__CORE__EXECUTOR`         | `LocalExecutor`     | Runs tasks locally inside the pod. (Upgrade to `KubernetesExecutor` for massive scale). |
+| `AIRFLOW__CORE__SQL_ALCHEMY_CONN` | `postgresql://...`  | DB Connection string. The "Brain" of Airflow.                                           |
+| `AIRFLOW__CORE__DAGS_FOLDER`      | `/opt/airflow/dags` | Where the sidecar syncs files to.                                                       |
+| `AIRFLOW__WEBSERVER__BASE_URL`    | `http://airflow...` | For generating links in emails/logs.                                                    |
+
+---
+
+## 3. Operations Guide
+
+### A. Deploying a New DAG
+You **do not** need to rebuild Docker images to add DAGs.
+1.  Write your python file (`my_dag.py`).
+2.  Upload it to MinIO:
+    *   **UI**: Open MinIO Browser -> `dags` bucket -> Upload.
+    *   **CLI**: `mc cp my_dag.py alias/dags/`
+3.  Wait ~60 seconds.
+4.  Refresh Airflow UI.
+
+### B. Accessing Logs
+*   **Scheduler Logs**:
+    ```bash
+    kubectl logs -n big-data -l app=airflow-scheduler -c airflow-scheduler
+    ```
+*   **Sync Sidecar Logs** (Debugging DAGs not appearing):
+    ```bash
+    kubectl logs -n big-data -l app=airflow-scheduler -c minio-sync
+    ```
+
+### C. Resource Tuning
+*   **Webserver OOM**: If the UI goes blank, increase RAM limits (`resources.limits.memory`).
+*   **Slow Scheduling**: If tasks hang in "Queued", increase CPU limits.
+
+---
+
+[⬅ Back to README](../README.md)

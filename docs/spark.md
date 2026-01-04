@@ -1,31 +1,61 @@
 # ⚡ Apache Spark on Kubernetes - Detailed Guide
 
-## 1. Architecture
-We use the **Kubeflow Spark Operator** to manage Spark Applications in a cloud-native way.
-*   **Submission**: You submit a YAML CRD (`SparkApplication`) or use Zeppelin/Airflow which acts as the generic submission client.
-*   **Execution**: The Operator spawns a **Driver Pod**, which then requests **Executor Pods**.
-*   **Networking**: Driver and Executors communicate via Headless Services.
+This project leverages the **Kubeflow Spark Operator** for native Kubernetes integration, allowing Spark to run as a first-class citizen on GKE.
 
-## 2. Configuration (`kubernetes/spark-defaults.conf`)
-This file is mounted into every Spark container. Here is what every config does:
+---
 
-| Configuration | Value | Effect / "Why?" |
-| :--- | :--- | :--- |
-| `spark.master` | `k8s://https://kubernetes.default.svc` | Tells Spark to talk to the K8s API Server |
-| `spark.submit.deployMode` | `cluster` | Driver runs inside the cluster (not on your laptop) |
-| `spark.kubernetes.container.image` | `subhodeep2022/spark-bigdata...` | The Docker image containing Spark binaries |
-| `spark.eventLog.enabled` | `true` | **Critical**: Enables history. Without this, you lose logs after pod deletion. |
-| `spark.eventLog.dir` | `s3a://spark-logs/spark-events` | Writes event logs to MinIO. allows History Server to replay them. |
-| `spark.hadoop.fs.s3a.impl` | `org.apache.hadoop.fs.s3a.S3AFileSystem` | Uses the AWS SDK for S3 access (required for MinIO) |
-| `spark.hadoop.fs.s3a.path.style.access` | `true` | **Required for MinIO**. Forces URLs like `server/bucket` instead of `bucket.server` |
-| `spark.ui.prometheus.enabled` | `true` | Exposes `/metrics/prometheus` endpoint for Grafana |
+## 1. Architecture Overview
 
-## 3. Pod Templates (`kubernetes/interpreter-template.yaml`)
-These YAML templates control the **shape** of the Spark pods.
-*   **Why use templates?**: To inject "non-Spark" things like Sidecars, Persistent Volumes, or Node Selectors.
-*   **Current Usage**: We use it to mount the `spark-defaults.conf` ConfigMap so we don't have to rebuild the Docker image for config changes.
+### The Spark Operator
+Instead of manually managing Driver/Executor pods, we submit a **Custom Resource** called `SparkApplication` (YAML).
+1.  **User** submits YAML to K8s API.
+2.  **Operator** sees the YAML and spawns a **Driver Pod**.
+3.  **Driver Pod** requests **Executor Pods** directly from K8s.
+4.  **Executors** run tasks and report back to Driver.
+5.  **Driver** persists logs to MinIO (for History Server) and shuts down.
+
+---
+
+## 2. Configuration Analysis
+
+We use a global `spark-defaults.conf` ConfigMap to streamline settings across all jobs.
+
+### Critical S3/MinIO Settings
+Most complexity comes from connecting Spark to Object Storage (S3/MinIO).
+
+| Config Key                              | Value                                          | Explanation                                                                        |
+| :-------------------------------------- | :--------------------------------------------- | :--------------------------------------------------------------------------------- |
+| `spark.hadoop.fs.s3a.impl`              | `org.apache.hadoop.fs.s3a.S3AFileSystem`       | Uses AWS SDK to talk to storage.                                                   |
+| `spark.hadoop.fs.s3a.path.style.access` | `true`                                         | **Vital for MinIO**. Forces `host/bucket` URL format instead of AWS `bucket.host`. |
+| `spark.hadoop.fs.s3a.endpoint`          | `http://minio.big-data.svc.cluster.local:9000` | Points to our internal MinIO service.                                              |
+| `spark.eventLog.dir`                    | `s3a://spark-logs/`                            | Where "History" files are written.                                                 |
+
+### Kubernetes Settings
+| Config Key                         | Value           | Explanation                                           |
+| :--------------------------------- | :-------------- | :---------------------------------------------------- |
+| `spark.kubernetes.container.image` | `docker.io/...` | The base image. Must contain Spark + Hadoop AWS JARs. |
+| `spark.kubernetes.namespace`       | `big-data`      | Namespace for executors.                              |
+| `spark.ui.prometheus.enabled`      | `true`          | Exposes metrics for Grafana.                          |
+
+---
+
+## 3. Pod Templates: The "Sidecar" Injector
+
+We use **Pod Templates** (`kubernetes/interpreter-template.yaml`) to "patch" Spark pods at runtime.
+*   **Why?**: Spark's native submit flags don't support everything (like sidecars or fancy volume mounts).
+*   **Our Use Case**: We do not currently use complex sidecars for Spark, but the template structure is in place for mounting specific ConfigMaps or Secrets if needed in the future.
+
+---
 
 ## 4. Troubleshooting
-*   **"Class Not Found: S3AFileSystem"**: You represent missing JARs (`hadoop-aws`, `aws-java-sdk`). Our image includes these.
-*   **"403 Forbidden" on S3**: Check `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` env vars in `zeppelin.yaml`.
-*   **"Driver Pod stuck in Pending"**: Cluster is out of RAM. Check `kubectl top nodes`.
+
+| Error                                | Root Cause                | Solution                                                                   |
+| :----------------------------------- | :------------------------ | :------------------------------------------------------------------------- |
+| **`Pending`** (Indefinitely)         | Cluster full.             | Run `kubectl top nodes`. Add nodes or reduce executor count.               |
+| **`Class not found: S3AFileSystem`** | Missing JARs.             | Ensure you are using the correct Docker image with `hadoop-aws` shaded in. |
+| **`403 Forbidden` (S3)**             | Bad Keys.                 | Check `AWS_ACCESS_KEY` env vars in the Driver.                             |
+| **`Connection Refused` on Driver**   | Headless Service missing. | Ensure the Operator created a service named `spark-app-driver-svc`.        |
+
+---
+
+[⬅ Back to README](../README.md)
