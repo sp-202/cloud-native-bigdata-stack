@@ -30,6 +30,7 @@ helmCharts:
     releaseName: kube-prometheus-stack
     namespace: default
     version: 56.6.2
+    includeCRDs: true
     valuesInline:
       grafana:
         adminPassword: prom-operator

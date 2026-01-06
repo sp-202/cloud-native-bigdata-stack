@@ -76,7 +76,7 @@ kubectl kustomize --enable-helm ./k8s-platform-v2 | \
   sed "s/\$(INGRESS_DOMAIN)/$INGRESS_DOMAIN/g" | \
   sed "s/$STATIC_DOMAIN_TO_REPLACE/$INGRESS_DOMAIN/g" | \
   sed "s/$STATIC_IP_TO_REPLACE/$EXTERNAL_IP/g" | \
-  kubectl apply -f - || echo "First apply failed (likely CRDs), retrying..."
+  kubectl apply --server-side --force-conflicts -f - || echo "First apply failed (likely CRDs), retrying..."
 
 echo "Waiting for CRDs to settle..."
 sleep 10
@@ -86,7 +86,7 @@ kubectl kustomize --enable-helm ./k8s-platform-v2 | \
   sed "s/\$(INGRESS_DOMAIN)/$INGRESS_DOMAIN/g" | \
   sed "s/$STATIC_DOMAIN_TO_REPLACE/$INGRESS_DOMAIN/g" | \
   sed "s/$STATIC_IP_TO_REPLACE/$EXTERNAL_IP/g" | \
-  kubectl apply -f -
+  kubectl apply --server-side --force-conflicts -f -
 
 echo "[4/4] Post-Deployment Verification & Info"
 
@@ -99,7 +99,7 @@ echo "=============================================="
 echo "Deployment Complete!"
 echo "Access URLs:"
 echo "Traefik Dashboard: http://traefik.$INGRESS_DOMAIN/dashboard/"
-echo "K8s Dashboard:     http://dashboard.$INGRESS_DOMAIN"
+echo "K8s Dashboard:     https://dashboard.$INGRESS_DOMAIN"
 echo "Grafana:           http://grafana.$INGRESS_DOMAIN"
 echo "Airflow:           http://airflow.$INGRESS_DOMAIN"
 echo "MinIO Console:     http://minio.$INGRESS_DOMAIN"
