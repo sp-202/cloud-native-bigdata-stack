@@ -1,3 +1,7 @@
+image:
+  repository: apache/superset
+  tag: 3.1.0
+  pullPolicy: IfNotPresent
 postgresql:
   enabled: false
 supersetNode:
@@ -15,12 +19,19 @@ supersetNode:
     limits:
       memory: "4Gi"
       cpu: "1000m"
+
+bootstrapScript: |
+  pip install --no-cache-dir --no-deps starrocks==1.0.6 pymysql
+  if [ ! -f /app/pythonpath/superset_config.py ]; then
+    echo "Creating default config..."
+  fi
 extraPyPIPackages:
   - pyhive
   - thrift
   - sasl
   - thrift_sasl
   - psycopg2-binary
+  - starrocks
 redis:
   enabled: true
   image:
