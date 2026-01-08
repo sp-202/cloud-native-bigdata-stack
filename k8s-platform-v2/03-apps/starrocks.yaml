@@ -1,0 +1,185 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: starrocks-fe
+  namespace: default
+  labels:
+    app: starrocks-fe
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: starrocks-fe
+  template:
+    metadata:
+      labels:
+        app: starrocks-fe
+    spec:
+      containers:
+        - name: starrocks-fe
+          image: starrocks/fe-ubuntu:3.3-latest
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9030
+              name: query
+            - containerPort: 9020
+              name: rpc
+            - containerPort: 9010
+              name: edit-log
+          env:
+            - name: JAVA_OPTS
+              value: "-Xmx1024m -XX:+UseG1GC"
+          volumeMounts:
+            - name: fe-meta
+              mountPath: /data/meta
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              /opt/starrocks/fe/bin/start_fe.sh --daemon
+              echo "Waiting for FE to start..."
+              sleep 10
+
+              echo "Starting BE Registration Loop..."
+              for i in {1..30}; do
+                  echo "Attempt $i: Resolving BE DNS..."
+                  BE_IP=$(getent hosts starrocks-be.default.svc.cluster.local | awk '{print $1}' | head -n 1)
+                  
+                  if [ -n "$BE_IP" ]; then
+                      echo "Resolved BE IP: $BE_IP"
+                      echo "Registering BE..."
+                      mysql -h 127.0.0.1 -P 9030 -u root -e "ALTER SYSTEM ADD BACKEND '${BE_IP}:9050';" || true
+                      echo "Checking Backends..."
+                      mysql -h 127.0.0.1 -P 9030 -u root -e "SHOW PROC '/backends';"
+                      break
+                  else
+                      echo "DNS resolution failed. Retrying in 5s..."
+                  fi
+                  sleep 5
+              done
+
+              sleep infinity
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: fe-meta
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: starrocks-fe
+  namespace: default
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+    - port: 9030
+      targetPort: 9030
+      name: query
+    - port: 9020
+      targetPort: 9020
+      name: rpc
+  selector:
+    app: starrocks-fe
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: starrocks-be
+  namespace: default
+  labels:
+    app: starrocks-be
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: starrocks-be
+  template:
+    metadata:
+      labels:
+        app: starrocks-be
+    spec:
+      containers:
+        - name: starrocks-be
+          image: starrocks/be-ubuntu:3.3-latest
+          ports:
+            - containerPort: 9060
+              name: be-port
+            - containerPort: 8040
+              name: web-server
+            - containerPort: 9050
+              name: heart-beat
+            - containerPort: 8060
+              name: brpc
+          env:
+            - name: FE_SERVERS
+              value: "starrocks-fe:9010"
+            - name: BE_ADDR
+              value: "0.0.0.0"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+          volumeMounts:
+            - name: be-storage
+              mountPath: /data/storage
+          command: ["/bin/bash", "-c"]
+          args: ["/opt/starrocks/be/bin/start_be.sh --daemon && sleep infinity"]
+  volumeClaimTemplates:
+    - metadata:
+        name: be-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: starrocks-be
+  namespace: default
+spec:
+  clusterIP: None
+  ports:
+    - port: 9060
+      name: be-port
+    - port: 9050
+      name: heart-beat
+  selector:
+    app: starrocks-be
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: starrocks-fe-ingress
+  namespace: default
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: starrocks.34.121.137.254.sslip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: starrocks-fe
+                port:
+                  number: 8080
