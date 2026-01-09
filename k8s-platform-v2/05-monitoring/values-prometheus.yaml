@@ -1,0 +1,28 @@
+grafana:
+  adminPassword: prom-operator
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki-stack.default.svc.cluster.local:3100
+      access: proxy
+      isDefault: false
+      jsonData:
+        maxLines: 1000
+  grafana.ini:
+    server:
+      root_url: http://grafana.$(INGRESS_DOMAIN)
+      serve_from_sub_path: true
+
+prometheus:
+  prometheusSpec:
+    podMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    retention: 168h
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi

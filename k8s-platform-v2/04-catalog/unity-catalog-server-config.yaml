@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unity-catalog-server-config
+  namespace: default
+data:
+  server.properties: |
+    # Unity Catalog Server Configuration
+    server.env=dev
+
+    # MinIO S3 Bucket Configuration
+    # Configure test-bucket for Unity Catalog tables
+    s3.bucketPath.0=s3://test-bucket
+    s3.accessKey.0=minioadmin
+    s3.secretKey.0=minioadmin
+    s3.region.0=us-east-1
+
+    # MinIO endpoint configuration (non-AWS S3)
+    s3.endpointUrl.0=http://minio.default.svc.cluster.local:9000

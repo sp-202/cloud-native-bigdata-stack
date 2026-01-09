@@ -1,0 +1,355 @@
+---
+# Source: unitycatalog/templates/server/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "unity-catalog-unitycatalog-server-config-templates"
+  labels:
+    helm.sh/chart: unitycatalog-0.0.1-pre.1
+    app.kubernetes.io/version: "main"
+    app.kubernetes.io/managed-by: "Helm"
+    app.kubernetes.io/name: "unitycatalog"
+    app.kubernetes.io/component: "server"
+    app.kubernetes.io/instance: "unity-catalog"
+data:
+  server.log4j2.properties.template: |-
+    status=warn
+    appenders=console
+    
+    appender.console.type=Console
+    appender.console.name=Console
+    appender.console.layout.type=PatternLayout
+    appender.console.layout.pattern=%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n
+    
+    rootLogger.level=info
+    rootLogger.appenderRefs=console
+    rootLogger.appenderRef.console.ref=Console
+  server.properties.template: |-
+    server.env=prod
+    
+    storage-root.models=file:/tmp/ucroot
+  hibernate.properties.template: |-
+    hibernate.connection.driver_class=org.h2.Driver
+    hibernate.connection.url=jdbc:h2:file:./etc/db/h2db;DB_CLOSE_DELAY=-1
+    
+    hibernate.hbm2ddl.auto=update
+    hibernate.show_sql=false
+    hibernate.archive.autodetection=class
+    hibernate.use_sql_comments=true
+    org.hibernate.SQL=INFO
+    org.hibernate.type.descriptor.sql.BasicBinder=TRACE
+---
+# Source: unitycatalog/templates/server/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: "unity-catalog-unitycatalog-server"
+  labels:
+    helm.sh/chart: unitycatalog-0.0.1-pre.1
+    app.kubernetes.io/version: "main"
+    app.kubernetes.io/managed-by: "Helm"
+    app.kubernetes.io/name: "unitycatalog"
+    app.kubernetes.io/component: "server"
+    app.kubernetes.io/instance: "unity-catalog"
+spec:
+  type: "ClusterIP"
+  ports:
+    - port: 8080
+      targetPort: api
+      protocol: TCP
+      name: api
+  selector:
+    app.kubernetes.io/name: "unitycatalog"
+    app.kubernetes.io/component: "server"
+    app.kubernetes.io/instance: "unity-catalog"
+---
+# Source: unitycatalog/templates/ui/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: unity-catalog-unitycatalog-ui
+  labels:
+    helm.sh/chart: unitycatalog-0.0.1-pre.1
+    app.kubernetes.io/version: "main"
+    app.kubernetes.io/managed-by: "Helm"
+    app.kubernetes.io/name: "unitycatalog"
+    app.kubernetes.io/component: "ui"
+    app.kubernetes.io/instance: "unity-catalog"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: ui
+      protocol: TCP
+      name: ui
+  selector:
+    app.kubernetes.io/name: "unitycatalog"
+    app.kubernetes.io/component: "ui"
+    app.kubernetes.io/instance: "unity-catalog"
+---
+# Source: unitycatalog/templates/server/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "unity-catalog-unitycatalog-server"
+  labels:
+    helm.sh/chart: unitycatalog-0.0.1-pre.1
+    app.kubernetes.io/version: "main"
+    app.kubernetes.io/managed-by: "Helm"
+    app.kubernetes.io/name: "unitycatalog"
+    app.kubernetes.io/component: "server"
+    app.kubernetes.io/instance: "unity-catalog"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "unitycatalog"
+      app.kubernetes.io/component: "server"
+      app.kubernetes.io/instance: "unity-catalog"
+  template:
+    metadata:
+      annotations:
+        checksum/serverConfig: "2fd426bf1118d18fba03969d89d96bb8e52f6515349fc090fdd65cb934ae0bee"
+        checksum/hibernateConfig: "082a79515c789cde9a8fa18eba0095850e15e39c767594f343a1948ec2f8c258"
+        checksum/log4j2Config: "cfdb47e6f174bf079c2cd6a0597aca6ac8ddd338ad8988d191f046c6e4bd23b2"
+      labels:
+        helm.sh/chart: unitycatalog-0.0.1-pre.1
+        app.kubernetes.io/version: "main"
+        app.kubernetes.io/managed-by: "Helm"
+        app.kubernetes.io/name: "unitycatalog"
+        app.kubernetes.io/component: "server"
+        app.kubernetes.io/instance: "unity-catalog"
+    spec:
+      serviceAccountName: "default"
+      securityContext:
+        fsGroup: 101
+      initContainers:
+        - name: init
+          image: "alpine:latest"
+          imagePullPolicy: "IfNotPresent"
+          command:
+            - /bin/sh
+            - -c
+            - |-
+              apk add --no-cache envsubst openssl curl
+              envsubst < /home/unitycatalog/etc/confTemplates/server.properties.template > /home/unitycatalog/etc/conf/server.properties
+              envsubst < /home/unitycatalog/etc/confTemplates/server.log4j2.properties.template > /home/unitycatalog/etc/conf/server.log4j2.properties
+              envsubst < /home/unitycatalog/etc/confTemplates/hibernate.properties.template > /home/unitycatalog/etc/conf/hibernate.properties
+
+              echo "Generating DER format keys (private_key.der and public_key.der) if they do not exist..."
+              if [ -f /home/unitycatalog/etc/conf/private_key.der ] && [ -f /home/unitycatalog/etc/conf/public_key.der ]; then
+                echo "DER format keys already exist, skipping generation."
+              elif [ -f /home/unitycatalog/etc/confJwtKey/private_key.der ]; then
+                echo "Using /home/unitycatalog/etc/confJwtKey/private_key.der..."
+                cp /home/unitycatalog/etc/confJwtKey/private_key.der /home/unitycatalog/etc/conf/private_key.der
+                openssl rsa -pubout -inform DER -outform DER \
+                    -in /home/unitycatalog/etc/confJwtKey/private_key.der \
+                    -out /home/unitycatalog/etc/conf/public_key.der
+              elif [ -f /home/unitycatalog/etc/confJwtKey/private_key.pem ]; then
+                echo "Using /home/unitycatalog/etc/confJwtKey/private_key.pem..."
+                openssl pkcs8 -topk8 -inform PEM -outform DER -nocrypt \
+                    -in /home/unitycatalog/etc/confJwtKey/private_key.pem \
+                    -out /home/unitycatalog/etc/conf/private_key.der
+                openssl rsa -pubout -inform PEM -outform DER \
+                    -in /home/unitycatalog/etc/confJwtKey/private_key.pem \
+                    -out /home/unitycatalog/etc/conf/public_key.der
+              else
+                echo "ERROR: No private_key.der or private_key.pem found in /home/unitycatalog/etc/conf or /home/unitycatalog/etc/confJwtKey"
+                exit 1
+              fi
+
+              echo "Looking up key_id.txt..."
+              if [ -f /home/unitycatalog/etc/conf/key_id.txt ]; then
+                echo "Key ID file already exists, skipping..."
+              elif [ -f /home/unitycatalog/etc/confJwtKey/key_id.txt ]; then
+                echo "Using /home/unitycatalog/etc/confJwtKey/key_id.txt..."
+                cp /home/unitycatalog/etc/confJwtKey/key_id.txt /home/unitycatalog/etc/conf/key_id.txt
+              else
+                echo "ERROR: No key_id.txt found in /home/unitycatalog/etc/confJwtKey"
+                exit 1
+              fi
+
+              # Set permissions for the mounted volumes uid:gid 100:101 - unitycatalog:unitycatalog
+              chown -R 100:101 /home/unitycatalog/etc/conf
+          volumeMounts:
+            - name: config-templates
+              mountPath: /home/unitycatalog/etc/confTemplates
+            - name: config-volume
+              mountPath: /home/unitycatalog/etc/conf
+            - name: jwt-key-volume
+              mountPath: /home/unitycatalog/etc/confJwtKey
+          env:
+      containers:
+        - name: server
+          image: "unitycatalog/unitycatalog:main"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            - name: api
+              containerPort: 8080
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: api
+            timeoutSeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30 # 5 minutes
+
+          volumeMounts:
+            - name: config-volume
+              mountPath: /home/unitycatalog/etc/conf
+            - name: db-volume
+              mountPath: /home/unitycatalog/etc/db
+      volumes:
+        - configMap:
+            name: "unity-catalog-unitycatalog-server-config-templates"
+          name: config-templates
+        - name: config-volume
+          emptyDir: {}
+        - name: jwt-key-volume
+          secret:
+            secretName: "unity-catalog-unitycatalog-server-jwt-key"
+        - name: db-volume
+          persistentVolumeClaim:
+            claimName: "unity-catalog-unitycatalog-server-db"
+  strategy:
+    type: Recreate
+---
+# Source: unitycatalog/templates/ui/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "unity-catalog-unitycatalog-ui"
+  labels:
+    helm.sh/chart: unitycatalog-0.0.1-pre.1
+    app.kubernetes.io/version: "main"
+    app.kubernetes.io/managed-by: "Helm"
+    app.kubernetes.io/name: "unitycatalog"
+    app.kubernetes.io/component: "ui"
+    app.kubernetes.io/instance: "unity-catalog"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "unitycatalog"
+      app.kubernetes.io/component: "ui"
+      app.kubernetes.io/instance: "unity-catalog"
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: unitycatalog-0.0.1-pre.1
+        app.kubernetes.io/version: "main"
+        app.kubernetes.io/managed-by: "Helm"
+        app.kubernetes.io/name: "unitycatalog"
+        app.kubernetes.io/component: "ui"
+        app.kubernetes.io/instance: "unity-catalog"
+    spec:
+      serviceAccountName: "default"
+      initContainers:
+        - name: wait-for-server
+          image: "busybox:latest"
+          imagePullPolicy: "IfNotPresent"
+          command:
+            - /bin/sh
+            - -c
+            - |-
+              until nc -z unity-catalog-unitycatalog-server 8080
+              do
+                echo "Waiting for server (unity-catalog-unitycatalog-server:8080) to be ready..."
+                sleep 2
+              done
+      containers:
+        - name: ui
+          image: "unitycatalog/unitycatalog-ui:main"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            - name: ui
+              containerPort: 3000
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: ui
+            timeoutSeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30 # 5 minutes
+
+          command:
+            - /bin/bash
+            - -c
+            - |-
+              jq '.proxy = null' package.json > temp.json
+              mv temp.json package.json
+              yarn start
+          env:
+---
+# Source: unitycatalog/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: "unity-catalog-unitycatalog"
+  labels:
+    helm.sh/chart: unitycatalog-0.0.1-pre.1
+    app.kubernetes.io/version: "main"
+    app.kubernetes.io/managed-by: "Helm"
+spec:
+  rules:
+    - host: 
+      http:
+        paths:
+          - path: "/api"
+            pathType: "Prefix"
+            backend:
+              service:
+                name: "unity-catalog-unitycatalog-server"
+                port:
+                  name: api
+          - path: "/"
+            pathType: "Prefix"
+            backend:
+              service:
+                name: "unity-catalog-unitycatalog-ui"
+                port:
+                  name: ui
+---
+# Source: unitycatalog/templates/server/keypair-secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "unity-catalog-unitycatalog-server-jwt-key"
+  labels:
+    helm.sh/chart: unitycatalog-0.0.1-pre.1
+    app.kubernetes.io/version: "main"
+    app.kubernetes.io/managed-by: "Helm"
+    app.kubernetes.io/name: "unitycatalog"
+    app.kubernetes.io/component: "server"
+    app.kubernetes.io/instance: "unity-catalog"
+  annotations:
+    helm.sh/hook: pre-install
+    helm.sh/resource-policy: keep
+type: Opaque
+data:
+  
+  
+  private_key.pem: "LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlKS1FJQkFBS0NBZ0VBNFdobmNnQzdyQ0RRU2RqdjZ5bGd1TGprQ2dja3V2WVpDS2dGdmxCc243MEJHUTA3CklEYVBPa3Q4ZGRXRmNycy9jYnlSdjdaMjdlaWR1OStBTUttUTJaRWRZYmUreVpzVmszZDFMeCtmclFSMUh1MEoKMlVIU0VZaytzVTA3NzhXRDZXZGhqVlBpUGZ5Z2pZQjdvbUJydzAzM0Z5V2hkdWdvR09JanhPYmxyLy96SmFwUgptUUZTenl2SUx6LzBJeHRxNVVjNExRZzJmQmNLUlhPWmEyOEFWblhWVXhoNjM3L0RSUloxMzY2SmhVbFNzaUx1ClRrOTRGSUNhUHdEeForT1NjRkI3SFlKWGYzTnlpSGlzdTk5TjQ5YndnaHF1bGtwV3hhNFZJL0YyeDBDS05Jc3EKSGRMclorME1tRXpWNXR3ZEhGZ0Uyc24yQUhCZW5WandxbXJ3aGk2a0E3akhJbS9wQVBrU1A1QmtSQnJaaUZMWAp1eHRXWkhZVGVoNUo1VERGeTNHdmpMUGpzWXd0ZSsvNmpCZ2owK0M4NjIvd2h3dy9XbHFiRWJOL0JwUHVvbzd4Ck1TZ0ZVTzR5R3dBT0VScjQ2b0NjMDZWWmFBdlkxQkdBMklUTkdNNmF2UXMzVzRxNm5lRHB3cTdTYkNqa1NtaGEKWDd5UU5rSUswb2tka01tNkpOck9Xd2ZOQlc2YXIwZmJwaWNUTFlDRFBPQTZld1NwN2dGbXBhdW1yalhtaENFMgp2US9tSUY0Z0tkbzFDUUV3ZHlXYkcwQnpaTkNVbDBSeUovUHdnQ3NZQ01xU2pPdGRZZUpROUpVWjUyc2dmQTA1CjNLMnBqY0hscnB4NVBzSDE3Z0JwTW00Ty9QR2NiOWhUb1RKL0xjZG1JZG5kY1J5ZjNFTGJVMzVlaHNrQ0F3RUEKQVFLQ0FnQUhwL1lyaHg3WXY5eVRSWTBRbmIwdFNRcGwxTXhJbFdkUVJmUzcvQnRVYWFVSjVzc2xVdlVXYzgzcwphcTQzc1doOFFuMW8xNWUraVBJaW1YclBMRk5CTUk2ZzdRN0w1anFiWWFsWFNtbXdCTUM5cGl0NWQ2VGM5NTVyCmcwWVA1Tk9RTC9TK1NpVWJHZU9TS3RVSU5PSTBKZ2ZJZjN5MmZ6Z3RjRERxMVRUai8zdVF3Zkkza2pYdjEzcmIKTC83bzJsdU5JaGdrWDIwS1ZmWUJXZVhTSWxrT2xyNENMb2l0NU9PTEN6SkJ3TG5uRHhDQ0FIRzdzek5PN3ZkTwpRSWZ5a1dZOTdsM2dLTGMwR3dXKzRPcHREeTZrR0g3ZXpHMDFxWnk4NWliTnE3dnZGS0FkSE1UM2NseVFrUnFtCmFhV3lTN09wYk12dGFvS3lqUjZKbGFYSEJBN2JUNUwvM3daU1N3c1ZEd3QwZkErRVg0QXpRWGVBOXBCZG8rZCsKenJnTkxDa3VPSWpmMmE4TlhUclM2aHU2Q3AvbVpTMVJoa1Fic2pTNTJhaHBCVFZGQ3BRZkZNVzV5RlNqZ3lWRQpsSGZXTnNvVUZxQzNaYTJEd3pIeHBoeHl4ZUcrNVlwaDN5MVdUN1diR0tWSUhqejdkQndIUThJeGJ6MnBCT3RLCnVKSmswYUFrQ3YvRTFzOWdvb3FUcWVYUXBudGdXMmJGZ0M3eVFFUTlkSWJ2NHlHaEpPTVNMeXN1b2VxT1VCa1YKUU1UQTNscTNWVmp6OGRDdGFpMWhuTzYxZWQ4ZWhvRnNmQklVQzNMY1c1K3hYNEVVY0tBRmNnQVIwajlxbERIUwpaU2pvYkZMU2tySXhrU3dxMTlOVk1iUGs1Z0xTUTZySk1LV1hrZndGYUZNemRlZXE2UUtDQVFFQTZXOFVlVStCCktFUGxzczF2S0JjVU9teUdEOENWb1ducFArYkttVkF2NHVHNGdpbEdiNTB5dzFSR3BndGdMUFBtTlRDS004SGkKa2lFZzduU05zb0F4a0FTdlNBUVZsM21CdEJMOC9Bcnl4enB6dlovMStBZWNPQmN3U0lRckJVMWx4NWY3ZWtWTwpWUWJTVjl1WUowaHlicDFwMEJCMFc1bmNLalRPYnpmYi9rd2M1T2Q0MTF5V1NCYVg4N2FpNUJHM2JyQzIvL05nClplOGtKdThvOWFVYVo4SCtmenl3dTdtWnpjeUdyYzJmRzRIbmVRTk1nRVg5VTVDWTdNRFROeW1KMFk3V2JiMlEKSnBxclJOK1hlcmdwZG9rcERIL0M5eFhhUlh1NVUrV2EwZXhtNExOSXYrOENZbTY2Tkx5dGZ0ZlEwL2NVYVNIOAp1TEpLVExscDhINlRId0tDQVFFQTl6S3l3TFhQbGJDWVlvQTE1YWY5bmg0SFhFM1d6aThwRVQ0Vm5taGE0dVZvCi9lT2RKVm15QzB5bjlNSFhzZXYxWGRhWGtLTkM2c1lmMk9vczM5Yzk2cldNSVZlSnU0SmxyWDhRQS9iWmU0QjkKbEtuVWJtd1U0MjVIaTVBOTU5eitVb2xoQTFuWUwvWXN6TjFRL3dSZ0w2UWFXZ1RIai96K0Jkd0pveFdlUUdUZQpiWWMzNm4zV3FmRVhnUTVvcVZ0TVdUbXhkODFoRitOTlZJNXd2aHl2enBQMEFteGlyNVN4Z0JESGlDMURXN2xvClZkakFadHpDZVQ1d252VmQzdnJtRC9CYlhNUnAyT1d5YTB1SERwbHBIYld0Wk5ZdW00WUpHQlY2SGFVclJYVVIKcFFjVFludUZRV3BRaThZSTM1NGhqV3RHRm5xUk1LN1kvcEtrTWIzUkZ3S0NBUUVBcTVtVnNtdm9wV0hzVEZuSwptZTBGV01HSWQ3SDZEVE9mWFBOYkFnTTVnSTZ3SlRjVWFWNWsvOFJIUHk3am40Z1lOZ2Vkd05pSnB5U2xZY1hhCm1GcTJsSWx0RlFLem9LdVkxbmlTOHZGVmNYR2R2Y3NHZFRPYStuekphTFdJTHBpcjltTGFZaExxdDRTUlFqYlMKamlZcXdQZ0UzZ2dLa1gvMG9pNDVodmJJU1JOSXRsa1dzektENHpDQXVZOE1CWjZrZXNGN2RZSkMzZ3hEUmovUAptMnlva1pmQmIyVjlBak01UmxsUXRCbVJHaGFQdzV6U013WEFhUnJGNEYwTHArUm9STjI4OGVWRlA2dTV0YUtzClozRlVRYWdvdmVCNXdVdVdMamY2a0JzY2lhOUFIWFNPU1ZINUxjVDZLMlI4SWQraXl2ODZTT0xNTmpZU2VuNWUKeTRVd3Z3S0NBUUVBbGgwTmZBVnNkK1J6eFcxQ1RhSkVXMTYwN1pLL1hSbzZnQ1FKa05haVNxTXhyT3dxSStKaQpRb1pjZ0QrdXNuY3QyN3hTOGh5U3FHdUVMMytWbktEakVzTUl3NzZhLzJsaVFZZWx2Q0tOVTNobHluK1BaemJ2ClFHVlp3U0RvMXdMVzFseGlzMXc5OG5JMkpucEhrM1dleTQrR0NTQlo1OUNrbWY1VFE5dis2Ky9WT3dJZ0xLQWEKV2J6MG53U1cvakZaSGQzeExXVmxEdEtUeFVOeXA2QllDc1RDS3k2U2h6bHV5T3hubndTTm9RZm9taWswUGNMVgp2amJ5d1RVVHVqTDJ2cnNoWUNaT2VNNlVHS0FXOWdDbldzbFc4S000VG0ySTNEMCttUDRTVnUyT3QzNmlnTzJ0CnNGblZhK3ZvdTVNVm9RR0I0R2l4L3JSUFJkamJLUEd5SlFLQ0FRQU1JS2tjY1lXTjlwK2VYemFidWxBUmlXY0UKeVA2UThpL3g2WlZMQlo0aVVpdXJWS0VNV1JETWZsMm5FR0dEcGROZmFucTV1NTZwbHQ0eG1yckpGSFFEc0xCZwpaL0tRSFl6THl6aHpaU01SdVlteWI2YmpKc1Q4dWwyc1N5YWxmWDdqWTBKVXdjS01JbXdIUXUyOU4wT1Vqc1VYCjdNN05DZnBzSjNsWENxcWVOZ21RRTQvSnkyaHhWMERmOGhQQVVBbG5Sc3RzV0tnNVJ5MnNiMHhkN3d3QnEzOTkKeG9MS1VCLy9XSGdVNTlRREgvTzd0TXZRYXhMdU9ZN3JsK3JVbHRieHJvL2RYRVVmUGZnbG9WK1JlTUo1V0QxRgpnMWJscFJ5Y050RmJpTVdMS3RIckRnNERmcS9nQmNJU3ZvUlVKWWNNY3pQWHhRcGtTY0psZktkWFVpT2QKLS0tLS1FTkQgUlNBIFBSSVZBVEUgS0VZLS0tLS0K"
+  key_id.txt: "OTJlY2ZhYmJhYjRlMDJkYzAyZjcxMDEyYjE5NzNlMWQyN2QzMjRlMmMzYTcxMjFhNDZlY2U0NWMwZmYwZjY2NQ=="
+---
+# Source: unitycatalog/templates/server/db-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "unity-catalog-unitycatalog-server-db"
+  labels:
+    helm.sh/chart: unitycatalog-0.0.1-pre.1
+    app.kubernetes.io/version: "main"
+    app.kubernetes.io/managed-by: "Helm"
+    app.kubernetes.io/name: "unitycatalog"
+    app.kubernetes.io/component: "server"
+    app.kubernetes.io/instance: "unity-catalog"
+  annotations:
+    helm.sh/hook: pre-install
+    helm.sh/resource-policy: "keep"
+spec:
+  accessModes: 
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "1Gi"

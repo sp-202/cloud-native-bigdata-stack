@@ -1,0 +1,24 @@
+app:
+  ingress:
+    enabled: false
+api:
+  enabled: true
+  ingress:
+    enabled: false
+web:
+  enabled: true
+  ingress:
+    enabled: false
+metricsScraper:
+  enabled: true
+kong:
+  proxy:
+    http:
+      enabled: true
+      nodePort: null
+    tls:
+      enabled: false
+  env:
+    proxy_listen: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
+    admin_listen: "0.0.0.0:8001, 0.0.0.0:8444 ssl"
+    status_listen: "0.0.0.0:8100"

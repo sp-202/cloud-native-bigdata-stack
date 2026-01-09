@@ -1,48 +1,99 @@
 # Deployment Guide
 
-This guide describes how to deploy the entire Spark, Hive, and Superset stack from scratch on a K3s cluster.
+This guide details how to set up the environment and deploy the Kubernetes Big Data Platform (v2).
 
-## 1. Prerequisites
-- **K3s Cluster**: A running Kubernetes cluster.
-- **Helm**: Version 3+ installed.
-- **Docker**: For building custom images (optional if using provided images).
+## Prerequisites
 
-## 2. Infrastructure Setup
-Run the automated deployment script to create PVCs, Databases, and Core Services.
+Ensure you have the following tools installed:
+- **Kubernetes Cluster**: A running K8s cluster (GKE, Minikube, Kind, etc.) and `kubectl` configured.
+- **Helm**: Version 3+ (v4 is also supported by this project).
+- **Git**: To clone repositories.
 
-```bash
-./deploy.sh
-```
+## Installation Instructions
 
-This script automates the following steps:
-1.  **Storage**: Creates Persistent Volume Claims for MinIO, Postgres, and Zeppelin.
-2.  **Databases**: Deploys Postgres (Shared) and MinIO (S3 Object Storage).
-3.  **Core Services**: Deploys Hive Metastore and Airflow.
-4.  **Compute**: Deploys Zeppelin and applies Spark configurations.
-5.  **Visualization**: Installs Apache Superset via Helm.
-
-## 3. Custom Images
-The platform uses custom Docker images for Hive and Spark to include necessary dependencies (AWS SDKs, Postgres drivers).
-
-To rebuild and push these images to your registry:
-```bash
-./build_and_push.sh
-```
-*Note: Ensure you are logged into Docker Hub (`docker login`) before running.*
-
-## 4. Manual Verification
-After deployment, verify all pods are running:
+### macOS (via Homebrew)
+If you are on macOS, `brew` is the easiest way to install dependencies.
 
 ```bash
-kubectl get pods
+# Update Homebrew
+brew update
+
+# Install Kubectl
+brew install kubernetes-cli
+
+# Install Helm
+brew install helm
+
+# Install Git
+brew install git
 ```
 
-### Expected Output
-- `hive-metastore-xxx` (2/2 Running)
-- `postgres-xxx` (1/1 Running)
-- `minio-xxx` (1/1 Running)
-- `zeppelin-xxx` (1/1 Running)
-- `superset-xxx` (1/1 Running)
+### Linux (Debian/Ubuntu)
+For Debian-based systems, use `apt` and official sources.
 
-## 5. Accessing Services
-Refer to `walkthrough.md` for connection details and credentials.
+```bash
+# 1. Install prerequisites
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl
+
+# 2. Install Kubectl
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+sudo apt-get install -y kubectl
+
+# 3. Install Helm
+curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+sudo apt-get install apt-transport-https --yes
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+sudo apt-get update
+sudo apt-get install helm
+
+# 4. Install Git
+sudo apt-get install -y git
+```
+
+## Deployment
+
+1.  **Clone/Navigate to Project**:
+    ```bash
+    cd kubernets-big-data-project
+    ```
+
+2.  **Build Custom Spark Image**:
+    The project requires a custom Spark image with Unity Catalog dependencies.
+    *Ensure Docker is running and you are logged in (`docker login`).*
+
+    ```bash
+    ./docker/spark/build.sh
+    ```
+
+3.  **Run Deployment Script**:
+    This script will:
+    - Install Infrastructure (Traefik, Spark Operator).
+    - Build Unity Catalog from source.
+    - Generate Helm manifests for all components.
+    - Deploy the platform using `kubectl kustomize`.
+
+    ```bash
+    ./deploy-gke.sh
+    ```
+
+## Verification
+
+After the script completes, verify the deployment:
+
+1.  **Check Pods**:
+    ```bash
+    kubectl get pods -n default
+    ```
+    Ensure `unity-catalog`, `spark-operator`, `superset`, `postgres`, `hive-metastore` pods are Running.
+
+2.  **Access Web UIs**:
+    Based on the output IP (e.g., `34.x.x.x`), access:
+    - **Unity Catalog**: `http://unity.34.x.x.x.sslip.io`
+    - **Superset**: `http://superset.34.x.x.x.sslip.io`
+    - **Traefik Dashboard**: `http://traefik.34.x.x.x.sslip.io/dashboard/`
+
+## Troubleshooting
+- **Run Deployment Again**: The script is idempotent. If a step fails (e.g., waiting for IP), just run `./deploy-gke.sh` again.

@@ -1,0 +1,35 @@
+# Values for Unity Catalog OSS
+ingress:
+  enabled: true
+  className: "traefik"
+  hosts:
+    - host: unity.$(INGRESS_DOMAIN)
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+
+# S3/MinIO Storage Configuration
+unitycatalog-server:
+  env:
+    # MinIO S3-compatible storage
+    - name: AWS_REGION
+      value: "us-east-1"
+    - name: AWS_ACCESS_KEY_ID
+      value: "minioadmin"
+    - name: AWS_SECRET_ACCESS_KEY
+      value: "minioadmin"
+    - name: AWS_S3_ENDPOINT
+      value: "http://minio.default.svc.cluster.local:9000"
+    - name: AWS_S3_PATH_STYLE_ACCESS
+      value: "true"
+
+  # Mount server.properties configuration
+  volumeMounts:
+    - name: server-config
+      mountPath: /etc/conf/server.properties
+      subPath: server.properties
+
+  volumes:
+    - name: server-config
+      configMap:
+        name: unity-catalog-server-config

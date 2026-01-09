@@ -170,7 +170,7 @@
 
 <property>
   <name>zeppelin.k8s.spark.container.image</name>
-  <value>subhodeep2022/spark-bigdata:spark-3.5.7-rocksdb</value>
+  <value>$(SPARK_IMAGE)</value>
   <description>Docker image for Spark executors</description>
 </property>
 

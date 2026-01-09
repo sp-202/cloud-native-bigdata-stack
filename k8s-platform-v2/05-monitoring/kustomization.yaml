@@ -9,6 +9,10 @@ resources:
   - dashboard-transport.yaml
   - spark-ui-service.yaml
   - spark-service-monitor.yaml
+  # Generated Helm Charts
+  - charts/gen/kube-prometheus-stack.yaml
+  - charts/gen/loki-stack.yaml
+  - charts/gen/kubernetes-dashboard.yaml
 
 configMapGenerator:
   - name: spark-grafana-dashboard
@@ -23,89 +27,3 @@ configMapGenerator:
     options:
       labels:
         grafana_dashboard: "1"
-
-helmCharts:
-  - name: kube-prometheus-stack
-    repo: https://prometheus-community.github.io/helm-charts
-    releaseName: kube-prometheus-stack
-    namespace: default
-    version: 56.6.2
-    includeCRDs: true
-    valuesInline:
-      grafana:
-        adminPassword: prom-operator
-        additionalDataSources:
-          - name: Loki
-            type: loki
-            url: http://loki-stack.default.svc.cluster.local:3100
-            access: proxy
-            isDefault: false
-            jsonData:
-              maxLines: 1000
-        grafana.ini:
-          server:
-            root_url: http://grafana.$(INGRESS_DOMAIN)
-            serve_from_sub_path: true
-
-      prometheus:
-        prometheusSpec:
-          podMonitorSelectorNilUsesHelmValues: false
-          serviceMonitorSelectorNilUsesHelmValues: false
-          retention: 168h
-          storageSpec:
-            volumeClaimTemplate:
-              spec:
-                storageClassName: standard
-                accessModes: ["ReadWriteOnce"]
-                resources:
-                  requests:
-                    storage: 10Gi
-  - name: loki-stack
-    repo: https://grafana.github.io/helm-charts
-    releaseName: loki-stack
-    namespace: default
-    version: 2.10.2
-    valuesInline:
-      loki:
-        isDefault: false
-        config:
-          table_manager:
-            retention_deletes_enabled: true
-            retention_period: 168h
-      promtail:
-        enabled: true
-      grafana:
-        enabled: false
-        sidecar:
-          datasources:
-            enabled: false
-  - name: kubernetes-dashboard
-    repo: https://kubernetes.github.io/dashboard/
-    releaseName: kubernetes-dashboard
-    namespace: default
-    version: 7.5.0
-    valuesInline:
-      app:
-        ingress:
-          enabled: false
-      api:
-        enabled: true
-        ingress:
-          enabled: false
-      web:
-        enabled: true
-        ingress:
-          enabled: false
-      metricsScraper:
-        enabled: true
-      kong:
-        proxy:
-          http:
-            enabled: true
-            nodePort: null
-          tls:
-            enabled: false
-        env:
-          proxy_listen: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
-          admin_listen: "0.0.0.0:8001, 0.0.0.0:8444 ssl"
-          status_listen: "0.0.0.0:8100"
