@@ -1,7 +1,7 @@
 # Use valid Java 17 base image (official Spark images for 3.5.1+ with Scala 2.13 don't exist on Docker Hub)
 FROM eclipse-temurin:17-jdk-jammy
 
-ENV SPARK_VERSION=3.5.4
+ENV SPARK_VERSION=3.5.3
 ENV HADOOP_VERSION=3
 ENV SCALA_VERSION=2.13
 ENV SPARK_HOME=/opt/spark
