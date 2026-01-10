@@ -34,7 +34,7 @@ RUN wget https://jdbc.postgresql.org/download/postgresql-42.6.0.jar && \
     wget https://repo1.maven.org/maven2/io/unitycatalog/unitycatalog-client/0.3.1/unitycatalog-client-0.3.1.jar && \
     wget https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.5_2.13/1.5.2/iceberg-spark-runtime-3.5_2.13-1.5.2.jar && \
     wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar && \
-    wget https://repo1.maven.org/maven2/software/amazon/awssdk/bundle/1.12.262/bundle-1.12.262.jar
+    wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar
 
 # Setup User and Permissions
 RUN groupadd -r zeppelin --gid=1000 && \
