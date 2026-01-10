@@ -61,7 +61,7 @@ You might want to query the Airflow or Hive metadata schemas directly.
 
 StarRocks provides high-performance real-time analytics. It is MySQL-compatible.
 
-### Step-by-Step
+### Step-by-Step (Internal Tables)
 1.  Go to **+ Database**.
 2.  Select **StarRocks** (It is supported).
 3.  **Enter the SQLAlchemy URI**:
@@ -71,6 +71,47 @@ StarRocks provides high-performance real-time analytics. It is MySQL-compatible.
     *(Note: We created a `demo` database for you, as `default` does not exist)*.
 
 4.  Test and Connect.
+
+### Accessing External Catalog Tables (Iceberg/Unity Catalog)
+
+StarRocks connects to external data lakes via **External Catalogs**. These tables (e.g., Iceberg tables created by Spark) are NOT visible in the default database browser.
+
+#### Option 1: Use SQL Lab (Recommended)
+1.  Go to **SQL Lab** → **SQL Editor**
+2.  Select your StarRocks database connection
+3.  Run SQL with catalog prefix:
+    ```sql
+    -- Switch to external catalog
+    SET CATALOG iceberg_hadoop;
+    
+    -- Show available databases
+    SHOW DATABASES;
+    
+    -- Query external Iceberg table
+    SELECT * FROM demo.test_table;
+    ```
+
+#### Option 2: Use Fully Qualified Names
+In SQL Lab, use three-part naming without switching catalog:
+```sql
+SELECT * FROM iceberg_hadoop.demo.test_table;
+```
+
+#### Option 3: Create a View (Best for Dashboards)
+Create a view in StarRocks internal database to expose external tables:
+```sql
+-- In StarRocks (MySQL client)
+USE demo;
+CREATE VIEW iceberg_test_table AS 
+SELECT * FROM iceberg_hadoop.demo.test_table;
+```
+Now `iceberg_test_table` appears in Superset's table browser!
+
+### Available External Catalogs
+| Catalog | Type | Description |
+|---------|------|-------------|
+| `iceberg_hadoop` | Iceberg (Hadoop) | Spark Iceberg tables at `s3://test-bucket/iceberg_warehouse` |
+| `uc_oss_discovery` | Iceberg (REST) | Unity Catalog Iceberg REST endpoint |
 
 ---
 
