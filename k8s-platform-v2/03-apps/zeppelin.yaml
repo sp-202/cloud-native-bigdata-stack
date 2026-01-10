@@ -20,6 +20,7 @@ spec:
       initContainers:
         - name: spark-home-init
           image: $(SPARK_IMAGE)
+          imagePullPolicy: Always
           command: ["sh", "-c", "cp -r /opt/spark/* /spark/"]
           volumeMounts:
             - name: spark-home
@@ -28,6 +29,7 @@ spec:
       containers:
         - name: zeppelin
           image: $(ZEPPELIN_IMAGE)
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               name: web
