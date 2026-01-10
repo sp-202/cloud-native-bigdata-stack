@@ -27,7 +27,7 @@ spec:
 
       containers:
         - name: zeppelin
-          image: subhodeep2022/spark-bigdata:zeppelin-0.12.0
+          image: subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v3
           ports:
             - containerPort: 8080
               name: web
@@ -62,9 +62,8 @@ spec:
             - name: SPARK_HOME
               value: "/spark"
 
-            # Kubernetes Interpreter Configuration
             - name: ZEPPELIN_K8S_CONTAINER_IMAGE
-              value: "subhodeep2022/spark-bigdata:zeppelin-0.12.0"
+              value: "subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v3"
             - name: ZEPPELIN_K8S_SPARK_CONTAINER_IMAGE
               value: "$(SPARK_IMAGE)"
             - name: ZEPPELIN_K8S_SPARK_HOME

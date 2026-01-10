@@ -129,8 +129,10 @@ if [ ! -d "build/unitycatalog/.git" ]; then
   git clone https://github.com/unitycatalog/unitycatalog.git build/unitycatalog
 else
   # Update if exists
-  (cd build/unitycatalog && git pull)
+  (cd build/unitycatalog && git fetch --tags)
 fi
+# Checkout v0.3.1 tag for storage credentials API
+(cd build/unitycatalog && git checkout v0.3.1)
 
 mkdir -p k8s-platform-v2/04-catalog/charts/gen
 helm template unity-catalog build/unitycatalog/helm \

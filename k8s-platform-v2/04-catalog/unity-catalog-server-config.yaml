@@ -13,6 +13,7 @@ data:
     s3.bucketPath.0=s3://test-bucket
     s3.accessKey.0=minioadmin
     s3.secretKey.0=minioadmin
+    s3.sessionToken.0=
     s3.region.0=us-east-1
 
     # MinIO endpoint configuration (non-AWS S3)

@@ -22,11 +22,21 @@ unitycatalog-server:
       value: "http://minio.default.svc.cluster.local:9000"
     - name: AWS_S3_PATH_STYLE_ACCESS
       value: "true"
+    
+    # Override AWS SDK to use MinIO for STS (critical for credential vending)
+    - name: AWS_ENDPOINT_URL_STS
+      value: "http://minio.default.svc.cluster.local:9000"
+    - name: AWS_ENDPOINT_URL_S3
+      value: "http://minio.default.svc.cluster.local:9000"
+    
+    # Java system properties for AWS SDK endpoint override
+    - name: JAVA_OPTS
+      value: "-Daws.endpointUrl=http://minio.default.svc.cluster.local:9000 -Daws.stsEndpoint=http://minio.default.svc.cluster.local:9000"
 
   # Mount server.properties configuration
   volumeMounts:
     - name: server-config
-      mountPath: /etc/conf/server.properties
+      mountPath: /home/unitycatalog/etc/conf/server.properties
       subPath: server.properties
 
   volumes:
