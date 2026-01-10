@@ -32,6 +32,9 @@ RUN wget https://jdbc.postgresql.org/download/postgresql-42.6.0.jar && \
 
 WORKDIR $SPARK_HOME
 
-# Use official Spark K8s entrypoint directly
-ENTRYPOINT ["/opt/spark/kubernetes/dockerfiles/spark/entrypoint.sh"]
+# Copy and set official Spark K8s entrypoint
+RUN cp $SPARK_HOME/kubernetes/dockerfiles/spark/entrypoint.sh /opt/entrypoint.sh && \
+    chmod +x /opt/entrypoint.sh
+
+ENTRYPOINT ["/opt/entrypoint.sh"]
 CMD ["bash"]
