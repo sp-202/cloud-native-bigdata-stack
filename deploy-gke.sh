@@ -152,6 +152,7 @@ echo "Building and Applying Manifests..."
 kubectl kustomize --enable-helm ./k8s-platform-v2 | \
   sed "s/\$(INGRESS_DOMAIN)/$INGRESS_DOMAIN/g" | \
   sed "s|\$(SPARK_IMAGE)|$SPARK_IMAGE|g" | \
+  sed "s|\$(ZEPPELIN_IMAGE)|$ZEPPELIN_IMAGE|g" | \
   sed "s/$STATIC_DOMAIN_TO_REPLACE/$INGRESS_DOMAIN/g" | \
   sed "s/$STATIC_IP_TO_REPLACE/$EXTERNAL_IP/g" | \
   kubectl apply --server-side --force-conflicts -f - || echo "First apply failed (likely CRDs), retrying..."
@@ -163,6 +164,7 @@ echo "Re-applying manifests..."
 kubectl kustomize --enable-helm ./k8s-platform-v2 | \
   sed "s/\$(INGRESS_DOMAIN)/$INGRESS_DOMAIN/g" | \
   sed "s|\$(SPARK_IMAGE)|$SPARK_IMAGE|g" | \
+  sed "s|\$(ZEPPELIN_IMAGE)|$ZEPPELIN_IMAGE|g" | \
   sed "s/$STATIC_DOMAIN_TO_REPLACE/$INGRESS_DOMAIN/g" | \
   sed "s/$STATIC_IP_TO_REPLACE/$EXTERNAL_IP/g" | \
   kubectl apply --server-side --force-conflicts -f -
