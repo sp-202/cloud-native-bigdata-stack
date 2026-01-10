@@ -57,7 +57,24 @@ You might want to query the Airflow or Hive metadata schemas directly.
 
 ---
 
-## 4. Troubleshooting Common Issues
+## 4. Connecting to StarRocks (OLAP)
+
+StarRocks provides high-performance real-time analytics. It is MySQL-compatible.
+
+### Step-by-Step
+1.  Go to **+ Database**.
+2.  Select **StarRocks** (It is supported).
+3.  **Enter the SQLAlchemy URI**:
+    ```
+    starrocks://root:@starrocks-fe.default.svc.cluster.local:9030/demo
+    ```
+    *(Note: We created a `demo` database for you, as `default` does not exist)*.
+
+4.  Test and Connect.
+
+---
+
+## 5. Troubleshooting Common Issues
 
 ### ❌ Error: `TSocket read 0 bytes`
 *   **Cause**: Authentication protocol mismatch.

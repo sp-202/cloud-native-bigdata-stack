@@ -79,6 +79,10 @@ spec:
             - name: ZEPPELIN_INTERPRETER_LIFECYCLEMANAGER_TIMEOUT_THRESHOLD
               value: "600000"
 
+            # Spark Version Check (Disable for Spark 4.x compatibility)
+            - name: ZEPPELIN_SPARK_ENABLESUPPORTEDVERSIONCHECK
+              value: "false"
+
           resources:
             requests:
               memory: "2Gi"

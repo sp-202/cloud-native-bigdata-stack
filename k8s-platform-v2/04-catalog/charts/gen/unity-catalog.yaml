@@ -36,6 +36,9 @@ data:
     s3.sessionToken.0=dummy-session-token
     s3.region.0=us-east-1
     s3.endpointUrl.0=http://minio.default.svc.cluster.local:9000
+    
+    # Enable Managed Tables
+    server.managed-table.enabled=true
   hibernate.properties.template: |-
     hibernate.connection.driver_class=org.h2.Driver
     hibernate.connection.url=jdbc:h2:file:./etc/db/h2db;DB_CLOSE_DELAY=-1

@@ -38,22 +38,35 @@ spec:
             - |
               /opt/starrocks/fe/bin/start_fe.sh --daemon
               echo "Waiting for FE to start..."
-              sleep 10
-
-              echo "Starting BE Registration Loop..."
+              
+              # Wait for port 9030 to be ready
               for i in {1..30}; do
-                  echo "Attempt $i: Resolving BE DNS..."
+                  if mysql -h 127.0.0.1 -P 9030 -u root -e "SELECT 1" >/dev/null 2>&1; then
+                      echo "FE is ready!"
+                      break
+                  fi
+                  echo "Waiting for FE port 9030... ($i/30)"
+                  sleep 5
+              done
+
+              echo "Starting Auto-Initialization..."
+              for i in {1..60}; do
+                  echo "Attempt $i: Resolving BE (starrocks-be)..."
                   BE_IP=$(getent hosts starrocks-be.default.svc.cluster.local | awk '{print $1}' | head -n 1)
                   
                   if [ -n "$BE_IP" ]; then
                       echo "Resolved BE IP: $BE_IP"
                       echo "Registering BE..."
                       mysql -h 127.0.0.1 -P 9030 -u root -e "ALTER SYSTEM ADD BACKEND '${BE_IP}:9050';" || true
-                      echo "Checking Backends..."
-                      mysql -h 127.0.0.1 -P 9030 -u root -e "SHOW PROC '/backends';"
+                      
+                      echo "Creating 'demo' database..."
+                      mysql -h 127.0.0.1 -P 9030 -u root -e "CREATE DATABASE IF NOT EXISTS demo;" || true
+                      
+                      echo "Initialization Complete."
+                      mysql -h 127.0.0.1 -P 9030 -u root -e "SHOW PROC '/backends'; SHOW DATABASES;"
                       break
                   else
-                      echo "DNS resolution failed. Retrying in 5s..."
+                      echo "DNS resolution failed for starrocks-be. Retrying in 5s..."
                   fi
                   sleep 5
               done
