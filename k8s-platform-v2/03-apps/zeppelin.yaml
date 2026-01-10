@@ -27,7 +27,7 @@ spec:
 
       containers:
         - name: zeppelin
-          image: subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v3
+          image: subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v4
           ports:
             - containerPort: 8080
               name: web
@@ -63,7 +63,7 @@ spec:
               value: "/spark"
 
             - name: ZEPPELIN_K8S_CONTAINER_IMAGE
-              value: "subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v3"
+              value: "subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v4"
             - name: ZEPPELIN_K8S_SPARK_CONTAINER_IMAGE
               value: "$(SPARK_IMAGE)"
             - name: ZEPPELIN_K8S_SPARK_HOME
@@ -110,6 +110,10 @@ spec:
             - name: interpreter-spec
               mountPath: /opt/zeppelin/k8s/interpreter/100-interpreter-spec.yaml
               subPath: interpreter-spec.yaml
+            # Overwrite Spark Interpreter Setting Defaults
+            - name: spark-setting
+              mountPath: /opt/zeppelin/interpreter/spark/interpreter-setting.json
+              subPath: interpreter-setting.json
 
       serviceAccountName: zeppelin-server
       volumes:
@@ -129,6 +133,9 @@ spec:
         - name: interpreter-spec
           configMap:
             name: zeppelin-interpreter-spec
+        - name: spark-setting
+          configMap:
+            name: zeppelin-spark-setting
         - name: spark-home
           emptyDir: {}
 ---

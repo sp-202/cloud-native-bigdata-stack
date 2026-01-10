@@ -28,6 +28,14 @@ data:
     server.env=prod
     
     storage-root.models=file:/tmp/ucroot
+
+    # MinIO S3 Configuration
+    s3.bucketPath.0=s3://test-bucket
+    s3.accessKey.0=minioadmin
+    s3.secretKey.0=minioadmin
+    s3.sessionToken.0=dummy-session-token
+    s3.region.0=us-east-1
+    s3.endpointUrl.0=http://minio.default.svc.cluster.local:9000
   hibernate.properties.template: |-
     hibernate.connection.driver_class=org.h2.Driver
     hibernate.connection.url=jdbc:h2:file:./etc/db/h2db;DB_CLOSE_DELAY=-1
@@ -179,10 +187,25 @@ spec:
             - name: jwt-key-volume
               mountPath: /home/unitycatalog/etc/confJwtKey
           env:
+      hostAliases:
+        - ip: "34.118.229.177"
+          hostnames:
+            - "test-bucket.minio.default.svc.cluster.local"
       containers:
         - name: server
           image: "unitycatalog/unitycatalog:main"
           imagePullPolicy: "IfNotPresent"
+          env:
+            - name: AWS_REGION
+              value: "us-east-1"
+            - name: AWS_ACCESS_KEY_ID
+              value: "minioadmin"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "minioadmin"
+            - name: AWS_S3_PATH_STYLE_ACCESS
+              value: "true"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Daws.endpointUrl=http://minio.default.svc.cluster.local:9000 -Daws.stsEndpoint=http://minio.default.svc.cluster.local:9000 -Daws.s3PathStyleAccess=true"
           ports:
             - name: api
               containerPort: 8080

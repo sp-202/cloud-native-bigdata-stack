@@ -169,6 +169,12 @@
 </property>
 
 <property>
+  <name>zeppelin.spark.enableSupportedVersionCheck</name>
+  <value>false</value>
+  <description>Allow Spark 4.0.1 (Experimental)</description>
+</property>
+
+<property>
   <name>zeppelin.k8s.spark.container.image</name>
   <value>$(SPARK_IMAGE)</value>
   <description>Docker image for Spark executors</description>
