@@ -19,7 +19,7 @@ spec:
       # Init Container: Copies Spark binaries to /spark to standardise paths
       initContainers:
         - name: spark-home-init
-          image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-v2
+          image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-v3
           command: ["sh", "-c", "cp -r /opt/spark/* /spark/"]
           volumeMounts:
             - name: spark-home
@@ -27,7 +27,7 @@ spec:
 
       containers:
         - name: zeppelin
-          image: subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v4
+          image: subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v5
           ports:
             - containerPort: 8080
               name: web
@@ -63,9 +63,9 @@ spec:
               value: "/spark"
 
             - name: ZEPPELIN_K8S_CONTAINER_IMAGE
-              value: "subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v4"
+              value: "subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v5"
             - name: ZEPPELIN_K8S_SPARK_CONTAINER_IMAGE
-              value: "subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-v2"
+              value: "subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-v3"
             - name: ZEPPELIN_K8S_SPARK_HOME
               value: "/spark"
             - name: ZEPPELIN_K8S_CONTAINER_IMAGE_PULL_POLICY

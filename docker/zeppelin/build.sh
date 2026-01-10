@@ -4,7 +4,7 @@ set -e
 # Navigate to the directory containing this script
 cd "$(dirname "$0")"
 
-IMAGE_NAME="subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v4"
+IMAGE_NAME="subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v5"
 DOCKERFILE_PATH="Dockerfile"
 
 echo "Building Zeppelin image from directory: $(pwd)"
@@ -27,3 +27,9 @@ else
     echo "❌ Build failed"
     exit 1
 fi
+
+echo "Pushing Docker image: $IMAGE_NAME"
+# Note: User must be logged in (docker login)
+docker push $IMAGE_NAME
+
+echo "Build and Push Complete!"
