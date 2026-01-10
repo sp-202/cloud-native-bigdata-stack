@@ -1,31 +1,37 @@
-# Use Spark 3.5.7 (User Requested) with Scala 2.13 and Java 17
-FROM apache/spark:3.5.7-scala2.13-java17
+# Use valid Java 17 base image (official Spark images for 3.5.1+ with Scala 2.13 don't exist on Docker Hub)
+FROM eclipse-temurin:17-jdk-jammy
 
-USER root
+ENV SPARK_VERSION=3.5.7
+ENV HADOOP_VERSION=3
+ENV SCALA_VERSION=2.13
+ENV SPARK_HOME=/opt/spark
+ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
 
 # Install dependencies
-RUN apt-get update && apt-get install -y curl vim && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    procps \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set up Spark environment
-ENV SPARK_HOME=/opt/spark
-ENV PATH=$SPARK_HOME/bin:$PATH
+# Download and install Spark 3.5.7 w/ Scala 2.13 (includes Hadoop 3)
+RUN wget https://dlcdn.apache.org/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala${SCALA_VERSION}.tgz && \
+    tar -xzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala${SCALA_VERSION}.tgz && \
+    mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala${SCALA_VERSION} ${SPARK_HOME} && \
+    rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala${SCALA_VERSION}.tgz
 
-# --- Compatible Versions for Spark 3.5.x (Scala 2.13) ---
-# Delta Lake 3.2.1 (First stable release with UniForm support)
-# Iceberg 1.5.2 (Matches Spark 3.5 ABI)
-# Unity Catalog 0.3.1 (Required for S3 support)
-# AWS SDK bundle (Required for S3A)
-# --------------------------------------------------------
-RUN curl -o $SPARK_HOME/jars/delta-spark_2.13-3.2.1.jar https://repo1.maven.org/maven2/io/delta/delta-spark_2.13/3.2.1/delta-spark_2.13-3.2.1.jar && \
-    curl -o $SPARK_HOME/jars/delta-storage-3.2.1.jar https://repo1.maven.org/maven2/io/delta/delta-storage/3.2.1/delta-storage-3.2.1.jar && \
-    curl -o $SPARK_HOME/jars/unitycatalog-spark_2.13-0.3.1.jar https://repo1.maven.org/maven2/io/unitycatalog/unitycatalog-spark_2.13/0.3.1/unitycatalog-spark_2.13-0.3.1.jar && \
-    curl -o $SPARK_HOME/jars/unitycatalog-client-0.3.1.jar https://repo1.maven.org/maven2/io/unitycatalog/unitycatalog-client/0.3.1/unitycatalog-client-0.3.1.jar && \
-    curl -o $SPARK_HOME/jars/iceberg-spark-runtime-3.5_2.13-1.5.2.jar https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.5_2.13/1.5.2/iceberg-spark-runtime-3.5_2.13-1.5.2.jar && \
-    curl -o $SPARK_HOME/jars/hadoop-aws-3.3.4.jar https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar && \
-    curl -o $SPARK_HOME/jars/aws-java-sdk-bundle-1.12.262.jar https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar && \
-    curl -o $SPARK_HOME/jars/postgresql-42.6.0.jar https://jdbc.postgresql.org/download/postgresql-42.6.0.jar
+# Download compatible JARs for Spark 3.5 (Scala 2.13)
+WORKDIR $SPARK_HOME/jars
+RUN wget https://jdbc.postgresql.org/download/postgresql-42.6.0.jar && \
+    wget https://repo1.maven.org/maven2/io/delta/delta-spark_2.13/3.2.1/delta-spark_2.13-3.2.1.jar && \
+    wget https://repo1.maven.org/maven2/io/delta/delta-storage/3.2.1/delta-storage-3.2.1.jar && \
+    wget https://repo1.maven.org/maven2/io/unitycatalog/unitycatalog-spark_2.13/0.3.1/unitycatalog-spark_2.13-0.3.1.jar && \
+    wget https://repo1.maven.org/maven2/io/unitycatalog/unitycatalog-client/0.3.1/unitycatalog-client-0.3.1.jar && \
+    wget https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.5_2.13/1.5.2/iceberg-spark-runtime-3.5_2.13-1.5.2.jar && \
+    wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar && \
+    wget https://repo1.maven.org/maven2/software/amazon/awssdk/bundle/1.12.262/bundle-1.12.262.jar
 
-# Configuration directory
 WORKDIR $SPARK_HOME
 
 # Copy and set official Spark K8s entrypoint
