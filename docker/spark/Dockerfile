@@ -32,14 +32,9 @@ RUN wget https://jdbc.postgresql.org/download/postgresql-42.6.0.jar && \
 
 WORKDIR $SPARK_HOME
 
-# Create entrypoint script
-RUN echo '#!/bin/bash\n\
-    if [ -z "$SPARK_NO_DAEMONIZE" ]; then\n\
-        exec tini -s -- "$@"\n\
-    else\n\
-        exec "$@"\n\
-    fi' > /entrypoint.sh && \
-    chmod +x /entrypoint.sh
+# Use official Spark K8s entrypoint
+RUN cp $SPARK_HOME/kubernetes/dockerfiles/spark/entrypoint.sh /opt/entrypoint.sh && \
+    chmod +x /opt/entrypoint.sh
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/opt/entrypoint.sh"]
 CMD ["bash"]
