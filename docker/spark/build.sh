@@ -4,7 +4,7 @@ set -e
 # Navigate to the directory containing this script
 cd "$(dirname "$0")"
 
-IMAGE_NAME="subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1"
+IMAGE_NAME="subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-v2"
 DOCKERFILE_PATH="Dockerfile"
 
 echo "Building Spark image from directory: $(pwd)"
