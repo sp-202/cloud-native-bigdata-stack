@@ -4,7 +4,7 @@ set -e
 # Navigate to the directory containing this script
 cd "$(dirname "$0")"
 
-IMAGE_NAME="subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v5"
+IMAGE_NAME="subhodeep2022/spark-bigdata:zeppelin-0.12.0-java17-v6"
 DOCKERFILE_PATH="Dockerfile"
 
 echo "Building Zeppelin image from directory: $(pwd)"
