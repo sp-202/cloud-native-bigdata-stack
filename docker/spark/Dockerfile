@@ -19,7 +19,13 @@ RUN apt-get update && apt-get install -y \
     curl \
     procps \
     tini \
+    python3 \
+    python3-pip \
+    python3-is-python3 \
     && rm -rf /var/lib/apt/lists/*
+
+# Install PySpark executor dependencies
+RUN pip3 install --no-cache-dir pandas pyarrow numpy
 
 # Download and install Spark w/ Scala 2.13 (includes Hadoop 3)
 RUN wget https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala${SCALA_VERSION}.tgz && \

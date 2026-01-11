@@ -252,6 +252,11 @@ data:
     echo "spark.hadoop.fs.s3a.access.key      ${AWS_ACCESS_KEY_ID}" >> "${FINAL_CONF}"
     echo "spark.hadoop.fs.s3a.secret.key      ${AWS_SECRET_ACCESS_KEY}" >> "${FINAL_CONF}"
     
+    # Python executable path for driver and executors
+    echo "spark.pyspark.python                python3" >> "${FINAL_CONF}"
+    echo "spark.pyspark.driver.python          python3" >> "${FINAL_CONF}"
+    echo "spark.executorEnv.PYSPARK_PYTHON     python3" >> "${FINAL_CONF}"
+    
     chmod 644 "${FINAL_CONF}"
     
     echo "Generated spark-defaults.conf with driver.host=${SPARK_DRIVER_HOST}"
