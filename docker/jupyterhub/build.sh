@@ -17,9 +17,10 @@ fi
 
 # Define custom image name
 # Repo: subhodeep2022/spark-bigdata
-# Tag: jupyterhub-<jupyter_version>-pyspark-scala-sql
+# Tag: jupyterhub-<jupyter_version>-pyspark-scala-sql-<vN>
 JUPYTER_VERSION_TAG="4.0.7"
-JUPYTERHUB_CUSTOM_IMAGE="subhodeep2022/spark-bigdata:jupyterhub-${JUPYTER_VERSION_TAG}-pyspark-scala-sql"
+VERSION_TAG="v2"
+JUPYTERHUB_CUSTOM_IMAGE="subhodeep2022/spark-bigdata:jupyterhub-${JUPYTER_VERSION_TAG}-pyspark-scala-sql-${VERSION_TAG}"
 DOCKERFILE_PATH="Dockerfile"
 
 echo "=============================================="

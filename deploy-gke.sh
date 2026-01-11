@@ -153,8 +153,10 @@ kubectl kustomize --enable-helm ./k8s-platform-v2 | \
   sed "s/\$(INGRESS_DOMAIN)/$INGRESS_DOMAIN/g" | \
   sed "s|\$(SPARK_IMAGE)|$SPARK_IMAGE|g" | \
   sed "s|\$(JUPYTERHUB_IMAGE)|$JUPYTERHUB_IMAGE|g" | \
+  sed "s|\$(MINIO_ENDPOINT)|$MINIO_ENDPOINT|g" | \
+  sed "s|\$(AWS_ACCESS_KEY_ID)|$MINIO_ROOT_USER|g" | \
+  sed "s|\$(AWS_SECRET_ACCESS_KEY)|$MINIO_ROOT_PASSWORD|g" | \
   sed "s/$STATIC_DOMAIN_TO_REPLACE/$INGRESS_DOMAIN/g" | \
-  sed "s/$STATIC_IP_TO_REPLACE/$EXTERNAL_IP/g" | \
   kubectl apply --server-side --force-conflicts -f - || echo "First apply failed (likely CRDs), retrying..."
 
 echo "Waiting for CRDs to settle..."
@@ -165,8 +167,10 @@ kubectl kustomize --enable-helm ./k8s-platform-v2 | \
   sed "s/\$(INGRESS_DOMAIN)/$INGRESS_DOMAIN/g" | \
   sed "s|\$(SPARK_IMAGE)|$SPARK_IMAGE|g" | \
   sed "s|\$(JUPYTERHUB_IMAGE)|$JUPYTERHUB_IMAGE|g" | \
+  sed "s|\$(MINIO_ENDPOINT)|$MINIO_ENDPOINT|g" | \
+  sed "s|\$(AWS_ACCESS_KEY_ID)|$MINIO_ROOT_USER|g" | \
+  sed "s|\$(AWS_SECRET_ACCESS_KEY)|$MINIO_ROOT_PASSWORD|g" | \
   sed "s/$STATIC_DOMAIN_TO_REPLACE/$INGRESS_DOMAIN/g" | \
-  sed "s/$STATIC_IP_TO_REPLACE/$EXTERNAL_IP/g" | \
   kubectl apply --server-side --force-conflicts -f -
 
 echo "[4/4] Post-Deployment Verification & Info"
