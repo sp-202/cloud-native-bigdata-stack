@@ -106,7 +106,12 @@ metadata:
   name: polynote-config
   namespace: default
 data:
-  config.yml: |
+  init-polynote.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "=== Configuring Polynote for Spark ==="
+    cat > /opt/polynote/config.yml << EOF
     listen:
       host: 0.0.0.0
       port: 8192
@@ -115,12 +120,16 @@ data:
     spark:
       master: k8s://https://kubernetes.default.svc
       conf:
-        spark.kubernetes.container.image: $(SPARK_IMAGE)
-        spark.driver.host: $(SPARK_DRIVER_HOST)
+        spark.kubernetes.container.image: ${SPARK_IMAGE}
+        spark.driver.host: ${SPARK_DRIVER_HOST}
         spark.driver.bindAddress: 0.0.0.0
         spark.kubernetes.authenticate.driver.serviceAccountName: jupyterhub
-        spark.hadoop.fs.s3a.endpoint: $(MINIO_ENDPOINT)
-        spark.hadoop.fs.s3a.access.key: $(AWS_ACCESS_KEY_ID)
-        spark.hadoop.fs.s3a.secret.key: $(AWS_SECRET_ACCESS_KEY)
+        spark.hadoop.fs.s3a.endpoint: ${MINIO_ENDPOINT}
+        spark.hadoop.fs.s3a.access.key: ${AWS_ACCESS_KEY_ID}
+        spark.hadoop.fs.s3a.secret.key: ${AWS_SECRET_ACCESS_KEY}
         spark.hadoop.fs.s3a.path.style.access: "true"
         spark.hadoop.fs.s3a.impl: org.apache.hadoop.fs.s3a.S3AFileSystem
+    EOF
+    
+    echo "=== Starting Polynote ==="
+    exec /opt/polynote/polynote.py
