@@ -29,7 +29,7 @@ Traditionally, big data clusters (like Hadoop/YARN) requires always-on infrastru
 | **Marimo Notebooks**   | ✅ Stable    | Reactive Python UI integration                 |
 | **Delta Lake**         | ✅ Stable    | ACID transactions and Time Travel on S3        |
 | **Airflow Scheduling** | 🏗 Beta      | Functional, standard DAG patterns only          |
-| **Monitoring Stack**   | 🏗 Beta      | Metrics flowing; Grafana dashboards maturing   |
+| **Monitoring Stack**   | 🏗 Beta      | Metrics & Logging: Spark and K8s logs captured |
 | **Polynote**           | 🧪 Exp       | High resource usage; testing stability         |
 | **Unity Catalog (UC)** | 🧪 Exp       | Integration in progress; not fully active      |
 | **StarRocks**          | 🧪 Exp       | Base manifests in place; awaiting verification |
