@@ -4,7 +4,7 @@ kind: Kustomization
 resources:
   - airflow.yaml
   - hive.yaml
-  - zeppelin.yaml
+  - jupyterhub.yaml
   - spark-ui-service.yaml
   - starrocks.yaml
   # Generated Helm Charts
@@ -18,16 +18,7 @@ configMapGenerator:
   - name: hive-config
     files:
       - configs/hive-site.xml
-  - name: zeppelin-site
-    files:
-      - configs/zeppelin-site.xml
-  - name: zeppelin-interpreter-spec
-    files:
-      - configs/interpreter-spec.yaml
-  - name: spark-templates
-    files:
-      - configs/interpreter-template.yaml
-      - configs/executor-template.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
+

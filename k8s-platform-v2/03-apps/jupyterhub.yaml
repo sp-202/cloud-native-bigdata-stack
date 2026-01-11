@@ -1,0 +1,329 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jupyterhub
+  namespace: default
+  labels:
+    app: jupyterhub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jupyterhub
+  template:
+    metadata:
+      labels:
+        app: jupyterhub
+        spark-role: driver
+    spec:
+      serviceAccountName: jupyterhub
+      initContainers:
+        # Copy Spark binaries and set permissions for jovyan user (UID 1000)
+        - name: spark-home-init
+          image: $(SPARK_IMAGE)
+          imagePullPolicy: Always
+          command: ["sh", "-c", "cp -r /opt/spark/* /mnt/spark/ && chown -R 1000:100 /mnt/spark"]
+          volumeMounts:
+            - name: spark-home
+              mountPath: /mnt/spark
+
+      containers:
+        - name: jupyterhub
+          image: jupyter/pyspark-notebook:spark-3.5.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8888
+              name: web
+            - containerPort: 4040
+              name: spark-ui
+          env:
+            # Spark Configuration
+            - name: SPARK_HOME
+              value: "/opt/spark"
+            - name: PYSPARK_PYTHON
+              value: "python3"
+            - name: PYSPARK_DRIVER_PYTHON
+              value: "python3"
+            
+            # Spark on K8s Configuration
+            - name: SPARK_DRIVER_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SPARK_LOCAL_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SPARK_DRIVER_BIND_ADDRESS
+              value: "0.0.0.0"
+            
+            # S3/MinIO Configuration
+            - name: AWS_ACCESS_KEY_ID
+              value: "minioadmin"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "minioadmin"
+            - name: JUPYTER_S3_ENDPOINT
+              value: "http://minio.default.svc.cluster.local:9000"
+            
+            # Jupyter Configuration
+            - name: JUPYTER_ENABLE_LAB
+              value: "yes"
+            - name: JUPYTER_TOKEN
+              value: ""  # No token for dev (set for production)
+            - name: GRANT_SUDO
+              value: "yes"
+            
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
+          
+          volumeMounts:
+            # Spark binaries
+            - name: spark-home
+              mountPath: /opt/spark
+            # Spark config template (copied and extended at startup)
+            - name: spark-config
+              mountPath: /tmp/spark-config-template/spark-defaults.conf
+              subPath: spark-defaults.conf
+            # JupyterHub config (mounted to standard Docker Stacks location)
+            - name: jupyter-config
+              mountPath: /etc/jupyter/jupyter_notebook_config.py
+              subPath: jupyter_notebook_config.py
+            # Notebooks persistence (S3 sync handled by script)
+            - name: notebooks
+              mountPath: /home/jovyan/work
+            # Startup script for kernel setup
+            - name: startup-script
+              mountPath: /usr/local/bin/before-notebook.d/setup-kernels.sh
+              subPath: setup-kernels.sh
+            # IPython startup template (copied to actual profile at startup)
+            - name: jupyter-config
+              mountPath: /tmp/ipython-startup/00-spark-init.py
+              subPath: spark_init.py
+
+      volumes:
+        - name: spark-home
+          emptyDir: {}
+        - name: spark-config
+          configMap:
+            name: spark-config
+        - name: jupyter-config
+          configMap:
+            name: jupyterhub-config
+        - name: notebooks
+          emptyDir: {}  # Use PVC or S3 sync for persistence
+        - name: startup-script
+          configMap:
+            name: jupyterhub-config
+            defaultMode: 0755
+---
+# Service for JupyterHub Web UI
+apiVersion: v1
+kind: Service
+metadata:
+  name: jupyterhub
+  namespace: default
+spec:
+  selector:
+    app: jupyterhub
+  ports:
+    - protocol: TCP
+      port: 8888
+      targetPort: 8888
+      name: web
+    - protocol: TCP
+      port: 4040
+      targetPort: 4040
+      name: spark-ui
+  type: ClusterIP
+---
+# Headless Service for Spark Driver communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: jupyterhub-driver
+  namespace: default
+spec:
+  clusterIP: None
+  selector:
+    app: jupyterhub
+  ports:
+    - port: 22321
+      name: spark-driver
+    - port: 22322
+      name: spark-blockmanager
+    - port: 4040
+      name: spark-ui
+---
+# ServiceAccount for JupyterHub
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jupyterhub
+  namespace: default
+---
+# ClusterRoleBinding for Spark executor management
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: jupyterhub-spark
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin  # For dev; use restricted role in production
+subjects:
+  - kind: ServiceAccount
+    name: jupyterhub
+    namespace: default
+---
+# ConfigMap for JupyterHub configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jupyterhub-config
+  namespace: default
+data:
+  jupyter_notebook_config.py: |
+    c = get_config()
+    # ServerApp config (JupyterLab 4.x / Jupyter Server 2.x)
+    c.ServerApp.ip = '0.0.0.0'
+    c.ServerApp.allow_remote_access = True
+    # Disable authentication for dev (enable for production)
+    c.IdentityProvider.token = ''
+
+    # Notebook Persistence with MinIO using s3contents
+    import os
+    from s3contents import S3ContentsManager
+    c.ServerApp.contents_manager_class = S3ContentsManager
+    c.S3ContentsManager.access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+    c.S3ContentsManager.secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    c.S3ContentsManager.endpoint_url = os.environ.get('JUPYTER_S3_ENDPOINT')
+    c.S3ContentsManager.bucket = "notebooks"
+    c.S3ContentsManager.prefix = "jupyterhub"
+    # Disable SSL verification for internal MinIO
+    c.S3ContentsManager.session_config = {"verify": False}
+    
+  setup-kernels.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "=== Spark-on-Kubernetes Dynamic Configuration ==="
+    
+    # CRITICAL: Generate dynamic spark-defaults.conf with driver host
+    # The ConfigMap spark-defaults.conf is read-only, so we copy and extend it
+    # The pod IP (SPARK_DRIVER_HOST) is only known at runtime
+    
+    SPARK_CONF_DIR="/opt/spark/conf"
+    TEMPLATE_CONF="/tmp/spark-config-template/spark-defaults.conf"
+    FINAL_CONF="${SPARK_CONF_DIR}/spark-defaults.conf"
+    
+    echo "Pod IP: ${SPARK_DRIVER_HOST}"
+    
+    # Create conf directory if not exists
+    mkdir -p "${SPARK_CONF_DIR}"
+    
+    # Copy base config from template (mounted read-only from ConfigMap)
+    if [ -f "${TEMPLATE_CONF}" ]; then
+      cp "${TEMPLATE_CONF}" "${FINAL_CONF}"
+      echo "Copied base config from template"
+    else
+      echo "WARNING: No template config found, creating minimal config"
+      touch "${FINAL_CONF}"
+    fi
+    
+    # Append dynamic driver configuration (CRITICAL for executor connectivity)
+    cat >> "${FINAL_CONF}" << 'DRIVER_EOF'
+
+    # === DYNAMIC DRIVER CONFIG (generated at startup) ===
+    # These settings are critical for executor-to-driver communication
+    DRIVER_EOF
+
+    # Use echo to append with variable expansion
+    echo "spark.driver.host                ${SPARK_DRIVER_HOST}" >> "${FINAL_CONF}"
+    echo "spark.driver.bindAddress         0.0.0.0" >> "${FINAL_CONF}"
+    echo "spark.driver.port                22321" >> "${FINAL_CONF}"
+    echo "spark.blockManager.port          22322" >> "${FINAL_CONF}"
+    
+    chmod 644 "${FINAL_CONF}"
+    
+    echo "Generated spark-defaults.conf with driver.host=${SPARK_DRIVER_HOST}"
+    echo "Driver config:"
+    cat "${FINAL_CONF}" | grep -E "^spark\.(driver|blockManager)" || true
+    
+    # Create PySpark kernel for Jupyter
+    mkdir -p /home/jovyan/.local/share/jupyter/kernels/pyspark_k8s
+    cat > /home/jovyan/.local/share/jupyter/kernels/pyspark_k8s/kernel.json << 'KERNEL_EOF'
+    {
+      "argv": ["python", "-m", "ipykernel_launcher", "-f", "{connection_file}"],
+      "display_name": "PySpark (Kubernetes)",
+      "language": "python",
+      "env": {
+        "SPARK_HOME": "/opt/spark",
+        "PYSPARK_PYTHON": "python3",
+        "PYSPARK_DRIVER_PYTHON": "python3"
+      }
+    }
+    KERNEL_EOF
+
+    # Ensure IPython profile and startup directory exists
+    mkdir -p /home/jovyan/.ipython/profile_default/startup/
+    
+    # Copy startup script from template to actual profile
+    if [ -f "/tmp/ipython-startup/00-spark-init.py" ]; then
+        cp /tmp/ipython-startup/00-spark-init.py /home/jovyan/.ipython/profile_default/startup/
+        echo "Copied IPython startup script"
+    fi
+
+    echo "=== Installing SQL Magic, Scala Support, and S3 Persistence ==="
+    # Install sparkmagic for %%sql, Toree for Scala, and s3contents for persistence
+    # Note: This may take a moment on first startup
+    pip install --quiet sparkmagic toree s3contents s3fs
+    
+    # Install Toree Scala kernel
+    jupyter toree install --user --spark_home=/opt/spark --kernel_name="Scala" --interpreters=Scala
+
+    echo "=== Spark configuration complete ==="
+    
+  # Startup script to create SparkSession (automatically injected into every notebook)
+  spark_init.py: |
+    import os
+    from pyspark.sql import SparkSession
+    
+    # Initialize SparkSession with dynamic values from environment
+    spark = SparkSession.builder \
+        .appName("JupyterNotebook") \
+        .master("k8s://https://kubernetes.default.svc") \
+        .config("spark.kubernetes.container.image", os.environ.get("SPARK_IMAGE", "subhodeep2022/spark-bigdata:spark-3.5.3-uc-0.3.1-v3")) \
+        .config("spark.kubernetes.namespace", "default") \
+        .config("spark.kubernetes.authenticate.driver.serviceAccountName", "jupyterhub") \
+        .config("spark.driver.host", os.environ.get("SPARK_DRIVER_HOST")) \
+        .config("spark.driver.bindAddress", "0.0.0.0") \
+        .config("spark.dynamicAllocation.enabled", "true") \
+        .config("spark.dynamicAllocation.shuffleTracking.enabled", "true") \
+        .config("spark.dynamicAllocation.minExecutors", "1") \
+        .config("spark.dynamicAllocation.maxExecutors", "4") \
+        .config("spark.hadoop.fs.s3a.endpoint", "http://minio.default.svc.cluster.local:9000") \
+        .config("spark.hadoop.fs.s3a.access.key", "minioadmin") \
+        .config("spark.hadoop.fs.s3a.secret.key", "minioadmin") \
+        .config("spark.hadoop.fs.s3a.path.style.access", "true") \
+        .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
+        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
+        .getOrCreate()
+    
+    # Enable SQL magic (%%sql)
+    from IPython.core.magic import register_line_cell_magic
+    
+    @register_line_cell_magic
+    def sql(line, cell=None):
+        """Execute Spark SQL and display results."""
+        query = cell if cell else line
+        return spark.sql(query).toPandas()
+    
+    print("✅ SparkSession ready! Use 'spark' variable.")
+    print("✅ SQL magic enabled! Use %%sql for SQL cells.")
+    print(f"📊 Spark UI: http://localhost:4040")

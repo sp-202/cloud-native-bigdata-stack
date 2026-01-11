@@ -1,6 +1,6 @@
 # 🚀 Cloud-Native Big Data Platform on Kubernetes (GKE)
 
-> A production-grade, scalable, and fully containerized Big Data stack featuring **Apache Spark 3.5**, **Airflow 2.x**, **Zeppelin**, and **Superset**, optimized for Google Kubernetes Engine (GKE).
+> A production-grade, scalable, and fully containerized Big Data stack featuring **Apache Spark 3.5**, **Airflow 2.x**, **JupyterHub**, and **Superset**, optimized for Google Kubernetes Engine (GKE).
 
 ![Architecture Diagram](k8s_diagram.drawio.svg)
 
@@ -24,9 +24,9 @@ The platform is divided into three logical domains:
 
 ### 2️⃣ Application Layer (Blue Domain)
 *   **Apache Airflow (2.x)**: The workflow orchestrator. It schedules DAGs that trigger Spark jobs, move data, and manage dependencies. configured with the **KubernetesExecutor** for scaling tasks.
-*   **Apache Zeppelin (0.11)**: Interactive notebook environment. Data Engineers/Scientists use this to write Spark code (Scala/Python/SQL) and visualize results immediately.
+*   **JupyterHub**: Interactive notebook environment for PySpark/Scala/SQL. Data Engineers/Scientists use this to write Spark code and visualize results immediately.
 *   **Apache Spark (3.5)**: The distributed compute engine. Run in two modes:
-    *   **Interactive**: Via Zeppelin (Interpreter runs in a pod, executors spawn dynamically).
+    *   **Interactive**: Via JupyterHub (driver runs in notebook pod, executors spawn dynamically).
     *   **Batch**: Triggered by Airflow steps (via `SparkApplication` CRDs).
 *   **Apache Superset**: Enterprise-ready Business Intelligence (BI) web application. Connects to Hive/Spark to visualize data.
 *   **Hive Metastore**: The central catalog that stores schema information (tables, partitions) for all data in the data lake. Backed by PostgreSQL.
@@ -44,7 +44,7 @@ The platform is divided into three logical domains:
 | :------------------ | :------------- | :------------- | :--------------------------------------- |
 | **Apache Airflow**  | `2.10.x`       | Orchestrator   | Scheduling ETL pipelines                 |
 | **Apache Spark**    | `3.5.0`        | Compute Engine | Large-scale data processing              |
-| **Apache Zeppelin** | `0.11.0`       | Notebooks      | Interactive development & ad-hoc queries |
+| **JupyterHub**      | `latest`       | Notebooks      | Interactive development & ad-hoc queries |
 | **Apache Superset** | `4.0.x`        | BI / Viz       | Dashboards & Analytics                   |
 | **MinIO**           | `RELEASE.2024` | Object Store   | Data Lake (S3 API)                       |
 | **Traefik**         | `v2.10`        | Ingress        | Load Balancing & Routing                 |
@@ -79,11 +79,45 @@ The script will output the dynamic URLs for your services. They will look like t
 
 | Service      | URL Pattern                                  | Default Credentials       |
 | :----------- | :------------------------------------------- | :------------------------ |
-| **Airflow**  | `http://airflow.X.X.X.X.sslip.io`            | `admin` / `admin`         |
-| **Zeppelin** | `http://zeppelin.X.X.X.X.sslip.io`           | Anonymous / None          |
-| **Superset** | `http://superset.X.X.X.X.sslip.io`           | `admin` / `admin`         |
-| **Traefik**  | `http://traefik.X.X.X.X.sslip.io/dashboard/` | N/A                       |
-| **Grafana**  | `http://grafana.X.X.X.X.sslip.io`            | `admin` / `prom-operator` |
+| **Airflow**    | `http://airflow.X.X.X.X.sslip.io`            | `admin` / `admin`         |
+| **JupyterHub** | `http://jupyterhub.X.X.X.X.sslip.io`         | No token (dev mode)       |
+| **Superset**   | `http://superset.X.X.X.X.sslip.io`           | `admin` / `admin`         |
+| **Traefik**    | `http://traefik.X.X.X.X.sslip.io/dashboard/` | N/A                       |
+| **Grafana**    | `http://grafana.X.X.X.X.sslip.io`            | `admin` / `prom-operator` |
+| **K8s Dashboard** | `https://dashboard.X.X.X.X.sslip.io`      | See token below           |
+
+### Kubernetes Dashboard Token
+
+Generate a token for K8s Dashboard access:
+
+```bash
+# One-time setup: Create admin-user service account
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-user
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin-user-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: admin-user
+  namespace: default
+EOF
+
+# Generate token (GKE limits to 48h max)
+kubectl create token admin-user -n default --duration=48h
+```
+
+Copy the output token and paste it into the Dashboard login page.
 
 ---
 
@@ -120,7 +154,7 @@ Superset is pre-connected to the internal Postgres and Hive Metastore.
 │   ├── 00-core/              # Namespaces, StorageClasses (PVCs)
 │   ├── 01-networking/        # Traefik Ingress, Middleware, Routes
 │   ├── 02-database/          # Postgres, MinIO, Redis
-│   ├── 03-apps/              # Airflow, Spark, Zeppelin, Superset
+│   ├── 03-apps/              # Airflow, Spark, JupyterHub, Superset
 │   └── 05-monitoring/        # Prometheus, Grafana, Dashboards
 ├── docs/                     # Detailed documentation
 │   ├── airflow.md

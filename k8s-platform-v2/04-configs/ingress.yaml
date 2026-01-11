@@ -52,15 +52,15 @@ spec:
             name: superset
             port:
               name: http
-  # Zeppelin
-  - host: zeppelin.$(INGRESS_DOMAIN)
+  # JupyterHub
+  - host: jupyterhub.$(INGRESS_DOMAIN)
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: zeppelin
+            name: jupyterhub
             port:
               name: web
   # Spark UI
