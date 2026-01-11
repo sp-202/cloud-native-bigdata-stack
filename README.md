@@ -68,7 +68,7 @@ The platform is divided into three logical domains:
 
 ## � Tech Stack
 
-| Role | Usage |
+| Component | Version | Role | Usage |
 | :--- | :--- | :--- | :--- |
 | **Apache Airflow** | `2.10.x` | Orchestrator | Scheduling ETL pipelines |
 | **Spark / Delta** | `3.5.3 / 3.2.0` | Compute / Format | Distributed processing & ACID tables |
