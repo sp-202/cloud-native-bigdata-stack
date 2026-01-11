@@ -1,0 +1,146 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: marimo
+  namespace: default
+  labels:
+    app: marimo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: marimo
+  template:
+    metadata:
+      labels:
+        app: marimo
+        spark-role: driver
+    spec:
+      serviceAccountName: jupyterhub  # Reuse the same SA for Spark permissions
+      initContainers:
+        - name: spark-home-init
+          image: $(SPARK_IMAGE)
+          imagePullPolicy: Always
+          command: ["sh", "-c", "cp -r /opt/spark/* /mnt/spark/ && chown -R 1000:100 /mnt/spark"]
+          volumeMounts:
+            - name: spark-home
+              mountPath: /mnt/spark
+
+      containers:
+        - name: marimo
+          image: $(MARIMO_IMAGE)
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: web
+            - containerPort: 4040
+              name: spark-ui
+          env:
+            - name: SPARK_HOME
+              value: "/opt/spark"
+            - name: SPARK_IMAGE
+              value: "$(SPARK_IMAGE)"
+            - name: SPARK_DRIVER_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: MINIO_ENDPOINT
+              value: "$(MINIO_ENDPOINT)"
+            - name: AWS_ACCESS_KEY_ID
+              value: "$(AWS_ACCESS_KEY_ID)"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "$(AWS_SECRET_ACCESS_KEY)"
+          volumeMounts:
+            - name: spark-home
+              mountPath: /opt/spark
+            - name: spark-config
+              mountPath: /tmp/spark-config-template/spark-defaults.conf
+              subPath: spark-defaults.conf
+            - name: startup-script
+              mountPath: /usr/local/bin/init-marimo.sh
+              subPath: init-marimo.sh
+          command: ["/bin/bash", "/usr/local/bin/init-marimo.sh"]
+
+      volumes:
+        - name: spark-home
+          emptyDir: {}
+        - name: spark-config
+          configMap:
+            name: spark-config
+        - name: startup-script
+          configMap:
+            name: marimo-config
+            defaultMode: 0755
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: marimo
+  namespace: default
+spec:
+  selector:
+    app: marimo
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: web
+    - protocol: TCP
+      port: 4040
+      targetPort: 4040
+      name: spark-ui
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: marimo-driver
+  namespace: default
+spec:
+  clusterIP: None
+  selector:
+    app: marimo
+  ports:
+    - port: 22321
+      name: spark-driver
+    - port: 22322
+      name: spark-blockmanager
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: marimo-config
+  namespace: default
+data:
+  init-marimo.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "=== Configuring Spark for Marimo ==="
+    SPARK_CONF_DIR="/opt/spark/conf"
+    TEMPLATE_CONF="/tmp/spark-config-template/spark-defaults.conf"
+    FINAL_CONF="${SPARK_CONF_DIR}/spark-defaults.conf"
+    
+    mkdir -p "${SPARK_CONF_DIR}"
+    if [ -f "${TEMPLATE_CONF}" ]; then
+      cp "${TEMPLATE_CONF}" "${FINAL_CONF}"
+    else
+      touch "${FINAL_CONF}"
+    fi
+    
+    cat >> "${FINAL_CONF}" << DRIVER_EOF
+    spark.driver.host                   ${SPARK_DRIVER_HOST}
+    spark.driver.bindAddress            0.0.0.0
+    spark.driver.port                   22321
+    spark.blockManager.port             22322
+    spark.kubernetes.container.image    ${SPARK_IMAGE}
+    spark.hadoop.fs.s3a.endpoint        ${MINIO_ENDPOINT}
+    spark.hadoop.fs.s3a.access.key      ${AWS_ACCESS_KEY_ID}
+    spark.hadoop.fs.s3a.secret.key      ${AWS_SECRET_ACCESS_KEY}
+    spark.pyspark.python                python3.11
+    spark.pyspark.driver.python          python3.11
+    spark.executorEnv.PYSPARK_PYTHON     python3.11
+    DRIVER_EOF
+    
+    echo "=== Starting Marimo ==="
+    exec python3.11 -m marimo edit --host 0.0.0.0 --port 8080 --no-token

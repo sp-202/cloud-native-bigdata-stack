@@ -74,3 +74,25 @@ spec:
             name: spark-ui
             port:
               name: spark-ui
+  # Marimo
+  - host: marimo.$(INGRESS_DOMAIN)
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: marimo
+            port:
+              name: web
+  # Polynote
+  - host: polynote.$(INGRESS_DOMAIN)
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: polynote
+            port:
+              name: web

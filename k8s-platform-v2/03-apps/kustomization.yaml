@@ -5,6 +5,8 @@ resources:
   - airflow.yaml
   - hive.yaml
   - jupyterhub.yaml
+  - marimo.yaml
+  - polynote.yaml
   - spark-ui-service.yaml
   - starrocks.yaml
   # Generated Helm Charts

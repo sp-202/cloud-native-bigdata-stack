@@ -153,6 +153,8 @@ kubectl kustomize --enable-helm ./k8s-platform-v2 | \
   sed "s/\$(INGRESS_DOMAIN)/$INGRESS_DOMAIN/g" | \
   sed "s|\$(SPARK_IMAGE)|$SPARK_IMAGE|g" | \
   sed "s|\$(JUPYTERHUB_IMAGE)|$JUPYTERHUB_IMAGE|g" | \
+  sed "s|\$(MARIMO_IMAGE)|$MARIMO_IMAGE|g" | \
+  sed "s|\$(POLYNOTE_IMAGE)|$POLYNOTE_IMAGE|g" | \
   sed "s|\$(MINIO_ENDPOINT)|$MINIO_ENDPOINT|g" | \
   sed "s|\$(AWS_ACCESS_KEY_ID)|$MINIO_ROOT_USER|g" | \
   sed "s|\$(AWS_SECRET_ACCESS_KEY)|$MINIO_ROOT_PASSWORD|g" | \
@@ -167,6 +169,8 @@ kubectl kustomize --enable-helm ./k8s-platform-v2 | \
   sed "s/\$(INGRESS_DOMAIN)/$INGRESS_DOMAIN/g" | \
   sed "s|\$(SPARK_IMAGE)|$SPARK_IMAGE|g" | \
   sed "s|\$(JUPYTERHUB_IMAGE)|$JUPYTERHUB_IMAGE|g" | \
+  sed "s|\$(MARIMO_IMAGE)|$MARIMO_IMAGE|g" | \
+  sed "s|\$(POLYNOTE_IMAGE)|$POLYNOTE_IMAGE|g" | \
   sed "s|\$(MINIO_ENDPOINT)|$MINIO_ENDPOINT|g" | \
   sed "s|\$(AWS_ACCESS_KEY_ID)|$MINIO_ROOT_USER|g" | \
   sed "s|\$(AWS_SECRET_ACCESS_KEY)|$MINIO_ROOT_PASSWORD|g" | \
@@ -189,5 +193,7 @@ echo "Grafana:           http://grafana.$INGRESS_DOMAIN"
 echo "Airflow:           http://airflow.$INGRESS_DOMAIN"
 echo "MinIO Console:     http://minio.$INGRESS_DOMAIN"
 echo "JupyterHub:        http://jupyterhub.$INGRESS_DOMAIN"
+echo "Marimo:            http://marimo.$INGRESS_DOMAIN"
+echo "Polynote:          http://polynote.$INGRESS_DOMAIN"
 echo "Superset:          http://superset.$INGRESS_DOMAIN"
 echo "=============================================="
