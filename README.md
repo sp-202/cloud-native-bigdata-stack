@@ -1,6 +1,13 @@
 # 🚀 Cloud-Native Big Data Platform on Kubernetes (GKE)
 
+[![Version](https://img.shields.io/badge/version-0.1.0--beta-blue)](RELEASES.md)
+[![Status](https://img.shields.io/badge/status-initial--beta-success)](README.md#🚦-project-status)
+
 > A production-grade, scalable, and fully containerized Big Data stack featuring **Apache Spark 3.5**, **Airflow 2.x**, **JupyterHub**, and **Superset**, optimized for Google Kubernetes Engine (GKE).
+
+---
+
+👉 **[View the v0.1.0 Release Notes](RELEASES.md)**
 
 ![Architecture Diagram](k8s_diagram.drawio.svg)
 
@@ -14,6 +21,24 @@ Traditionally, big data clusters (like Hadoop/YARN) requires always-on infrastru
 
 ---
 
+## 🚦 Project Status
+
+| Feature               | Status       | Notes                                           |
+| :-------------------- | :----------- | :---------------------------------------------- |
+| **JupyterHub / Spark** | ✅ Stable    | Core interactive environment                   |
+| **Marimo Notebooks**   | ✅ Stable    | Reactive Python UI integration                 |
+| **Delta Lake**         | ✅ Stable    | ACID transactions and Time Travel on S3        |
+| **Airflow Scheduling** | 🏗 Beta      | Functional, standard DAG patterns only          |
+| **Monitoring Stack**   | 🏗 Beta      | Metrics flowing; Grafana dashboards maturing   |
+| **Polynote**           | 🧪 Exp       | High resource usage; testing stability         |
+| **Unity Catalog (UC)** | 🧪 Exp       | Integration in progress; not fully active      |
+| **StarRocks**          | 🧪 Exp       | Base manifests in place; awaiting verification |
+
+> [!IMPORTANT]
+> Features marked as **Experimental (🧪 Exp)** are currently in the development phase. They may have incomplete functionality or require additional configuration.
+
+---
+
 ## 🏗 Architecture & Components
 
 The platform is divided into three logical domains:
@@ -24,12 +49,13 @@ The platform is divided into three logical domains:
 
 ### 2️⃣ Application Layer (Blue Domain)
 *   **Apache Airflow (2.x)**: The workflow orchestrator. It schedules DAGs that trigger Spark jobs, move data, and manage dependencies. configured with the **KubernetesExecutor** for scaling tasks.
-*   **JupyterHub**: Interactive notebook environment for PySpark/Scala/SQL. Data Engineers/Scientists use this to write Spark code and visualize results immediately.
-*   **Apache Spark (3.5)**: The distributed compute engine. Run in two modes:
-    *   **Interactive**: Via JupyterHub (driver runs in notebook pod, executors spawn dynamically).
-    *   **Batch**: Triggered by Airflow steps (via `SparkApplication` CRDs).
-*   **Apache Superset**: Enterprise-ready Business Intelligence (BI) web application. Connects to Hive/Spark to visualize data.
-*   **Hive Metastore**: The central catalog that stores schema information (tables, partitions) for all data in the data lake. Backed by PostgreSQL.
+*   **Notebook Suite**: 
+    *   **JupyterHub**: Standard interactive environment with **Zeppelin features** (SQL magic, Scala kernel, `z.show()`).
+    *   **Marimo**: Reactive Python notebooks with high-performance UI components.
+    *   **Polynote**: IDE-focused notebook for Scala and multi-language Spark development.
+*   **Apache Spark (3.5)**: The distributed compute engine, pre-configured with **Delta Lake** and **Unity Catalog** support.
+*   **Apache Superset**: Enterprise-ready BI. Connects to the platform for data visualization.
+*   **Hive Metastore**: Central schema catalog for the Data Lake.
 
 ### 3️⃣ Data & Persistence (Green Domain)
 *   **MinIO**: High-performance Object Storage (S3 Compatible). Acts as the "Data Lake" storage layer.
@@ -43,13 +69,14 @@ The platform is divided into three logical domains:
 | Component           | Version        | Role           | Usage                                    |
 | :------------------ | :------------- | :------------- | :--------------------------------------- |
 | **Apache Airflow**  | `2.10.x`       | Orchestrator   | Scheduling ETL pipelines                 |
-| **Apache Spark**    | `3.5.0`        | Compute Engine | Large-scale data processing              |
-| **JupyterHub**      | `latest`       | Notebooks      | Interactive development & ad-hoc queries |
+| **Spark / Delta**   | `3.5.3 / 3.2.0` | Compute / Format | Distributed processing & ACID tables     |
+| **JupyterHub**      | `4.0.7`        | Notebooks      | Standard Data Engineering workflow       |
+| **Marimo**          | `latest`       | Notebooks      | Reactive, Python-first exploration       |
+| **Polynote**        | `latest`       | Notebooks      | Scala-first IDE-like experience          |
 | **Apache Superset** | `4.0.x`        | BI / Viz       | Dashboards & Analytics                   |
 | **MinIO**           | `RELEASE.2024` | Object Store   | Data Lake (S3 API)                       |
 | **Traefik**         | `v2.10`        | Ingress        | Load Balancing & Routing                 |
-| **Prometheus**      | `v2.45`        | Monitoring     | Metrics collection                       |
-| **Grafana**         | `10.x`         | Observability  | Visualizing cluster health & job metrics |
+| **Monitoring**      | `Prom/Grafana` | Observability  | Visualizing cluster health & job metrics |
 
 ---
 
@@ -66,7 +93,18 @@ git clone https://github.com/your-repo/k8s-big-data-platform.git
 cd k8s-big-data-platform
 ```
 
-### Step 2: Deploy Infrastructure
+### Step 2: Build Custom Images (Crucial)
+The platform uses optimized images for notebooks and executors. Build and push them to your registry:
+```bash
+# Spark Executor & Driver Base
+docker/spark/build.sh
+
+# User Interfaces
+docker/jupyterhub/build.sh
+docker/marimo/build.sh
+```
+
+### Step 3: Deploy Platform
 Run the main deployment script. This automation handles namespace creation, CRD installation, and Helm chart deployments.
 ```bash
 chmod +x deploy-gke.sh
@@ -80,9 +118,10 @@ The script will output the dynamic URLs for your services. They will look like t
 | Service      | URL Pattern                                  | Default Credentials       |
 | :----------- | :------------------------------------------- | :------------------------ |
 | **Airflow**    | `http://airflow.X.X.X.X.sslip.io`            | `admin` / `admin`         |
-| **JupyterHub** | `http://jupyterhub.X.X.X.X.sslip.io`         | No token (dev mode)       |
+| **JupyterHub** | `http://jupyterhub.X.X.X.X.sslip.io`         | No token (Dev Mode)       |
+| **Marimo**     | `http://marimo.X.X.X.X.sslip.io`             | No token (Dev Mode)       |
+| **Polynote**   | `http://polynote.X.X.X.X.sslip.io`           | N/A                       |
 | **Superset**   | `http://superset.X.X.X.X.sslip.io`           | `admin` / `admin`         |
-| **Traefik**    | `http://traefik.X.X.X.X.sslip.io/dashboard/` | N/A                       |
 | **Grafana**    | `http://grafana.X.X.X.X.sslip.io`            | `admin` / `prom-operator` |
 | **K8s Dashboard** | `https://dashboard.X.X.X.X.sslip.io`      | See token below           |
 
@@ -147,19 +186,23 @@ Superset is pre-connected to the internal Postgres and Hive Metastore.
 
 ## � Repository Structure
 ```bash
-├── archive/                  # Legacy V1 manifests
+├── docker/                   # Custom image source code
+│   ├── jupyterhub/           # Notebook environment with Spark & Scala
+│   ├── marimo/               # Reactive Python notebook
+│   └── spark/                # Golden Spark image (v5)
 ├── deploy-gke.sh             # Main automation script
 ├── k8s_diagram.drawio.svg    # Architecture Diagram
 ├── k8s-platform-v2/          # V2 Source of Truth (Kustomize)
-│   ├── 00-core/              # Namespaces, StorageClasses (PVCs)
-│   ├── 01-networking/        # Traefik Ingress, Middleware, Routes
-│   ├── 02-database/          # Postgres, MinIO, Redis
-│   ├── 03-apps/              # Airflow, Spark, JupyterHub, Superset
-│   └── 05-monitoring/        # Prometheus, Grafana, Dashboards
-├── docs/                     # Detailed documentation
-│   ├── airflow.md
-│   ├── spark.md
-│   └── ...
+│   ├── 00-core/              # Namespaces, StorageClasses, PVCs
+│   ├── 01-networking/        # Traefik, IngressRoutes, Domains
+│   ├── 02-database/          # Postgres, MinIO (S3), Redis
+│   ├── 03-apps/              # Airflow, Notebooks, Superset, Spark
+│   └── 05-monitoring/        # Prometheus, Grafana, Loki
+├── docs/                     # Detailed technical guides
+│   ├── notebooks.md          # Guide: JupyterHub, Marimo, Polynote
+│   ├── delta_lake.md         # Guide: ACID tables on S3
+│   ├── spark_on_k8s.md       # Deep Dive: Spark Client vs Cluster mode
+│   └── airflow.md            # Workflow orchestration
 ├── MONITORING_GUIDE.md       # Observability instructions
 ├── README.md                 # Entry point
 └── SUPERSET_CONNECTION_GUIDE.md # BI connectivity instructions

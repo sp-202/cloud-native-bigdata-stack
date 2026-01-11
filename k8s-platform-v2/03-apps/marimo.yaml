@@ -59,6 +59,9 @@ spec:
             - name: startup-script
               mountPath: /usr/local/bin/init-marimo.sh
               subPath: init-marimo.sh
+            - name: startup-script
+              mountPath: /home/marimo/spark_init.py
+              subPath: spark_init.py
           command: ["/bin/bash", "/usr/local/bin/init-marimo.sh"]
 
       volumes:
@@ -144,3 +147,19 @@ data:
     
     echo "=== Starting Marimo ==="
     exec python3.11 -m marimo edit --host 0.0.0.0 --port 8080 --no-token
+
+  spark_init.py: |
+    import marimo as mo
+    from pyspark.sql import SparkSession
+    import os
+
+    # Standard Spark Initialization for this environment
+    spark = SparkSession.builder.getOrCreate()
+
+    # Pre-configure beautiful HTML tables
+    spark.conf.set("spark.sql.repl.eagerEval.enabled", True)
+
+    # Export common helpers
+    __all__ = ["spark", "mo"]
+
+    print("✅ Spark (K8s) & Marimo Helpers Ready!")

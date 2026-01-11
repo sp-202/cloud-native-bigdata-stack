@@ -14,9 +14,10 @@ This directory contains the actual Big Data logic. Every application here connec
 *   **Function**: Watches for `SparkApplication` YAMLs and creates Pods.
 *   **Key**: Includes `service-account.yaml` which grants Spark permission to create pods.
 
-### `zeppelin/`
-*   **Role**: Interactive Notebooks.
-*   **Mode**: Runs in "Client Mode", acting as a long-running Spark Driver.
+### `notebooks/`
+*   **JupyterHub**: The primary IDE. Features Apache Toree (Scala), SQL Magics, and `z.show()` formatting.
+*   **Marimo**: Reactive Python platform. Ideal for data dashboards and interactive widgets.
+*   **Polynote**: IDE-like experience with first-class Scala/Python interoperability.
 
 ### `superset/`
 *   **Role**: BI & Analytics.
@@ -32,4 +33,4 @@ This directory contains the actual Big Data logic. Every application here connec
 *   **Spark** talks to **Hive** to find data.
 *   **Hive** points Spark to **MinIO**.
 *   **Superset** reads from **Hive/Spark** to visualize.
-*   **Zeppelin** provides the UI to write the Spark code.
+*   **Notebooks** (Jupyter/Marimo/Polynote) provide the UI to write and run Spark code.

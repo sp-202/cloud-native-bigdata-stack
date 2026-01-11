@@ -8,13 +8,13 @@ The platform uses the **Kube-Prometheus-Stack** (CoreOS) to provide comprehensiv
 
 ### Prometheus Operator
 We do not configure `prometheus.yaml` manually. Instead, we use Kubernetes **Custom Resources**:
-*   **`ServiceMonitor`**: Tells Prometheus to scrape a Kubernetes Service (e.g., Zeppelin, Superset).
+*   **`ServiceMonitor`**: Tells Prometheus to scrape a Kubernetes Service (e.g., JupyterHub, Superset).
 *   **`PodMonitor`**: Tells Prometheus to scrape Pods directly (crucial for **Spark**, which uses headless services or ephemeral executor pods).
 
 ### The Flow
 1.  **Spark Pod** start up.
 2.  **Prometheus Operator** detects the pod labels (`spark-role: driver`).
-3.  **Prometheus Server** starts scraping `http://<pod-ip>:4040/metrics/prometheus`.
+3.  **Prometheus Server** starts scraping `http://<pod-ip>:4040/metrics/prometheus` (JupyterHub/Spark UI metrics).
 4.  **Grafana** queries Prometheus to draw charts.
 
 ---
