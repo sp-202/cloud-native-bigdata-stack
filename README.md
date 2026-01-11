@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-0.1.0--beta-blue)](RELEASES.md)
 [![Status](https://img.shields.io/badge/status-initial--beta-success)](README.md#🚦-project-status)
 
-> A production-grade, scalable, and fully containerized Big Data stack featuring **Apache Spark 3.5**, **Airflow 2.x**, **JupyterHub**, and **Superset**, optimized for Google Kubernetes Engine (GKE).
+> An enterprise-grade, cloud-native orchestration framework for distributed big data workloads. Built on Google Kubernetes Engine (GKE), this platform provides a decoupled, elastic environment for **Apache Spark**, **Delta Lake**, and **Airflow**, featuring a unified suite of modern interactive notebook environments.
 
 ---
 
@@ -12,12 +12,12 @@
 ![Architecture Diagram](k8s_diagram.drawio.svg)
 
 ## 📖 Introduction
-This project provides a complete, deployable **Data Platform as Code**. It leverages the power of Kubernetes to orchestrate a modern data stack that separates compute from storage, enabling high scalability and cost efficiency.
+This repository contains a **Data Platform as Code (DPaC)** implementation, designed to modernize distributed computing by enforcing a strict separation of compute and storage. Leveraging Kubernetes as the primary orchestration plane, the platform eliminates infrastructure silos, enabling teams to deploy and scale production-ready data ecosystems elastically.
 
-Traditionally, big data clusters (like Hadoop/YARN) requires always-on infrastructure. This platform moves to a **Cloud-Native** paradigm:
-*   **Ephemeral Compute**: Spark executors are spun up only when needed (via Spark on K8s Operator).
-*   **Persistent Storage**: Data resides in Object Storage (MinIO/S3) and decoupled databases (Postgres), not on the compute nodes themselves.
-*   **GitOps Ready**: All configurations are defined in declarative Kubernetes manifests.
+### Architectural Core Principles:
+*   **Decoupled Compute/Storage**: Persistence is offloaded to S3-compatible object storage (MinIO), allowing compute resources (Spark Executors) to remain ephemeral and cost-efficient.
+*   **GitOps-Centric Design**: Every component, from networking routes to database schemas, is defined as declarative Kubernetes manifests for reproducible deployments.
+*   **High Observability**: Integrated telemetry across the stack provides deep visibility into job performance, resource utilization, and system health.
 
 ---
 
