@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y \
     tini \
     python3 \
     python3-pip \
-    python3-is-python3 \
+    && ln -s /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PySpark executor dependencies
