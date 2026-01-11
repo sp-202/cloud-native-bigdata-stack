@@ -19,13 +19,19 @@ RUN apt-get update && apt-get install -y \
     curl \
     procps \
     tini \
-    python3 \
-    python3-pip \
-    && ln -s /usr/bin/python3 /usr/bin/python \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa -y \
+    && apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-distutils \
+    python3.11-dev \
+    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PySpark executor dependencies
-RUN pip3 install --no-cache-dir pandas pyarrow numpy
+RUN python3.11 -m pip install --no-cache-dir pandas pyarrow numpy
 
 # Download and install Spark w/ Scala 2.13 (includes Hadoop 3)
 RUN wget https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala${SCALA_VERSION}.tgz && \
