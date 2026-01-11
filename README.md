@@ -61,22 +61,25 @@ The platform is divided into three logical domains:
 *   **MinIO**: High-performance Object Storage (S3 Compatible). Acts as the "Data Lake" storage layer.
 *   **PostgreSQL**: The relational metadata backbone. Stores state for Airflow (DAG runs), Superset (dashboards), and Hive (schemas).
 *   **Redis**: In-memory cache used by Superset to speed up query results and dashboard loading.
+*   **StarRocks (Experimental)**: High-performance analytical (OLAP) database for real-time reporting.
+*   **Kong Gateway (Experimental)**: Secondary API gateway for external service management.
 
 ---
 
 ## � Tech Stack
 
-| Component           | Version        | Role           | Usage                                    |
-| :------------------ | :------------- | :------------- | :--------------------------------------- |
-| **Apache Airflow**  | `2.10.x`       | Orchestrator   | Scheduling ETL pipelines                 |
-| **Spark / Delta**   | `3.5.3 / 3.2.0` | Compute / Format | Distributed processing & ACID tables     |
-| **JupyterHub**      | `4.0.7`        | Notebooks      | Standard Data Engineering workflow       |
-| **Marimo**          | `latest`       | Notebooks      | Reactive, Python-first exploration       |
-| **Polynote**        | `latest`       | Notebooks      | Scala-first IDE-like experience          |
-| **Apache Superset** | `4.0.x`        | BI / Viz       | Dashboards & Analytics                   |
-| **MinIO**           | `RELEASE.2024` | Object Store   | Data Lake (S3 API)                       |
-| **Traefik**         | `v2.10`        | Ingress        | Load Balancing & Routing                 |
-| **Monitoring**      | `Prom/Grafana` | Observability  | Visualizing cluster health & job metrics |
+| Role | Usage |
+| :--- | :--- | :--- | :--- |
+| **Apache Airflow** | `2.10.x` | Orchestrator | Scheduling ETL pipelines |
+| **Spark / Delta** | `3.5.3 / 3.2.0` | Compute / Format | Distributed processing & ACID tables |
+| **JupyterHub** | `4.0.7` | Notebooks | Standard Data Engineering workflow |
+| **Marimo / Polynote** | `latest` | Notebooks | Reactive & Multi-language environments |
+| **StarRocks** | `v3.x` | OLAP Database | Sub-second queries on large datasets |
+| **Apache Superset** | `4.0.x` | BI / Viz | Dashboards & Analytics |
+| **MinIO** | `RELEASE.2024` | Object Store | Data Lake (S3 API) |
+| **Traefik / Kong** | `v2.10 / v3.x` | Ingress/API Gateway | Load Balancing & Service Routing |
+| **Prometheus / Loki** | `Custom Helm` | Observability | Metrics & Centralized Logging |
+| **Grafana** | `latest` | Dashboards | Visualizing cluster health & job metrics |
 
 ---
 
