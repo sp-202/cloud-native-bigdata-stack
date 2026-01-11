@@ -29,7 +29,7 @@ spec:
 
       containers:
         - name: jupyterhub
-          image: jupyter/pyspark-notebook:spark-3.5.0
+          image: $(JUPYTERHUB_IMAGE)
           imagePullPolicy: Always
           ports:
             - containerPort: 8888
@@ -44,6 +44,8 @@ spec:
               value: "python3"
             - name: PYSPARK_DRIVER_PYTHON
               value: "python3"
+            - name: SPARK_IMAGE
+              value: "$(SPARK_IMAGE)"
             
             # Spark on K8s Configuration
             - name: SPARK_DRIVER_HOST
@@ -59,11 +61,13 @@ spec:
             
             # S3/MinIO Configuration
             - name: AWS_ACCESS_KEY_ID
-              value: "minioadmin"
+              value: "$(AWS_ACCESS_KEY_ID)"
             - name: AWS_SECRET_ACCESS_KEY
-              value: "minioadmin"
+              value: "$(AWS_SECRET_ACCESS_KEY)"
             - name: JUPYTER_S3_ENDPOINT
-              value: "http://minio.default.svc.cluster.local:9000"
+              value: "$(MINIO_ENDPOINT)"
+            - name: MINIO_ENDPOINT
+              value: "$(MINIO_ENDPOINT)"
             
             # Jupyter Configuration
             - name: JUPYTER_ENABLE_LAB
@@ -100,10 +104,6 @@ spec:
             - name: startup-script
               mountPath: /usr/local/bin/before-notebook.d/setup-kernels.sh
               subPath: setup-kernels.sh
-            # IPython startup template (copied to actual profile at startup)
-            - name: jupyter-config
-              mountPath: /tmp/ipython-startup/00-spark-init.py
-              subPath: spark_init.py
 
       volumes:
         - name: spark-home
@@ -204,8 +204,8 @@ data:
     c.S3ContentsManager.endpoint_url = os.environ.get('JUPYTER_S3_ENDPOINT')
     c.S3ContentsManager.bucket = "notebooks"
     c.S3ContentsManager.prefix = "jupyterhub"
-    # Disable SSL verification for internal MinIO
-    c.S3ContentsManager.session_config = {"verify": False}
+    # Disable SSL verification for internal MinIO (if needed, s3contents uses session_kwargs)
+    c.S3ContentsManager.session_kwargs = {"verify": False}
     
   setup-kernels.sh: |
     #!/bin/bash
@@ -243,10 +243,14 @@ data:
     DRIVER_EOF
 
     # Use echo to append with variable expansion
-    echo "spark.driver.host                ${SPARK_DRIVER_HOST}" >> "${FINAL_CONF}"
-    echo "spark.driver.bindAddress         0.0.0.0" >> "${FINAL_CONF}"
-    echo "spark.driver.port                22321" >> "${FINAL_CONF}"
-    echo "spark.blockManager.port          22322" >> "${FINAL_CONF}"
+    echo "spark.driver.host                   ${SPARK_DRIVER_HOST}" >> "${FINAL_CONF}"
+    echo "spark.driver.bindAddress            0.0.0.0" >> "${FINAL_CONF}"
+    echo "spark.driver.port                   22321" >> "${FINAL_CONF}"
+    echo "spark.blockManager.port             22322" >> "${FINAL_CONF}"
+    echo "spark.kubernetes.container.image    ${SPARK_IMAGE}" >> "${FINAL_CONF}"
+    echo "spark.hadoop.fs.s3a.endpoint        ${MINIO_ENDPOINT}" >> "${FINAL_CONF}"
+    echo "spark.hadoop.fs.s3a.access.key      ${AWS_ACCESS_KEY_ID}" >> "${FINAL_CONF}"
+    echo "spark.hadoop.fs.s3a.secret.key      ${AWS_SECRET_ACCESS_KEY}" >> "${FINAL_CONF}"
     
     chmod 644 "${FINAL_CONF}"
     
@@ -254,7 +258,7 @@ data:
     echo "Driver config:"
     cat "${FINAL_CONF}" | grep -E "^spark\.(driver|blockManager)" || true
     
-    # Create PySpark kernel for Jupyter
+    # Create PySpark kernel for Jupyter (specialized for K8s)
     mkdir -p /home/jovyan/.local/share/jupyter/kernels/pyspark_k8s
     cat > /home/jovyan/.local/share/jupyter/kernels/pyspark_k8s/kernel.json << 'KERNEL_EOF'
     {
@@ -269,61 +273,4 @@ data:
     }
     KERNEL_EOF
 
-    # Ensure IPython profile and startup directory exists
-    mkdir -p /home/jovyan/.ipython/profile_default/startup/
-    
-    # Copy startup script from template to actual profile
-    if [ -f "/tmp/ipython-startup/00-spark-init.py" ]; then
-        cp /tmp/ipython-startup/00-spark-init.py /home/jovyan/.ipython/profile_default/startup/
-        echo "Copied IPython startup script"
-    fi
-
-    echo "=== Installing SQL Magic, Scala Support, and S3 Persistence ==="
-    # Install sparkmagic for %%sql, Toree for Scala, and s3contents for persistence
-    # Note: This may take a moment on first startup
-    pip install --quiet sparkmagic toree s3contents s3fs
-    
-    # Install Toree Scala kernel
-    jupyter toree install --user --spark_home=/opt/spark --kernel_name="Scala" --interpreters=Scala
-
     echo "=== Spark configuration complete ==="
-    
-  # Startup script to create SparkSession (automatically injected into every notebook)
-  spark_init.py: |
-    import os
-    from pyspark.sql import SparkSession
-    
-    # Initialize SparkSession with dynamic values from environment
-    spark = SparkSession.builder \
-        .appName("JupyterNotebook") \
-        .master("k8s://https://kubernetes.default.svc") \
-        .config("spark.kubernetes.container.image", os.environ.get("SPARK_IMAGE", "subhodeep2022/spark-bigdata:spark-3.5.3-uc-0.3.1-v3")) \
-        .config("spark.kubernetes.namespace", "default") \
-        .config("spark.kubernetes.authenticate.driver.serviceAccountName", "jupyterhub") \
-        .config("spark.driver.host", os.environ.get("SPARK_DRIVER_HOST")) \
-        .config("spark.driver.bindAddress", "0.0.0.0") \
-        .config("spark.dynamicAllocation.enabled", "true") \
-        .config("spark.dynamicAllocation.shuffleTracking.enabled", "true") \
-        .config("spark.dynamicAllocation.minExecutors", "1") \
-        .config("spark.dynamicAllocation.maxExecutors", "4") \
-        .config("spark.hadoop.fs.s3a.endpoint", "http://minio.default.svc.cluster.local:9000") \
-        .config("spark.hadoop.fs.s3a.access.key", "minioadmin") \
-        .config("spark.hadoop.fs.s3a.secret.key", "minioadmin") \
-        .config("spark.hadoop.fs.s3a.path.style.access", "true") \
-        .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
-        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
-        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
-        .getOrCreate()
-    
-    # Enable SQL magic (%%sql)
-    from IPython.core.magic import register_line_cell_magic
-    
-    @register_line_cell_magic
-    def sql(line, cell=None):
-        """Execute Spark SQL and display results."""
-        query = cell if cell else line
-        return spark.sql(query).toPandas()
-    
-    print("✅ SparkSession ready! Use 'spark' variable.")
-    print("✅ SQL magic enabled! Use %%sql for SQL cells.")
-    print(f"📊 Spark UI: http://localhost:4040")

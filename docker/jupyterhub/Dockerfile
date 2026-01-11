@@ -23,8 +23,7 @@ RUN jupyter toree install --user --spark_home=${SPARK_HOME} --kernel_name="Scala
 # Create IPython profile and startup directory
 RUN mkdir -p /home/jovyan/.ipython/profile_default/startup/
 
-# Note: 00-spark-init.py will be mounted or copied here. 
-# We can also bake it in if it's stable.
+# Bake in the SparkSession auto-injection script
 COPY 00-spark-init.py /home/jovyan/.ipython/profile_default/startup/00-spark-init.py
 
 # Fix permissions
