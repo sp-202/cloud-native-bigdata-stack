@@ -39,7 +39,7 @@ spec:
             - name: SPARK_HOME
               value: "/opt/spark"
             - name: SPARK_IMAGE
-              value: "subhodeep2022/spark-bigdata:spark-3.5.3-uc-0.3.1-v5"
+              value: "subhodeep2022/spark-bigdata:spark-3.5.3-uc-0.3.1-v6"
             - name: SPARK_DRIVER_HOST
               valueFrom:
                 fieldRef:
