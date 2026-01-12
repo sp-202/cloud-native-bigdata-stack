@@ -145,6 +145,25 @@ data:
     spark.executorEnv.PYSPARK_PYTHON     python3.11
     DRIVER_EOF
     
+    echo "=== Setting up Auto-Imports ==="
+    USER_SITE="/home/marimo/.local/lib/python3.11/site-packages"
+    mkdir -p "${USER_SITE}"
+    cat > "${USER_SITE}/usercustomize.py" << EOF
+    import builtins
+    import sys
+    import os
+    if "/home/marimo" not in sys.path:
+        sys.path.append("/home/marimo")
+    try:
+        from spark_init import spark, mo
+        builtins.spark = spark
+        builtins.mo = mo
+        # Clean up namespace to avoid confusion
+        del sys, os, builtins
+    except ImportError:
+        pass
+    EOF
+
     echo "=== Starting Marimo ==="
     exec python3.11 -m marimo edit --host 0.0.0.0 --port 8080 --no-token
 
