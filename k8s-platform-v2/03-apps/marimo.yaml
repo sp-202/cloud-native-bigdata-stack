@@ -19,7 +19,7 @@ spec:
       serviceAccountName: jupyterhub  # Reuse the same SA for Spark permissions
       initContainers:
         - name: spark-home-init
-          image: subhodeep2022/spark-bigdata:spark-3.5.3-uc-0.3.1-v5
+          image: subhodeep2022/spark-bigdata:spark-3.5.3-uc-0.3.1-v6
           imagePullPolicy: Always
           command: ["sh", "-c", "cp -r /opt/spark/* /mnt/spark/ && chown -R 1000:100 /mnt/spark"]
           volumeMounts:

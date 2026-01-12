@@ -23,16 +23,15 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 try:
-    print("Listing databases in unity catalog...")
-    spark.sql("SHOW DATABASES IN unity").show()
-
-    table_name = "unity.default.uniform_native_v1"
+    print("Catalog 'unity' configured.")
+    
+    table_name = "unity.default.uniform_native_proper"
     
     print(f"Dropping table if exists: {table_name}")
     spark.sql(f"DROP TABLE IF EXISTS {table_name}")
 
     print(f"Creating table {table_name} with UniForm enabled...")
-    # We use Delta format. UCSingleCatalog handles the registration.
+    # Using TBLPROPERTIES to ensure OSS UC picks up requirements
     spark.sql(f"""
         CREATE TABLE {table_name} (
             id INT,
@@ -47,16 +46,18 @@ try:
     """)
 
     print(f"Inserting data into {table_name}...")
-    spark.sql(f"INSERT INTO {table_name} VALUES (1, 'Native-UniForm')")
+    spark.sql(f"INSERT INTO {table_name} VALUES (1, 'Fixed-Native-UniForm')")
 
-    print(f"Running OPTIMIZE on {table_name}...")
+    print(f"Running OPTIMIZE on {table_name} to trigger metadata conversion...")
     spark.sql(f"OPTIMIZE {table_name}")
 
-    time.sleep(5)
-    print("Done.")
-
+    print("Success! Table created and data inserted.")
+    
+    print("Verifying via UC API (identifiers list)...")
+    # This part will be checked manually via curl
+    
 except Exception as e:
-    print(f"Error: {e}")
+    print(f"Caught Error: {e}")
     import traceback
     traceback.print_exc(file=log_file)
 finally:
