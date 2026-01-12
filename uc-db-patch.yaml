@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: uc-db-patch
+spec:
+  containers:
+  - name: patcher
+    image: unitycatalog/unitycatalog:main
+    command: ["sleep", "3600"]
+    volumeMounts:
+    - name: db-volume
+      mountPath: /home/unitycatalog/etc/db
+  volumes:
+  - name: db-volume
+    persistentVolumeClaim:
+      claimName: unity-catalog-unitycatalog-server-db
+  restartPolicy: Never
