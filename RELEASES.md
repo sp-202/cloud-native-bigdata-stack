@@ -9,7 +9,7 @@ We are proud to announce the first official beta release of the **Cloud-Native B
 ### 🍱 The Multi-Notebook Suite
 Deploy three industry-leading notebook environments with a single command:
 - **JupyterHub**: Standardized for DE/DS teams with **Apache Toree** (Scala) and **SQL Magic**.
-- **Marimo**: A reactive Python environment for the next generation of data exploration.
+- **Marimo**: A reactive Python environment with **Zero-Config Spark Auto-Import** (automatically injects `spark`, `mo`, `pd`, and `np`).
 - **Polynote**: IDE-quality Scala/Python interoperability from Netflix.
 
 ### 💎 Robust Spark-on-K8s
