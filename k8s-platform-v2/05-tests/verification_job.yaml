@@ -32,7 +32,7 @@ data:
             data STRING,
             timestamp TIMESTAMP
         ) USING DELTA
-        LOCATION 's3a://test-bucket/fixed_table'
+        LOCATION 's3://test-bucket/fixed_table'
         TBLPROPERTIES (
             'delta.universalFormat.enabledFormats' = 'iceberg',
             'delta.enableIcebergCompatV2' = 'true'
@@ -51,7 +51,7 @@ data:
     print(">>> Verifying Physical Files in S3...")
     fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(spark._jsc.hadoopConfiguration())
     # Note: 'test-bucket' must match the location used above
-    path = spark._jvm.org.apache.hadoop.fs.Path("s3a://test-bucket/fixed_table/metadata")
+    path = spark._jvm.org.apache.hadoop.fs.Path("s3://test-bucket/fixed_table/metadata")
 
     if fs.exists(path):
         print(">>> SUCCESS: Iceberg 'metadata' folder FOUND.")

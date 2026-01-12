@@ -16,6 +16,16 @@ data:
     s3.accessKey.0=minioadmin
     s3.secretKey.0=minioadmin
 
+    # Enable S3 Scheme for test-bucket
+    s3.bucketPath.4=s3://test-bucket
+    s3.region.4=us-east-1
+    s3.awsRoleArn.4=arn:aws:iam::000000000000:role/minio-dummy-role
+    s3.accessKey.4=minioadmin
+    s3.secretKey.4=minioadmin
+    s3.endpointUrl.4=http://minio.default.svc.cluster.local:9000
+    s3.pathStyleAccess.4=true
+    s3.ssl.enabled.4=false
+
     # Config 1: Warehouse Bucket (Exact match)
     s3.bucketPath.1=s3a://warehouse
     s3.region.1=us-east-1

@@ -1,0 +1,20 @@
+26/01/12 19:03:38 INFO MemoryStore: MemoryStore cleared
+26/01/12 19:03:38 INFO BlockManager: BlockManager stopped
+26/01/12 19:03:38 INFO BlockManagerMaster: BlockManagerMaster stopped
+26/01/12 19:03:38 INFO OutputCommitCoordinator$OutputCommitCoordinatorEndpoint: OutputCommitCoordinator stopped!
+26/01/12 19:03:38 INFO SparkContext: Successfully stopped SparkContext
+26/01/12 19:03:38 INFO ShutdownHookManager: Shutdown hook called
+26/01/12 19:03:38 INFO ShutdownHookManager: Deleting directory /tmp/spark-1cdb3d09-4d6a-4ded-8a54-16e37307fc06
+26/01/12 19:03:38 INFO ShutdownHookManager: Deleting directory /tmp/spark-d305b274-1682-44a6-a6d1-a4699a9fc386
+26/01/12 19:03:38 INFO ShutdownHookManager: Deleting directory /tmp/spark-d305b274-1682-44a6-a6d1-a4699a9fc386/pyspark-69a9f318-b656-48dc-915e-86c6dc6458a1
+26/01/12 19:03:38 INFO ShutdownHookManager: Deleting directory /tmp/artifacts-fe38176e-5f80-4aa8-a6cd-76a7ca6200ac
+26/01/12 19:02:47 INFO MemoryStore: MemoryStore cleared
+26/01/12 19:02:47 INFO BlockManager: BlockManager stopped
+26/01/12 19:02:48 INFO BlockManagerMaster: BlockManagerMaster stopped
+26/01/12 19:02:48 INFO OutputCommitCoordinator$OutputCommitCoordinatorEndpoint: OutputCommitCoordinator stopped!
+26/01/12 19:02:48 INFO SparkContext: Successfully stopped SparkContext
+26/01/12 19:02:48 INFO ShutdownHookManager: Shutdown hook called
+26/01/12 19:02:48 INFO ShutdownHookManager: Deleting directory /tmp/spark-e880f50f-ab57-4598-bc00-8023a2efe565
+26/01/12 19:02:48 INFO ShutdownHookManager: Deleting directory /tmp/artifacts-d5c3b74e-d9d8-4c79-af61-35ef87a43eda
+26/01/12 19:02:48 INFO ShutdownHookManager: Deleting directory /tmp/spark-e880f50f-ab57-4598-bc00-8023a2efe565/pyspark-b44c2a91-bc19-49ec-bbc7-6abec0bf0ecc
+26/01/12 19:02:48 INFO ShutdownHookManager: Deleting directory /tmp/spark-856ae127-170a-45ad-b197-8788a4a5a5ca
