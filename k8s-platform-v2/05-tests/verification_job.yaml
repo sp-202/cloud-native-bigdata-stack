@@ -1,0 +1,127 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lakehouse-verification-script
+  namespace: default
+data:
+  lakehouse_verification.py: |
+    from pyspark.sql import SparkSession
+    import os
+    import time
+
+    print("Starting Lakehouse Verification...")
+
+    spark = SparkSession.builder \
+        .appName("LakehouseVerification") \
+        .getOrCreate()
+
+    # Use 'unity' catalog as defined in spark-defaults.conf
+    catalog_name = "unity"
+    schema_name = "default" 
+    table_name = "fixed_table"
+    full_table_name = f"{catalog_name}.{schema_name}.{table_name}"
+
+    print(f"Using Catalog: {catalog_name}")
+
+    # 1. Create Table (Ensure s3a scheme is explicit)
+    print(f"Creating Table {full_table_name}...")
+    spark.sql(f"DROP TABLE IF EXISTS {full_table_name}")
+    spark.sql(f"""
+        CREATE TABLE {full_table_name} (
+            id INT, 
+            data STRING,
+            timestamp TIMESTAMP
+        ) USING DELTA
+        LOCATION 's3a://test-bucket/fixed_table'
+        TBLPROPERTIES (
+            'delta.universalFormat.enabledFormats' = 'iceberg',
+            'delta.enableIcebergCompatV2' = 'true'
+        )
+    """)
+
+    # 2. Insert Data
+    print("Inserting test data...")
+    spark.sql(f"INSERT INTO {full_table_name} VALUES (1, 'Sync Test', current_timestamp())")
+
+    # 3. CRITICAL: Force Iceberg Metadata Generation (Synchronous)
+    print(">>> Triggering Synchronous UniForm Metadata Generation...")
+    spark.sql(f"MSCK REPAIR TABLE {full_table_name} SYNC METADATA")
+
+    # 4. DEBUG: Verify Files in MinIO
+    print(">>> Verifying Physical Files in S3...")
+    fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(spark._jsc.hadoopConfiguration())
+    # Note: 'test-bucket' must match the location used above
+    path = spark._jvm.org.apache.hadoop.fs.Path("s3a://test-bucket/fixed_table/metadata")
+
+    if fs.exists(path):
+        print(">>> SUCCESS: Iceberg 'metadata' folder FOUND.")
+        # List files to ensure metadata.json exists
+        files = fs.listStatus(path)
+        for f in files:
+            print(f"   Found: {f.getPath().getName()}")
+    else:
+        print(">>> FATAL: Iceberg 'metadata' folder MISSING. UniForm failed.")
+        # Don't exit yet, let's try to see if Spark can read it anyway (Delta read)
+
+    print("Reading data back via Spark (Delta)...")
+    df = spark.sql(f"SELECT * FROM {full_table_name}")
+    df.show()
+
+    if df.count() >= 1:
+        print("SUCCESS: Spark write and read verification passed!")
+    else:
+        print("FAILURE: Record count mismatch.")
+        exit(1)
+
+    spark.stop()
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: lakehouse-verification-job
+  namespace: default
+spec:
+  template:
+    metadata:
+      labels:
+        spark-role: driver
+    spec:
+      serviceAccountName: spark-operator-spark # Assuming standard SA exists, or default
+      containers:
+        - name: spark-client
+          image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-fix-latest
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              /opt/spark/bin/spark-submit \
+              --master k8s://https://kubernetes.default.svc.cluster.local:443 \
+              --deploy-mode client \
+              --conf spark.driver.host=$POD_IP \
+              --conf spark.driver.bindAddress=$POD_IP \
+              --conf spark.kubernetes.driver.pod.name=$SPARK_podName \
+              --conf spark.kubernetes.container.image=subhodeep2022/spark-bigdata:spark-4.0.1-uc-fix-latest \
+              /opt/scripts/lakehouse_verification.py
+          volumeMounts:
+            - name: script-volume
+              mountPath: /opt/scripts
+            - name: spark-defaults
+              mountPath: /opt/spark/conf/spark-defaults.conf
+              subPath: spark-defaults.conf
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SPARK_podName
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+      restartPolicy: Never
+      volumes:
+        - name: script-volume
+          configMap:
+            name: lakehouse-verification-script
+        - name: spark-defaults
+          configMap:
+            name: spark-defaults

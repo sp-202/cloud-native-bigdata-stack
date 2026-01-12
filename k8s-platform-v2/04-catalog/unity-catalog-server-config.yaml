@@ -11,10 +11,31 @@ data:
     # MinIO S3 Bucket Configuration
     # Configure test-bucket for Unity Catalog tables
     s3.bucketPath.0=s3a://test-bucket
+    s3.region.0=us-east-1
+    s3.awsRoleArn.0=arn:aws:iam::000000000000:role/minio-dummy-role
     s3.accessKey.0=minioadmin
     s3.secretKey.0=minioadmin
-    s3.sessionToken.0=
-    s3.region.0=us-east-1
+
+    # Config 1: Warehouse Bucket (Exact match)
+    s3.bucketPath.1=s3a://warehouse
+    s3.region.1=us-east-1
+    s3.awsRoleArn.1=arn:aws:iam::000000000000:role/minio-dummy-role
+    s3.accessKey.1=minioadmin
+    s3.secretKey.1=minioadmin
+
+    # Config 2: Warehouse Bucket (Trailing Slash)
+    s3.bucketPath.2=s3a://warehouse/
+    s3.region.2=us-east-1
+    s3.awsRoleArn.2=arn:aws:iam::000000000000:role/minio-dummy-role
+    s3.accessKey.2=minioadmin
+    s3.secretKey.2=minioadmin
+
+    # Config 3: Warehouse Bucket (S3 Scheme)
+    s3.bucketPath.3=s3://warehouse
+    s3.region.3=us-east-1
+    s3.awsRoleArn.3=arn:aws:iam::000000000000:role/minio-dummy-role
+    s3.accessKey.3=minioadmin
+    s3.secretKey.3=minioadmin
 
     # MinIO endpoint configuration (non-AWS S3)
     s3.endpointUrl.0=http://minio.default.svc.cluster.local:9000

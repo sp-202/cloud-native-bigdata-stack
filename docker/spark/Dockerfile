@@ -9,6 +9,7 @@ ENV UC_VERSION=0.3.1
 ENV ICEBERG_VERSION=1.10.0
 ENV HADOOP_AWS_VERSION=3.4.0
 ENV AWS_SDK_VERSION=1.12.638
+ENV AWS_SDK_V2_VERSION=2.20.162
 ENV POSTGRES_VERSION=42.6.0
 ENV SPARK_HOME=/opt/spark
 ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
@@ -50,6 +51,7 @@ RUN wget https://jdbc.postgresql.org/download/postgresql-${POSTGRES_VERSION}.jar
     wget https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-4.0_2.13/${ICEBERG_VERSION}/iceberg-spark-runtime-4.0_2.13-${ICEBERG_VERSION}.jar -P $SPARK_HOME/jars/ && \
     wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_AWS_VERSION}/hadoop-aws-${HADOOP_AWS_VERSION}.jar -P $SPARK_HOME/jars/ && \
     wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar -P $SPARK_HOME/jars/ && \
+    wget https://repo1.maven.org/maven2/software/amazon/awssdk/bundle/${AWS_SDK_V2_VERSION}/bundle-${AWS_SDK_V2_VERSION}.jar -P $SPARK_HOME/jars/ && \
     # Fix Guava version conflict for Unity Catalog
     rm -f $SPARK_HOME/jars/guava-14.0.1.jar && \
     wget https://repo1.maven.org/maven2/com/google/guava/guava/31.1-jre/guava-31.1-jre.jar -P $SPARK_HOME/jars/ && \
