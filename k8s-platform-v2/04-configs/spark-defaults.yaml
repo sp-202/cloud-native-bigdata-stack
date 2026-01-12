@@ -36,11 +36,21 @@ data:
     spark.executor.memory                       1g
     spark.driver.cores                          1
     spark.driver.memory                         2g
+    spark.driver.memory                         2g
+    spark.jars.packages                         io.unitycatalog:unitycatalog-spark_2.13:0.3.1,io.delta:delta-spark_2.13:4.0.0,org.apache.iceberg:iceberg-spark-runtime-3.5_2.13:1.7.0
 
-    # --- Unity Catalog (Iceberg REST) ---
-    spark.sql.catalog.uc_catalog                org.apache.spark.sql.delta.catalog.UnityCatalog
-    spark.sql.catalog.uc_catalog.uri            http://unity-catalog-unitycatalog-server:8080
-    spark.sql.catalog.uc_catalog.token          dummy-token
+    # --- Unity Catalog (Native Writer -- Fixed) ---
+    spark.sql.catalog.unity                     io.unitycatalog.spark.UCSingleCatalog
+    spark.sql.catalog.unity.uri                 http://unity-catalog-unitycatalog-server:8085
+    spark.sql.catalog.unity.token               not-used-in-oss-mode
+
+    # Force S3A Scheme (Fixes Protocol Mismatch)
+    spark.sql.catalog.unity.warehouse           s3a://warehouse/
+    spark.sql.catalog.unity.s3.endpoint         http://minio.default.svc.cluster.local:9000
+
+    # --- UniForm (Delta -> Iceberg Metadata) ---
+    spark.databricks.delta.universalFormat.enabledFormats iceberg
+    spark.databricks.delta.icebergCompatV2.enabled        true
 
     # --- MinIO S3A Configuration ---
     spark.hadoop.fs.s3a.endpoint                http://minio.default.svc.cluster.local:9000
