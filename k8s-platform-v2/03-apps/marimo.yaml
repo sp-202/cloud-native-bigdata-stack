@@ -19,7 +19,7 @@ spec:
       serviceAccountName: jupyterhub  # Reuse the same SA for Spark permissions
       initContainers:
         - name: spark-home-init
-          image: $(SPARK_IMAGE)
+          image: subhodeep2022/spark-bigdata:spark-3.5.3-uc-0.3.1-v5
           imagePullPolicy: Always
           command: ["sh", "-c", "cp -r /opt/spark/* /mnt/spark/ && chown -R 1000:100 /mnt/spark"]
           volumeMounts:
@@ -28,7 +28,7 @@ spec:
 
       containers:
         - name: marimo
-          image: $(MARIMO_IMAGE)
+          image: subhodeep2022/spark-bigdata:marimo-v1
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -39,17 +39,17 @@ spec:
             - name: SPARK_HOME
               value: "/opt/spark"
             - name: SPARK_IMAGE
-              value: "$(SPARK_IMAGE)"
+              value: "subhodeep2022/spark-bigdata:spark-3.5.3-uc-0.3.1-v5"
             - name: SPARK_DRIVER_HOST
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
             - name: MINIO_ENDPOINT
-              value: "$(MINIO_ENDPOINT)"
+              value: "http://minio.default.svc.cluster.local:9000"
             - name: AWS_ACCESS_KEY_ID
-              value: "$(AWS_ACCESS_KEY_ID)"
+              value: "minioadmin"
             - name: AWS_SECRET_ACCESS_KEY
-              value: "$(AWS_SECRET_ACCESS_KEY)"
+              value: "minioadmin"
           volumeMounts:
             - name: spark-home
               mountPath: /opt/spark
