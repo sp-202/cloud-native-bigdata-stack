@@ -170,6 +170,8 @@ data:
   spark_init.py: |
     import marimo as mo
     from pyspark.sql import SparkSession
+    import pandas as pd
+    import numpy as np
     import os
 
     # Standard Spark Initialization for this environment
@@ -179,6 +181,6 @@ data:
     spark.conf.set("spark.sql.repl.eagerEval.enabled", True)
 
     # Export common helpers
-    __all__ = ["spark", "mo"]
+    __all__ = ["spark", "mo", "pd", "np"]
 
-    print("✅ Spark (K8s) & Marimo Helpers Ready!")
+    print("✅ Spark (K8s), Marimo, Pandas, and NumPy Ready!")
