@@ -89,7 +89,7 @@ spec:
       serviceAccountName: spark-operator-spark # Assuming standard SA exists, or default
       containers:
         - name: spark-client
-          image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-fix-v2
+          image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-fix-v3
           imagePullPolicy: Always
           command: ["/bin/bash", "-c"]
           args:
@@ -104,7 +104,7 @@ spec:
               --conf spark.driver.host=$POD_IP \
               --conf spark.driver.bindAddress=$POD_IP \
               --conf spark.kubernetes.driver.pod.name=$SPARK_podName \
-              --conf spark.kubernetes.container.image=subhodeep2022/spark-bigdata:spark-4.0.1-uc-fix-v2 \
+              --conf spark.kubernetes.container.image=subhodeep2022/spark-bigdata:spark-4.0.1-uc-fix-v3 \
               /opt/scripts/lakehouse_verification.py
           volumeMounts:
             - name: script-volume
