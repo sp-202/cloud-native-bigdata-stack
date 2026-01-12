@@ -7,8 +7,8 @@ ENV SCALA_VERSION=2.13
 ENV DELTA_VERSION=4.0.0
 ENV UC_VERSION=0.3.1
 ENV ICEBERG_VERSION=1.10.0
-ENV HADOOP_AWS_VERSION=3.3.4
-ENV AWS_SDK_VERSION=1.12.262
+ENV HADOOP_AWS_VERSION=3.4.0
+ENV AWS_SDK_VERSION=1.12.638
 ENV POSTGRES_VERSION=42.6.0
 ENV SPARK_HOME=/opt/spark
 ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
@@ -34,7 +34,8 @@ RUN apt-get update && apt-get install -y \
 RUN python3.11 -m pip install --no-cache-dir pandas pyarrow numpy
 
 # Download and install Spark w/ Scala 2.13 (includes Hadoop 3)
-RUN wget https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz && \
+# Using dlcdn mirror as requested for speed
+RUN wget https://dlcdn.apache.org/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz && \
     tar -xzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz && \
     mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} ${SPARK_HOME} && \
     rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
@@ -42,7 +43,6 @@ RUN wget https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SP
 # Download compatible JARs for Spark 4.0 (Scala 2.13)
 WORKDIR $SPARK_HOME/jars
 RUN wget https://jdbc.postgresql.org/download/postgresql-${POSTGRES_VERSION}.jar -P $SPARK_HOME/jars/ && \
-    wget https://repo1.maven.org/maven2/io/delta/delta-iceberg_2.13/${DELTA_VERSION}/delta-iceberg_2.13-${DELTA_VERSION}.jar -P $SPARK_HOME/jars/ && \
     wget https://repo1.maven.org/maven2/io/delta/delta-spark_2.13/${DELTA_VERSION}/delta-spark_2.13-${DELTA_VERSION}.jar -P $SPARK_HOME/jars/ && \
     wget https://repo1.maven.org/maven2/io/delta/delta-storage/${DELTA_VERSION}/delta-storage-${DELTA_VERSION}.jar -P $SPARK_HOME/jars/ && \
     wget https://repo1.maven.org/maven2/io/unitycatalog/unitycatalog-spark_2.13/${UC_VERSION}/unitycatalog-spark_2.13-${UC_VERSION}.jar -P $SPARK_HOME/jars/ && \
