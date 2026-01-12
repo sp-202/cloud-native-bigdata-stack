@@ -38,7 +38,7 @@ spec:
             - |
               /opt/starrocks/fe/bin/start_fe.sh --daemon
               echo "Waiting for FE to start..."
-              
+
               # Wait for port 9030 to be ready
               for i in {1..30}; do
                   if mysql -h 127.0.0.1 -P 9030 -u root -e "SELECT 1" >/dev/null 2>&1; then
@@ -58,6 +58,22 @@ spec:
                       echo "Resolved BE IP: $BE_IP"
                       echo "Registering BE..."
                       mysql -h 127.0.0.1 -P 9030 -u root -e "ALTER SYSTEM ADD BACKEND '${BE_IP}:9050';" || true
+                      
+                      # Create Unity Catalog External Catalog (Iceberg REST)
+                      echo "Creating 'uc_iceberg_catalog'..."
+                      mysql -h 127.0.0.1 -P 9030 -u root -e "
+                      CREATE EXTERNAL CATALOG IF NOT EXISTS uc_iceberg_catalog
+                      PROPERTIES (
+                          'type' = 'iceberg',
+                          'iceberg.catalog.type' = 'rest',
+                          'iceberg.catalog.uri' = 'http://unity-catalog-unitycatalog-server:8080/api/2.1/unity-catalog/iceberg',
+                          'iceberg.catalog.warehouse' = 's3a://test-bucket/',
+                          'aws.s3.enable_ssl' = 'false',
+                          'aws.s3.enable_path_style_access' = 'true',
+                          'aws.s3.endpoint' = 'http://minio.default.svc.cluster.local:9000',
+                          'aws.s3.access_key' = 'minioadmin',
+                          'aws.s3.secret_key' = 'minioadmin'
+                      );" || true
                       
                       echo "Creating 'demo' database..."
                       mysql -h 127.0.0.1 -P 9030 -u root -e "CREATE DATABASE IF NOT EXISTS demo;" || true
@@ -79,7 +95,12 @@ spec:
             periodSeconds: 20
           readinessProbe:
             exec:
-              command: ["/bin/bash", "-c", "mysql -h 127.0.0.1 -P 9030 -u root -e 'SELECT 1'"]
+              command:
+                [
+                  "/bin/bash",
+                  "-c",
+                  "mysql -h 127.0.0.1 -P 9030 -u root -e 'SELECT 1'",
+                ]
             initialDelaySeconds: 30
             periodSeconds: 10
           resources:
