@@ -94,6 +94,10 @@ spec:
           command: ["/bin/bash", "-c"]
           args:
             - |
+              echo ">>> DIAGNOSTIC: Checking for AWS SDK Jars..."
+              ls -la /opt/spark/jars/ | grep -i -E "aws|amazon|bundle"
+              echo ">>> DIAGNOSTIC: Done."
+
               /opt/spark/bin/spark-submit \
               --master k8s://https://kubernetes.default.svc.cluster.local:443 \
               --deploy-mode client \
