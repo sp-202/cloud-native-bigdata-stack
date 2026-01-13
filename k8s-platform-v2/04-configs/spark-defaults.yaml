@@ -36,24 +36,24 @@ data:
     spark.executor.memory                       1g
     spark.driver.cores                          1
     spark.driver.memory                         2g
-    spark.driver.memory                         2g
-    spark.jars.packages                         io.unitycatalog:unitycatalog-spark_2.13:0.3.1,io.delta:delta-spark_2.13:4.0.0,org.apache.iceberg:iceberg-spark-runtime-3.5_2.13:1.7.0
-
-    # --- Unity Catalog (Native Writer -- Fixed) ---
-    spark.sql.catalog.unity                     io.unitycatalog.spark.UCSingleCatalog
-    spark.sql.catalog.unity.uri                 http://unity-catalog-unitycatalog-server:8085
-    spark.sql.catalog.unity.token               not-used-in-oss-mode
-
-    # Force S3A Scheme (Fixes Protocol Mismatch)
-    spark.sql.catalog.unity.warehouse           s3a://warehouse/
-    spark.sql.catalog.unity.s3.endpoint         http://minio.default.svc.cluster.local:9000
-
-    # --- UniForm (Delta -> Iceberg Metadata) ---
+    # REMOVED: io.unitycatalog:unitycatalog-spark_2.13:0.3.1
+    # KEPT: delta-spark andhadoop-aws (required for S3A)
+    # The image likely contains hadoop-aws, but adding explicit packages if needed
+    spark.jars.packages                         io.delta:delta-spark_2.13:4.0.0,org.apache.iceberg:iceberg-spark-runtime-3.5_2.13:1.7.0,org.apache.hadoop:hadoop-aws:3.3.4,software.amazon.awssdk:bundle:2.20.160
+    
+    # --- Hive Metastore (HMS) Config ---
+    spark.sql.catalogImplementation             hive
+    spark.hadoop.hive.metastore.uris            thrift://hive-metastore:9083
+    
+    # --- Delta Lake / UniForm w/ Iceberg ---
+    spark.sql.catalog.spark_catalog             org.apache.spark.sql.delta.catalog.DeltaCatalog
     spark.databricks.delta.universalFormat.enabledFormats iceberg
-    spark.databricks.delta.icebergCompatV2.enabled        true
+    spark.databricks.delta.icebergCompatV2.enabled true
+    # Allow unknown features (like delta.feature.catalogManaged) for UC OSS interop
+    spark.databricks.delta.allowArbitraryProperties.enabled true
 
     # --- MinIO S3A Configuration ---
-    spark.hadoop.fs.s3a.endpoint                http://minio.default.svc.cluster.local:9000
+    spark.hadoop.fs.s3a.endpoint                http://minio:9000
     spark.hadoop.fs.s3a.access.key              minioadmin
     spark.hadoop.fs.s3a.secret.key              minioadmin
     spark.hadoop.fs.s3a.path.style.access       true
@@ -62,13 +62,6 @@ data:
     spark.hadoop.fs.s3.impl                     org.apache.hadoop.fs.s3a.S3AFileSystem
     spark.hadoop.fs.s3a.aws.credentials.provider org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
     spark.hadoop.fs.s3a.fast.upload             true
-
-    # --- Delta Lake / UniForm w/ Iceberg ---
-    spark.sql.catalog.spark_catalog             org.apache.spark.sql.delta.catalog.DeltaCatalog
-    spark.databricks.delta.universalFormat.enabledFormats iceberg
-    spark.databricks.delta.icebergCompatV2.enabled true
-    # Allow unknown features (like delta.feature.catalogManaged) for UC OSS interop
-    spark.databricks.delta.allowArbitraryProperties.enabled true
 
     # --- RocksDB State Store (RESTORED) ---
     spark.sql.streaming.stateStore.providerClass   org.apache.spark.sql.execution.streaming.state.RocksDBStateStoreProvider
@@ -88,6 +81,7 @@ data:
     spark.kubernetes.executor.annotation.prometheus.io/port   4040
 
     # --- Kubernetes Pod Defaults ---
+    spark.kubernetes.container.image            $(SPARK_IMAGE)
     spark.kubernetes.container.image.pullPolicy Always
     spark.kubernetes.driver.pod.name            spark-driver
     spark.kubernetes.namespace                  default

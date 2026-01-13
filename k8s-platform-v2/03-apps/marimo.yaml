@@ -69,7 +69,7 @@ spec:
           emptyDir: {}
         - name: spark-config
           configMap:
-            name: spark-config
+            name: spark-defaults
         - name: startup-script
           configMap:
             name: marimo-config

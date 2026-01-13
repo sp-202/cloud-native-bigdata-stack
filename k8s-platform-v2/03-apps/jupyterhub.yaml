@@ -81,6 +81,10 @@ spec:
             requests:
               memory: "2Gi"
               cpu: "500m"
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "500m"
             limits:
               memory: "4Gi"
               cpu: "2000m"
@@ -110,7 +114,7 @@ spec:
           emptyDir: {}
         - name: spark-config
           configMap:
-            name: spark-config
+            name: spark-defaults
         - name: jupyter-config
           configMap:
             name: jupyterhub-config
@@ -247,6 +251,8 @@ data:
     echo "spark.driver.bindAddress            0.0.0.0" >> "${FINAL_CONF}"
     echo "spark.driver.port                   22321" >> "${FINAL_CONF}"
     echo "spark.blockManager.port             22322" >> "${FINAL_CONF}"
+    # CRITICAL: Client mode requires driver pod name to match actual pod name
+    echo "spark.kubernetes.driver.pod.name    ${HOSTNAME}" >> "${FINAL_CONF}"
     echo "spark.kubernetes.container.image    ${SPARK_IMAGE}" >> "${FINAL_CONF}"
     echo "spark.hadoop.fs.s3a.endpoint        ${MINIO_ENDPOINT}" >> "${FINAL_CONF}"
     echo "spark.hadoop.fs.s3a.access.key      ${AWS_ACCESS_KEY_ID}" >> "${FINAL_CONF}"
@@ -273,9 +279,71 @@ data:
       "env": {
         "SPARK_HOME": "/opt/spark",
         "PYSPARK_PYTHON": "python3",
-        "PYSPARK_DRIVER_PYTHON": "python3"
+        "PYSPARK_DRIVER_PYTHON": "python3",
+        "SPARK_DRIVER_HOST": "${SPARK_DRIVER_HOST}",
+        "MINIO_ENDPOINT": "${MINIO_ENDPOINT}",
+        "AWS_ACCESS_KEY_ID": "${AWS_ACCESS_KEY_ID}",
+        "AWS_SECRET_ACCESS_KEY": "${AWS_SECRET_ACCESS_KEY}"
       }
     }
     KERNEL_EOF
+
+    # Create IPython startup script (Best for Jupyter Notebooks)
+    mkdir -p /home/jovyan/.ipython/profile_default/startup/
+    cat > /home/jovyan/.ipython/profile_default/startup/00-pyspark-setup.py << 'STARTUP_EOF'
+    import os
+    import sys
+    import glob
+
+    spark_home = os.environ.get('SPARK_HOME', '/opt/spark')
+    sys.path.insert(0, os.path.join(spark_home, 'python'))
+    py4j_zip = glob.glob(os.path.join(spark_home, 'python/lib/py4j-*-src.zip'))
+    if py4j_zip:
+        sys.path.insert(0, py4j_zip[0])
+
+    try:
+        from pyspark.sql import SparkSession
+        spark = SparkSession.builder.enableHiveSupport().getOrCreate()
+        # In IPython, direct assignment to global namespace is handled by the shell
+        # But let's also try builtins just in case
+        import builtins
+        builtins.spark = spark
+        print(f"✅ Auto-initialized Spark {spark.version}")
+    except Exception as e:
+        print(f"⚠️ Spark auto-init failed: {e}")
+    STARTUP_EOF
+    
+    # Create sitecustomize.py for global auto-initialization (robust)
+    SITE_PACKAGES="/home/jovyan/.local/lib/python3.11/site-packages"
+    mkdir -p "${SITE_PACKAGES}"
+    
+    cat > "${SITE_PACKAGES}/sitecustomize.py" << 'SITE_EOF'
+    import os
+    import sys
+    import builtins
+    import glob
+    
+    # 1. Ensure Spark is in path
+    spark_home = os.environ.get('SPARK_HOME', '/opt/spark')
+    if spark_home:
+        sys.path.insert(0, os.path.join(spark_home, 'python'))
+        # Dynamically find py4j zip
+        py4j_zip = glob.glob(os.path.join(spark_home, 'python/lib/py4j-*-src.zip'))
+        if py4j_zip:
+            sys.path.insert(0, py4j_zip[0])
+
+    # 2. Attempt Auto-Initialization
+    try:
+        # Avoid re-initializing in worker processes or irrelevant contexts
+        if 'pyspark' not in sys.modules and os.environ.get('SPARK_DRIVER_HOST'):
+            from pyspark.sql import SparkSession
+            spark = SparkSession.builder.enableHiveSupport().getOrCreate()
+            builtins.spark = spark  # Make it globally available
+            print(f"✅ Auto-initialized Spark {spark.version} (Master: {spark.sparkContext.master})")
+    except Exception as e:
+        # Fail silently to avoid breaking non-Spark scripts
+        pass
+    SITE_EOF
+
 
     echo "=== Spark configuration complete ==="
