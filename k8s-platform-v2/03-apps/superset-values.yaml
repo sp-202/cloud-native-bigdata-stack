@@ -2,6 +2,10 @@ image:
   repository: apache/superset
   tag: 3.1.0
   pullPolicy: IfNotPresent
+initImage:
+  repository: jwilder/dockerize
+  tag: 0.6.1
+  pullPolicy: IfNotPresent
 postgresql:
   enabled: false
 supersetNode:
