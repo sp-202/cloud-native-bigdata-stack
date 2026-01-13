@@ -53,6 +53,23 @@ sudo apt-get install helm
 sudo apt-get install -y git
 ```
 
+## Configuration
+
+The platform relies on a `.env` file for dynamic configuration (like Spark image versions).
+
+1.  **Create `.env` file**:
+    ```bash
+    cp .env.example .env
+    ```
+    *(If `.env.example` is missing, create `.env` manually)*
+
+2.  **Set Spark Image Version**:
+    ```bash
+    # Content of .env
+    SPARK_IMAGE_VERSION=fix-v4
+    SPARK_IMAGE=subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-fix-v4
+    ```
+
 ## Deployment
 
 1.  **Clone/Navigate to Project**:
@@ -61,21 +78,25 @@ sudo apt-get install -y git
     ```
 
 2.  **Build Custom Spark Image**:
-    The project requires a custom Spark image with Unity Catalog dependencies.
+    The project requires a custom Spark image with proper Hadoop/AWS SDK dependencies.
     *Ensure Docker is running and you are logged in (`docker login`).*
 
     ```bash
     ./docker/spark/build.sh
     ```
+    *Note: Update `.env` with the new image tag if you change versions.*
 
 3.  **Run Deployment Script**:
     This script will:
     - Install Infrastructure (Traefik, Spark Operator).
-    - Build Unity Catalog from source.
+    - Deploy Hive Metastore (HMS) and MinIO.
     - Generate Helm manifests for all components.
     - Deploy the platform using `kubectl kustomize`.
 
     ```bash
+    # Ensure .env variables are exported
+    set -a && source .env && set +a
+    
     ./deploy-gke.sh
     ```
 
@@ -87,11 +108,11 @@ After the script completes, verify the deployment:
     ```bash
     kubectl get pods -n default
     ```
-    Ensure `unity-catalog`, `spark-operator`, `superset`, `postgres`, `hive-metastore` pods are Running.
+    Ensure `hive-metastore`, `spark-operator`, `superset`, `postgres`, `minio` pods are Running.
 
 2.  **Access Web UIs**:
     Based on the output IP (e.g., `34.x.x.x`), access:
-    - **Unity Catalog**: `http://unity.34.x.x.x.sslip.io`
+    - **JupyterHub**: `http://jupyterhub.34.x.x.x.sslip.io`
     - **Superset**: `http://superset.34.x.x.x.sslip.io`
     - **Traefik Dashboard**: `http://traefik.34.x.x.x.sslip.io/dashboard/`
 

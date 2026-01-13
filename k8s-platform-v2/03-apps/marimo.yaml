@@ -19,7 +19,7 @@ spec:
       serviceAccountName: jupyterhub  # Reuse the same SA for Spark permissions
       initContainers:
         - name: spark-home-init
-          image: subhodeep2022/spark-bigdata:spark-3.5.3-uc-0.3.1-v6
+          image: $(SPARK_IMAGE)
           imagePullPolicy: Always
           command: ["sh", "-c", "cp -r /opt/spark/* /mnt/spark/ && chown -R 1000:100 /mnt/spark"]
           volumeMounts:
@@ -28,7 +28,7 @@ spec:
 
       containers:
         - name: marimo
-          image: subhodeep2022/spark-bigdata:marimo-v1
+          image: $(MARIMO_IMAGE)
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -39,7 +39,7 @@ spec:
             - name: SPARK_HOME
               value: "/opt/spark"
             - name: SPARK_IMAGE
-              value: "subhodeep2022/spark-bigdata:spark-3.5.3-uc-0.3.1-v6"
+              value: "$(SPARK_IMAGE)"
             - name: SPARK_DRIVER_HOST
               valueFrom:
                 fieldRef:

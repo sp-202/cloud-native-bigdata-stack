@@ -22,8 +22,8 @@ data:
     spark.dynamicAllocation.shuffleTracking.enabled true
     spark.dynamicAllocation.minExecutors        1
     spark.dynamicAllocation.maxExecutors        4
-    spark.dynamicAllocation.executorIdleTimeout 600s
-    spark.dynamicAllocation.schedulerBacklogTimeout 5s
+    spark.dynamicAllocation.executorIdleTimeout 600000
+    spark.dynamicAllocation.schedulerBacklogTimeout 5000
 
     # Graceful Decommission (finish tasks before shutdown)
     spark.decommission.enabled                  true
@@ -58,6 +58,11 @@ data:
     spark.hadoop.fs.s3a.secret.key              minioadmin
     spark.hadoop.fs.s3a.path.style.access       true
     spark.hadoop.fs.s3a.connection.ssl.enabled  false
+    spark.hadoop.fs.s3a.threads.keepalivetime   60
+    spark.hadoop.fs.s3a.multipart.purge.age     86400
+    spark.hadoop.fs.s3a.connection.estimated.ttl 300
+    spark.hadoop.fs.s3a.connection.timeout      200000
+    spark.hadoop.fs.s3a.connection.establish.timeout 5000
     spark.hadoop.fs.s3a.impl                    org.apache.hadoop.fs.s3a.S3AFileSystem
     spark.hadoop.fs.s3.impl                     org.apache.hadoop.fs.s3a.S3AFileSystem
     spark.hadoop.fs.s3a.aws.credentials.provider org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider

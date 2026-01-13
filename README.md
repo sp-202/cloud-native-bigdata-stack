@@ -28,11 +28,12 @@ This repository contains a **Data Platform as Code (DPaC)** implementation, desi
 | **JupyterHub / Spark** | ✅ Stable    | Core interactive environment                   |
 | **Marimo Notebooks**   | ✅ Stable    | Reactive Python UI integration                 |
 | **Delta Lake**         | ✅ Stable    | ACID transactions and Time Travel on S3        |
+| **Hive Metastore**     | ✅ Stable    | Centralized metadata management (Thrift)       |
+| **StarRocks**          | 🏗 Beta      | Verified with Native Delta Catalog (OLAP)      |
 | **Airflow Scheduling** | 🏗 Beta      | Functional, standard DAG patterns only          |
 | **Monitoring Stack**   | 🏗 Beta      | Metrics & Logging: Spark and K8s logs captured |
 | **Polynote**           | 🧪 Exp       | High resource usage; testing stability         |
-| **Unity Catalog (UC)** | 🧪 Exp       | Integration in progress; not fully active      |
-| **StarRocks**          | 🧪 Exp       | Base manifests in place; awaiting verification |
+| **Unity Catalog (UC)** | ⏸ Paused     | Replaced by HMS for stability                  |
 
 > [!IMPORTANT]
 > Features marked as **Experimental (🧪 Exp)** are currently in the development phase. They may have incomplete functionality or require additional configuration.
@@ -53,27 +54,29 @@ The platform is divided into three logical domains:
     *   **JupyterHub**: Standard interactive environment with **Zeppelin features** (SQL magic, Scala kernel, `z.show()`).
     *   **Marimo**: Reactive Python notebooks with high-performance UI components.
     *   **Polynote**: IDE-focused notebook for Scala and multi-language Spark development.
-*   **Apache Spark (3.5)**: The distributed compute engine, pre-configured with **Delta Lake** and **Unity Catalog** support.
+*   **Apache Spark (4.0.1)**: The distributed compute engine, pre-configured with **Delta Lake** and **Hadoop 3.3.4** support.
 *   **Apache Superset**: Enterprise-ready BI. Connects to the platform for data visualization.
-*   **Hive Metastore**: Central schema catalog for the Data Lake.
+*   **Hive Metastore (HMS)**: Standalone Thrift service acting as the central catalog for Spark and StarRocks.
 
 ### 3️⃣ Data & Persistence (Green Domain)
 *   **MinIO**: High-performance Object Storage (S3 Compatible). Acts as the "Data Lake" storage layer.
 *   **PostgreSQL**: The relational metadata backbone. Stores state for Airflow (DAG runs), Superset (dashboards), and Hive (schemas).
 *   **Redis**: In-memory cache used by Superset to speed up query results and dashboard loading.
-*   **StarRocks (Experimental)**: High-performance analytical (OLAP) database for real-time reporting.
+*   **StarRocks**: High-performance analytical (OLAP) database. Reads directly from MinIO via Delta Native Catalog.
 *   **Kong Gateway (Experimental)**: Secondary API gateway for external service management.
 
 ---
 
-## � Tech Stack
+## 🛠 Tech Stack
 
 | Component | Version | Role | Usage |
 | :--- | :--- | :--- | :--- |
 | **Apache Airflow** | `2.10.x` | Orchestrator | Scheduling ETL pipelines |
-| **Spark / Delta** | `3.5.3 / 3.2.0` | Compute / Format | Distributed processing & ACID tables |
+| **Spark / Delta** | `4.0.1 / 4.0.0` | Compute / Format | Distributed processing & ACID tables |
+| **Hadoop / AWS SDK** | `3.3.4 / 2.20.160` | Storage Access | S3A FileSystem optimizations |
 | **JupyterHub** | `4.0.7` | Notebooks | Standard Data Engineering workflow |
 | **Marimo / Polynote** | `latest` | Notebooks | Reactive & Multi-language environments |
+| **Hive Metastore** | `3.1.3` | Catalog | Metadata persistence |
 | **StarRocks** | `v3.x` | OLAP Database | Sub-second queries on large datasets |
 | **Apache Superset** | `4.0.x` | BI / Viz | Dashboards & Analytics |
 | **MinIO** | `RELEASE.2024` | Object Store | Data Lake (S3 API) |
