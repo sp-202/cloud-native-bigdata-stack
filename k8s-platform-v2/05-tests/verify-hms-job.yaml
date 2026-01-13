@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: verify-hms-script
+  namespace: default
+data:
+  verify_hms.py: |
+    from pyspark.sql import SparkSession
+    import sys
+
+    print("Starting HMS Migration Verification...")
+
+    # Enable Hive Support (CRITICAL for HMS connection)
+    spark = SparkSession.builder \
+        .appName("HMSVerification") \
+        .enableHiveSupport() \
+        .getOrCreate()
+
+    print("Checking Databases in HMS...")
+    spark.sql("SHOW DATABASES").show()
+
+    table_name = "default.hms_migration_test"
+    print(f"Dropping table if exists: {table_name}")
+    spark.sql(f"DROP TABLE IF EXISTS {table_name}")
+
+    print(f"Creating Native Delta Table: {table_name}...")
+    # This should register in HMS because spark.sql.catalogImplementation=hive
+    # and default catalog is spark_catalog (DeltaCatalog) which now delegates to HMS/Hive for persistence
+    spark.sql(f"""
+        CREATE TABLE {table_name} (
+            id INT,
+            data STRING,
+            ts TIMESTAMP
+        ) USING DELTA
+    """)
+
+    print("Inserting test data...")
+    spark.sql(f"INSERT INTO {table_name} VALUES (1, 'Verification Data', current_timestamp())")
+
+    print("Reading data back...")
+    df = spark.sql(f"SELECT * FROM {table_name}")
+    df.show()
+
+    count = df.count()
+    print(f"Total count: {count}")
+
+    if count == 1:
+        print("SUCCESS: Table created in HMS and data written/read via Spark.")
+    else:
+        print("FAILURE: Data mismatch.")
+        sys.exit(1)
+
+    spark.stop()
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: verify-hms-job
+  namespace: default
+spec:
+  template:
+    metadata:
+      labels:
+        app: verify-hms
+    spec:
+      serviceAccountName: spark-operator-spark
+      containers:
+        - name: spark-client
+          image: $(SPARK_IMAGE)
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              /opt/spark/bin/spark-submit \
+              --master k8s://https://kubernetes.default.svc.cluster.local:443 \
+              --deploy-mode client \
+              --conf spark.driver.host=$POD_IP \
+              --conf spark.driver.bindAddress=$POD_IP \
+              --conf spark.kubernetes.driver.pod.name=$SPARK_podName \
+              --conf spark.kubernetes.container.image=$(SPARK_IMAGE) \
+              /opt/scripts/verify_hms.py
+          volumeMounts:
+            - name: script-volume
+              mountPath: /opt/scripts
+            - name: spark-defaults
+              mountPath: /opt/spark/conf/spark-defaults.conf
+              subPath: spark-defaults.conf
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SPARK_podName
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+      restartPolicy: Never
+      volumes:
+        - name: script-volume
+          configMap:
+            name: verify-hms-script
+        - name: spark-defaults
+          configMap:
+            name: spark-defaults
