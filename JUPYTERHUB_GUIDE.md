@@ -12,21 +12,21 @@ JupyterHub provides interactive PySpark notebooks with dynamic Spark executor al
 2. **Create a new notebook** (Python 3 kernel)
 
 3. **Initialize Spark**
+   *Note: Spark is auto-initialized. You can directly access the `spark` variable.*
    ```python
-   from pyspark.sql import SparkSession
-   
-   spark = SparkSession.builder \
-       .appName("MyNotebook") \
-       .getOrCreate()
-   
-   # Test
+   # Verify session
+   print(spark)
    spark.range(10).show()
    ```
 
-4. **Read from MinIO (S3)**
+4. **Write & Read Delta Lake (S3)**
    ```python
-   df = spark.read.parquet("s3a://my-bucket/data/")
-   df.show()
+   # Write
+   df = spark.range(100)
+   df.write.format("delta").mode("overwrite").saveAsTable("default.test_table")
+   
+   # Read
+   spark.sql("SELECT * FROM default.test_table").show()
    ```
 
 ---
@@ -38,7 +38,7 @@ JupyterHub provides interactive PySpark notebooks with dynamic Spark executor al
 │                     JupyterHub Pod                          │
 │  ┌─────────────────┐  ┌──────────────────────────────────┐ │
 │  │ Spark Driver    │  │ JupyterLab UI                    │ │
-│  │ (port 22321)    │  │ (port 8888)                      │ │
+│  │ (Auto-Host IP)  │  │ (port 8888)                      │ │
 │  └────────┬────────┘  └──────────────────────────────────┘ │
 └───────────┼─────────────────────────────────────────────────┘
             │ Executor communication
@@ -59,7 +59,8 @@ JupyterHub provides interactive PySpark notebooks with dynamic Spark executor al
 |---------|-------|-------------|
 | `minExecutors` | 1 | Minimum executor pods |
 | `maxExecutors` | 4 | Maximum executor pods |
-| `executorIdleTimeout` | 600s (10 min) | Idle time before executor shutdown |
+| `executorIdleTimeout` | 600000 (ms) | Idle time before shutdown (10 min) |
+| `schedulerBacklogTimeout` | 5000 (ms) | Time before scaling up |
 | `executor.memory` | 1GB | Memory per executor |
 | `executor.cores` | 1 | CPU cores per executor |
 | `driver.port` | 22321 | Spark driver RPC port |

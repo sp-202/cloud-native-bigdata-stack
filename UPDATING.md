@@ -2,6 +2,26 @@
 
 This document tracks breaking changes and significant updates to the platform that require manual intervention or specific migration steps.
 
+## [2026-01-13] 🌟 v0.2.0: The HMS & StarRocks Lakehouse
+
+### ⚠️ Breaking Changes
+- **Unity Catalog Removed**: Replaced by **Hive Metastore (Standalone)** as the central catalog.
+- **Spark Image Upgrade**: Now requires `fix-v4` tag (`hadoop-aws-3.3.4` + `aws-java-sdk-bundle-2.20.160`).
+- **Config Updates**: `spark-defaults.conf` now enforces integer timeouts (e.g., `600000` instead of `600s`).
+
+### 📝 Update Instructions
+1.  **Update `.env`**:
+    ```bash
+    SPARK_IMAGE_VERSION=fix-v4
+    ```
+2.  **Re-deploy Configs**:
+    ```bash
+    ./deploy-gke.sh
+    ```
+    *(This updates the `spark-defaults` ConfigMap and `jupyterhub` deployment)*
+
+---
+
 ## [2026-01-11] 🚀 The "Golden Stack" Migration (V2)
 
 ### ⚠️ Breaking Changes

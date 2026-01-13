@@ -1,79 +1,91 @@
-# Migration Issues Log
+# Project Issues & Resolutions Log
 
-This document tracks issues encountered during the migration from Unity Catalog to Hive Metastore (HMS) and their resolution status.
+## 1. Spark Auto-Initialization Failure (`NameError: name 'spark' is not defined`)
 
-## 1. Hive Metastore (HMS) Startup Failures
+**Issue:**
+JupyterHub users (IPython/Notebooks) found that `spark` was not defined on startup, despite `00-pyspark-setup.py` being present.
 
-### 1.1 Missing Database Driver
-**Issue:**  
-HMS container (`apache/hive:4.0.0`) failed to start with `ClassNotFoundException: org.postgresql.Driver`. The official image does not include the Postgres JDBC driver.
+**Root Cause:**
+Spark running in **Client Mode** on Kubernetes requires the Driver Pod to have a resolvable name that matches `spark.kubernetes.driver.pod.name`.
+*   The default Pod name is random (e.g., `jupyterhub-78dd...`).
+*   Spark failed silently during initialization with `SparkException: No pod was found named spark-driver`, causing the startup script to abort without defining `spark`.
 
-**Resolution:**  
-Modified `hms.yaml` to include an `initContainer` that downloads `postgresql-42.6.0.jar` and mounts it to `/opt/hive/lib` using a `subPath` volume mount (to avoid overwriting existing jars).
-
-### 1.2 Missing Database
-**Issue:**  
-HMS failed to initialize because the backend database `metastore_db` did not exist in the Postgres service.
+**Resolution:**
+Updated `k8s-platform-v2/03-apps/jupyterhub.yaml` (inside `setup-kernels.sh`) to dynamically set the property at runtime:
+```bash
+echo "spark.kubernetes.driver.pod.name    ${HOSTNAME}" >> "${FINAL_CONF}"
 ```
-FATAL: database "metastore_db" does not exist
+This ensures the driver name always matches the actual pod hostname.
+
+---
+
+## 2. Missing AWS SDK (`NoClassDefFoundError: software/amazon/awssdk/...`)
+
+**Issue:**
+Writing to S3 (MinIO) failed with `NoClassDefFoundError` for AWS SDK v2 classes, preventing Delta Lake operations.
+
+**Root Cause:**
+The Spark 4.0 / Hadoop 3.3.4 combination requires specific AWS SDK v2 bundles that were missing from the generic Spark image.
+
+**Resolution:**
+1.  **Rebuilt Spark Image**: Created `spark-4.0.1-uc-0.3.1-fix-v4`.
+2.  **Dockerfile Updates**:
+    *   `HADOOP_AWS_VERSION=3.3.4`
+    *   `AWS_SDK_V2_VERSION=2.20.160` (Explicitly added `software.amazon.awssdk:bundle:2.20.160`)
+3.  **Deployment**: Updated `.env` to `SPARK_IMAGE_VERSION=fix-v4` and redeployed all services.
+
+**Working Dependency Set:**
+*   `io.delta:delta-spark_2.13:4.0.0`
+*   `org.apache.hadoop:hadoop-aws:3.3.4`
+*   `software.amazon.awssdk:bundle:2.20.160`
+
+---
+
+## 3. Configuration Parsing Error (`NumberFormatException: For input string: "60s"`)
+
+**Issue:**
+Spark operations failed with `NumberFormatException: "60s"` or `"24h"`.
+
+**Root Cause:**
+Default settings in `hadoop-aws` (specifically `fs.s3a.threads.keepalivetime` and `fs.s3a.multipart.purge.age`) use time suffixes (e.g., "60s"), but the Spark/Delta S3A integration path strictly expects **integer milliseconds** or seconds.
+
+**Resolution:**
+Hardened `k8s-platform-v2/04-configs/spark-defaults.yaml` to override these defaults with integers:
+```yaml
+# Timeouts (Milliseconds)
+spark.dynamicAllocation.executorIdleTimeout 600000   # Was 600s
+spark.dynamicAllocation.schedulerBacklogTimeout 5000 # Was 5s
+spark.hadoop.fs.s3a.connection.timeout 200000
+
+# S3A Specifics (Seconds/Integers)
+spark.hadoop.fs.s3a.threads.keepalivetime 60         # Was 60s
+spark.hadoop.fs.s3a.multipart.purge.age 86400        # Was 24h
+spark.hadoop.fs.s3a.connection.estimated.ttl 300
 ```
 
-**Resolution:**  
-Manually connected to the Postgres pod and created the database:
+---
+
+## 4. StarRocks Empty Results (`type='hive'`)
+
+**Issue:**
+Querying the Delta table in StarRocks using a `hive` catalog returned 0 rows, even though Spark confirmed data existed.
+
+**Root Cause:**
+The `hive` catalog in StarRocks expects standard Hive tables (Parquet files in folders). For Delta Lake tables, it relies on `symlink_format_manifest` files, which Spark does not generate by default. Without them, StarRocks sees the folder but no valid data files.
+
+**Resolution:**
+Switched to the **Native Delta Lake Catalog** (`type='deltalake'`), which reads the `_delta_log` directly.
+
+**Correct SQL:**
 ```sql
-CREATE DATABASE metastore_db OWNER hive;
-GRANT ALL PRIVILEGES ON DATABASE metastore_db TO hive;
+CREATE EXTERNAL CATALOG delta_test
+PROPERTIES (
+    "type" = "deltalake",
+    "hive.metastore.uris" = "thrift://hive-metastore:9083",
+    "aws.s3.use_instance_profile" = "false",
+    "aws.s3.access_key" = "minioadmin",
+    "aws.s3.secret_key" = "minioadmin",
+    "aws.s3.endpoint" = "http://minio:9000",
+    "aws.s3.enable_path_style_access" = "true"
+);
 ```
-
-### 1.3 Incorrect Default Configuration (Derby)
-**Issue:**  
-HMS attempted to connect to an embedded Derby database instead of Postgres, despite environment variables being set. This indicates `hive-site.xml` was defaults or missing.
-```
-Metastore connection URL: jdbc:derby:;databaseName=metastore_db;create=true
-```
-
-**Resolution:**  
-Created a ConfigMap `hive-config` containing a proper `hive-site.xml` with Postgres connection details and S3A configurations, and mounted it to `/opt/hive/conf/hive-site.xml`.
-
-### 1.4 Missing S3A Support Jars
-**Issue:**  
-Spark jobs failed with `ClassNotFoundException: org.apache.hadoop.fs.s3a.S3AFileSystem` when trying to write to S3 via HMS. The HMS image lacks the AWS Hadoop libraries required for S3A support.
-
-**Resolution:**  
-Updated the `initContainer` in `hms.yaml` to download:
-- `hadoop-aws-3.3.6.jar` (Matches HMS Hadoop version 3.3.6)
-- `aws-java-sdk-bundle-1.12.367.jar`
-
-## 2. StarRocks Integration Issues
-
-### 2.1 Native Delta Catalog Support
-**Issue:**  
-StarRocks 3.3 failed to create a catalog of type `delta_lake`.
-```
-ERROR 1064 (HY000): ... [type : delta_lake] is not supported.
-```
-**Resolution:**  
-Functionality verified using `type = 'hive'` catalog (`hms_test`), which successfully connects to HMS. Native `delta_lake` type appears to be unavailable in the current image `starrocks/fe-ubuntu:3.3-latest`.
-
-### 2.2 Backend Node Failure
-**Issue:**  
-StarRocks frontend reported the backend node as "alive: false" during verification queries.
-```
-Backend node not found. Check if any backend node is down.backend: [10.100.1.152 alive: false]
-```
-
-**Resolution:**  
-(Resolved) Restarted StarRocks BE pod. New pod `starrocks-be-0` came up with IP `10.100.1.60`. Dropped stale backend `10.100.1.152` and registered the new one using `ALTER SYSTEM ADD BACKEND`.
-
-## 3. Deployment & Configuration
-
-### 3.1 Spark Image Updates
-**Update:**  
-Updated `spark-defaults.yaml`, `jupyterhub.yaml`, and `marimo.yaml` to use the unified image `subhodeep2022/spark-bigdata:spark-4.0.1-uc-fix-v3` to ensure consistency across all services.
-
-### 3.2 MinIO Bucket Missing
-**Issue:**  
-E2E verification job failed because the target bucket `test-bucket` did not exist.
-
-**Resolution:**  
-Manually created the bucket using `aws s3 mb s3://test-bucket`.
