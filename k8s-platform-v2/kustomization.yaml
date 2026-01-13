@@ -7,7 +7,7 @@ resources:
   - 02-database
   - 03-apps
   - 04-configs
-  - 04-catalog
+
   - 05-monitoring
 
 vars:
