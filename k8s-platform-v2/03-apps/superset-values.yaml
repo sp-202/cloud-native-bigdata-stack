@@ -14,11 +14,11 @@ supersetNode:
   secret_key: "superset_secret_key_change_me_in_prod"
   resources:
     requests:
-      memory: "2Gi"
-      cpu: "500m"
-    limits:
       memory: "4Gi"
-      cpu: "1000m"
+      cpu: "2000m"
+    limits:
+      memory: "6Gi"
+      cpu: "4000m"
 
 bootstrapScript: |
   pip install --no-cache-dir --no-deps starrocks==1.0.6 pymysql

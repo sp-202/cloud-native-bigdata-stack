@@ -9,7 +9,7 @@ spec:
   resources:
     requests:
       storage: 5Gi
-  storageClassName: standard # Use standard (HDD) to avoid SSD quota
+  # storageClassName: standard # Use standard (HDD) to avoid SSD quota
 
 ---
 apiVersion: v1
@@ -23,4 +23,4 @@ spec:
   resources:
     requests:
       storage: 10Gi
-  storageClassName: standard # Use standard (HDD) to avoid SSD quota
+  # storageClassName: standard # Use standard (HDD) to avoid SSD quota

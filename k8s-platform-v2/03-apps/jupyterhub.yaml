@@ -77,10 +77,7 @@ spec:
             - name: GRANT_SUDO
               value: "yes"
             
-          resources:
-            requests:
-              memory: "2Gi"
-              cpu: "500m"
+
           resources:
             requests:
               memory: "2Gi"
