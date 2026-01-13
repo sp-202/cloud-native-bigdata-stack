@@ -111,7 +111,7 @@ spec:
           emptyDir: {}
         - name: spark-config
           configMap:
-            name: spark-defaults
+            name: spark-config
         - name: jupyter-config
           configMap:
             name: jupyterhub-config
