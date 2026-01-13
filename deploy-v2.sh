@@ -155,3 +155,32 @@ kubectl wait --for=condition=available --timeout=300s deployment/postgres -n def
 echo "Deployment Complete!"
 echo "Superset: http://superset.$INGRESS_DOMAIN"
 echo "JupyterHub: http://jupyterhub.$INGRESS_DOMAIN"
+
+# ---------------------------------------------------
+# 4. StarRocks Production Fix (Post-Deploy)
+# ---------------------------------------------------
+echo "---------------------------------------------------"
+echo "Running StarRocks Production Fixer..."
+echo "---------------------------------------------------"
+
+# Wait for pods to be ready
+echo "Waiting for StarRocks pods..."
+kubectl wait --for=condition=ready pod starrocks-fe-0 -n default --timeout=300s || echo "FE wait timed out"
+kubectl wait --for=condition=ready pod starrocks-be-0 -n default --timeout=300s || echo "BE wait timed out"
+
+# Get BE IP (External/Host view is reliable)
+BE_IP=$(kubectl get pod starrocks-be-0 -n default -o jsonpath='{.status.podIP}')
+echo "Detected StarRocks BE IP: $BE_IP"
+
+if [ -n "$BE_IP" ]; then
+    echo "Force-Registering Backend..."
+    kubectl exec -n default starrocks-fe-0 -- mysql -h 127.0.0.1 -P 9030 -u root -e "ALTER SYSTEM ADD BACKEND '${BE_IP}:9050';" 2>/dev/null || echo "Backend might already exist (warning ignored)."
+    
+    echo "Ensuring 'demo' Database..."
+    kubectl exec -n default starrocks-fe-0 -- mysql -h 127.0.0.1 -P 9030 -u root -e "CREATE DATABASE IF NOT EXISTS demo;" || echo "Failed to create demo DB"
+    
+    echo "StarRocks Fix Complete."
+else
+    echo "ERROR: Could not detect StarRocks BE IP. Skipping fix."
+fi
+echo "---------------------------------------------------"
