@@ -206,7 +206,7 @@ data:
     c.S3ContentsManager.bucket = "notebooks"
     c.S3ContentsManager.prefix = "jupyterhub"
     # Disable SSL verification for internal MinIO (if needed, s3contents uses session_kwargs)
-    c.S3ContentsManager.session_kwargs = {"verify": False}
+    # c.S3ContentsManager.session_kwargs = {"verify": False}
     
   setup-kernels.sh: |
     #!/bin/bash
