@@ -20,6 +20,5 @@ configMapGenerator:
     files:
       - configs/hive-site.xml
 
-generatorOptions:
-  disableNameSuffixHash: true
+
 
