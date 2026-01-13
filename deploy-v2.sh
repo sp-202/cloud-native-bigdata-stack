@@ -131,11 +131,16 @@ kubectl kustomize --enable-helm ./k8s-platform-v2 | \
   sed "s|\$(SPARK_IMAGE)|$SPARK_IMAGE|g" | \
   sed "s|\$(JUPYTERHUB_IMAGE)|$JUPYTERHUB_IMAGE|g" | \
 
-  sed "s|\$(MINIO_ENDPOINT)|$MINIO_ENDPOINT|g" | \
-  sed "s|\$(AWS_ACCESS_KEY_ID)|$MINIO_ROOT_USER|g" | \
   sed "s|\$(AWS_SECRET_ACCESS_KEY)|$MINIO_ROOT_PASSWORD|g" | \
-  sed "s/$STATIC_DOMAIN_TO_REPLACE/$INGRESS_DOMAIN/g" | \
-  kubectl apply --server-side --force-conflicts -f -
+  sed "s/$STATIC_DOMAIN_TO_REPLACE/$INGRESS_DOMAIN/g" > generated-manifests.yaml
+
+# Pre-cleanup to avoid immutable field errors
+echo "Pre-cleaning immutable resources..."
+kubectl delete job superset-init-db -n default --ignore-not-found=true
+# Fix for "Forbidden: may not be specified when strategy type is Recreate"
+kubectl delete deployment postgres -n default --ignore-not-found=true
+
+kubectl apply --server-side --force-conflicts -f generated-manifests.yaml
 
 echo "Waiting for Resources..."
 kubectl wait --for=condition=available --timeout=300s deployment/minio -n default || echo "MinIO wait timed out"
