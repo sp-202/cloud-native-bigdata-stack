@@ -59,15 +59,14 @@ spec:
                       echo "Registering BE..."
                       mysql -h 127.0.0.1 -P 9030 -u root -e "ALTER SYSTEM ADD BACKEND '${BE_IP}:9050';" || true
                       
-                      # Create Unity Catalog External Catalog (Iceberg REST)
-                      echo "Creating 'uc_iceberg_catalog'..."
+                      # Create HMS Delta Catalog (Native Delta Lake)
+                      echo "Creating 'hms_delta_catalog'..."
                       mysql -h 127.0.0.1 -P 9030 -u root -e "
-                      CREATE EXTERNAL CATALOG IF NOT EXISTS uc_iceberg_catalog
+                      CREATE EXTERNAL CATALOG IF NOT EXISTS hms_delta_catalog
                       PROPERTIES (
-                          'type' = 'iceberg',
-                          'iceberg.catalog.type' = 'rest',
-                          'iceberg.catalog.uri' = 'http://unity-catalog-unitycatalog-server:8080/api/2.1/unity-catalog/iceberg',
-                          'iceberg.catalog.warehouse' = 's3a://test-bucket/',
+                          'type' = 'delta_lake',
+                          'hive.metastore.type' = 'hive',
+                          'hive.metastore.uris' = 'thrift://hive-metastore:9083',
                           'aws.s3.enable_ssl' = 'false',
                           'aws.s3.enable_path_style_access' = 'true',
                           'aws.s3.endpoint' = 'http://minio.default.svc.cluster.local:9000',
@@ -227,7 +226,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: starrocks.34.121.137.254.sslip.io
+    - host: starrocks.34.136.221.189.sslip.io
       http:
         paths:
           - path: /
