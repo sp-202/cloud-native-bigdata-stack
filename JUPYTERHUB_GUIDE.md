@@ -1,6 +1,8 @@
-# JupyterHub + Spark-on-Kubernetes Guide
+⚠️ Updated documentation as of 2026-01-15. See CHANGELOG for details.
 
-JupyterHub provides interactive PySpark notebooks with dynamic Spark executor allocation on Kubernetes.
+# JupyterHub + Spark Connect Guide
+
+JupyterHub provides interactive PySpark notebooks as **thin clients** connecting to a centralized **Spark Connect Server**.
 
 ## Quick Start
 
@@ -9,14 +11,25 @@ JupyterHub provides interactive PySpark notebooks with dynamic Spark executor al
    http://jupyterhub.<INGRESS_IP>.sslip.io
    ```
 
-2. **Create a new notebook** (Python 3 kernel)
+2. **Create a new notebook** (PySpark Connect kernel)
 
-3. **Initialize Spark**
-   *Note: Spark is auto-initialized. You can directly access the `spark` variable.*
+3. **Verify Spark Connection**
    ```python
-   # Verify session
+   # Spark is auto-initialized via SPARK_REMOTE environment variable
    print(spark)
    spark.range(10).show()
+   ```
+
+   **Expected Output:**
+   ```
+   ✅ Connected to Spark 4.0.1 via Spark Connect
+      Remote: sc://spark-connect-server-driver-svc:15002
+   +---+
+   | id|
+   +---+
+   |  0|
+   |  1|
+   ...
    ```
 
 4. **Write & Read Delta Lake (S3)**
@@ -31,24 +44,37 @@ JupyterHub provides interactive PySpark notebooks with dynamic Spark executor al
 
 ---
 
-## Architecture
+## Architecture (Spark Connect)
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     JupyterHub Pod                          │
-│  ┌─────────────────┐  ┌──────────────────────────────────┐ │
-│  │ Spark Driver    │  │ JupyterLab UI                    │ │
-│  │ (Auto-Host IP)  │  │ (port 8888)                      │ │
-│  └────────┬────────┘  └──────────────────────────────────┘ │
-└───────────┼─────────────────────────────────────────────────┘
-            │ Executor communication
-            ▼
-┌───────────────────────────────────────────────────────────┐
-│         Spark Executor Pods (dynamic scaling 1-4)          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │ spark-exec-1 │  │ spark-exec-2 │  │ spark-exec-N │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└───────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                    JupyterHub Pod (Thin Client)                     │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │ JupyterLab UI (port 8888)                                   │   │
+│  │ - No local Spark Driver                                     │   │
+│  │ - No executor management                                    │   │
+│  │ - Connects via gRPC to Spark Connect Server                 │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+└───────────────────────────────────────────────────────────────────┘
+                              │ gRPC (port 15002)
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│               Spark Connect Server (Driver Pod)                     │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │ Spark Driver + Connect Service                              │   │
+│  │ - Manages 4 dynamic executor pods                           │   │
+│  │ - Delta Lake extensions enabled                             │   │
+│  │ - Connected to Hive Metastore                               │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+└───────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌───────────────────────────────────────────────────────────────┐
+│         Spark Executor Pods (managed by Connect Server)        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │ spark-exec-1 │  │ spark-exec-2 │  │ spark-exec-N │         │
+│  └──────────────┘  └──────────────┘  └──────────────┘         │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -57,123 +83,60 @@ JupyterHub provides interactive PySpark notebooks with dynamic Spark executor al
 
 | Setting | Value | Description |
 |---------|-------|-------------|
-| `minExecutors` | 1 | Minimum executor pods |
-| `maxExecutors` | 4 | Maximum executor pods |
-| `executorIdleTimeout` | 600000 (ms) | Idle time before shutdown (10 min) |
-| `schedulerBacklogTimeout` | 5000 (ms) | Time before scaling up |
-| `executor.memory` | 1GB | Memory per executor |
-| `executor.cores` | 1 | CPU cores per executor |
-| `driver.port` | 22321 | Spark driver RPC port |
-| `blockManager.port` | 22322 | Block manager port |
+| `SPARK_REMOTE` | `sc://spark-connect-server-driver-svc:15002` | Spark Connect Server endpoint |
+| `executor.instances` | 4 | Number of executor pods (managed by server) |
+| `HMS URI` | `thrift://hive-metastore:9083` | Hive Metastore for table metadata |
+| `warehouse.dir` | `s3a://warehouse/managed/` | Default table storage location |
 
 ---
 
 ## Troubleshooting Guide
 
-### Error: `SparkContext was shut down`
+### Error: `Spark Connect initialization failed`
 
 **Symptoms:**
 ```
-Py4JJavaError: An error occurred while calling o88.showString.
-: org.apache.spark.SparkException: Job 0 cancelled because SparkContext was shut down
+⚠️ Spark Connect initialization failed: Connection refused
+   Ensure Spark Connect Server is running at sc://spark-connect-server-driver-svc:15002
 ```
 
-**Cause:** Executors failed to connect to the driver, causing max failure limit (8) to be reached.
+**Cause:** Spark Connect Server is not running or not reachable.
 
-**Fix:** Ensure dynamic driver configuration is working:
+**Fix:**
 ```bash
-# Check startup logs for driver.host
-kubectl logs -l app=jupyterhub -n default | grep "driver.host"
+# Check if Spark Connect Server is running
+kubectl get pods -l app=spark-connect-server
+# Expected: spark-connect-server-xxxxx   Running
 
-# Expected output:
-# spark.driver.host                10.x.x.x
-```
+# Check server logs
+kubectl logs -l app=spark-connect-server --tail=50
 
-If missing, redeploy JupyterHub:
-```bash
-kubectl rollout restart deployment/jupyterhub -n default
+# Verify service exists
+kubectl get svc spark-connect-server-driver-svc
+# Expected: Port 15002/TCP exposed
 ```
 
 ---
 
-### Error: `No pod was found named spark-driver`
+### Error: `SPARK_REMOTE not set`
 
 **Symptoms:**
 ```
-SparkException: No pod was found named spark-driver in the cluster
+⚠️ SPARK_REMOTE not set. Spark session not initialized.
 ```
 
-**Cause:** Static `spark.kubernetes.driver.pod.name` is set but doesn't match actual pod name.
+**Cause:** Environment variable not configured in JupyterHub deployment.
 
-**Fix:** In client mode, the driver IS the JupyterHub pod. Remove any static driver pod name:
+**Fix:**
 ```bash
-# Verify spark-defaults.conf doesn't have:
-# spark.kubernetes.driver.pod.name  spark-driver
+# Check JupyterHub environment
+kubectl exec deployment/jupyterhub -- env | grep SPARK_REMOTE
+# Expected: SPARK_REMOTE=sc://spark-connect-server-driver-svc:15002
 
-kubectl get configmap spark-config -o yaml | grep "driver.pod.name"
-```
-
----
-
-### Error: `Max number of executor failures (8) reached`
-
-**Symptoms:**
-```
-WARN ExecutorPodsAllocator: 1 new failed executors.
-ERROR ExecutorPodsAllocator: Max number of executor failures (8) reached
-```
-
-**Cause:** Executors start but can't connect back to driver.
-
-**Fix:** Check driver networking configuration:
-```bash
-# Verify driver config in startup logs
-kubectl logs -l app=jupyterhub -n default | grep -E "spark.driver|blockManager"
-
-# Expected:
-# spark.driver.host          10.x.x.x  (pod IP)
-# spark.driver.bindAddress   0.0.0.0
-# spark.driver.port          22321
-# spark.blockManager.port    22322
-```
-
----
-
-### Error: `InvalidImageName` for executor pods
-
-**Symptoms:**
-```
-kubectl get pods
-spark-executor-exec-1   InvalidImageName
-```
-
-**Cause:** `${SPARK_IMAGE}` variable not substituted.
-
-**Fix:** Use `$(SPARK_IMAGE)` syntax for Kustomize/sed substitution in YAML files:
-```yaml
-# Wrong
-image: ${SPARK_IMAGE}
-
-# Correct
-image: $(SPARK_IMAGE)
-```
-
----
-
-### Error: `Permission denied` on `/opt/spark/conf`
-
-**Symptoms:**
-```
-cp: cannot create regular file '/opt/spark/conf/spark-defaults.conf': Permission denied
-```
-
-**Cause:** InitContainer copies files as root, but main container runs as jovyan (UID 1000).
-
-**Fix:** InitContainer must set permissions:
-```yaml
-initContainers:
-  - name: spark-home-init
-    command: ["sh", "-c", "cp -r /opt/spark/* /mnt/spark/ && chown -R 1000:100 /mnt/spark"]
+# If missing, verify jupyterhub.yaml has:
+env:
+  - name: SPARK_REMOTE
+    value: "sc://spark-connect-server-driver-svc:15002"
 ```
 
 ---
@@ -184,7 +147,7 @@ initContainers:
 
 **Cause:** Jupyter server not binding to 0.0.0.0.
 
-**Fix:** Verify Jupyter config:
+**Fix:**
 ```bash
 kubectl exec deployment/jupyterhub -- cat /etc/jupyter/jupyter_notebook_config.py
 
@@ -194,15 +157,47 @@ kubectl exec deployment/jupyterhub -- cat /etc/jupyter/jupyter_notebook_config.p
 
 ---
 
-### Error: Executors creating and terminating rapidly
+### Error: `Table not found in Hive Metastore`
 
-**Symptoms:** Executor pods appear and disappear quickly without completing work.
-
-**Cause:** Dynamic allocation with short idle timeout.
-
-**Fix:** Current config uses 600s (10 min) idle timeout. If you need longer:
+**Symptoms:**
 ```
-spark.dynamicAllocation.executorIdleTimeout  1200s
+AnalysisException: Table or view not found: default.my_table
+```
+
+**Cause:** Spark Connect Server not connected to Hive Metastore.
+
+**Fix:**
+```bash
+# Check HMS connectivity from Spark Connect Server
+kubectl exec -it deployment/spark-connect-server -- \
+  curl -v telnet://hive-metastore:9083
+
+# Check Spark Connect Server config
+kubectl logs -l app=spark-connect-server | grep "hive.metastore"
+# Expected: spark.hadoop.hive.metastore.uris=thrift://hive-metastore:9083
+```
+
+---
+
+### Error: Executor pods stuck in `Pending`
+
+**Symptoms:**
+```bash
+kubectl get pods -l spark-role=executor
+# Shows pods in Pending state
+```
+
+**Cause:** Insufficient cluster resources or missing service account.
+
+**Fix:**
+```bash
+# Check pod events
+kubectl describe pod <executor-pod-name> | grep -A10 Events
+
+# Common issues:
+# - Insufficient CPU/memory: Scale up cluster
+# - Missing service account: Check spark-operator-spark SA exists
+kubectl get sa spark-operator-spark
 ```
 
 ---
@@ -210,30 +205,30 @@ spark.dynamicAllocation.executorIdleTimeout  1200s
 ## Useful Commands
 
 ```bash
-# Watch JupyterHub pod in real-time
-kubectl get pods -l app=jupyterhub -w
+# Watch Spark Connect Server pod
+kubectl get pods -l app=spark-connect-server -w
 
-# View executor pods
+# View Spark Connect Server logs
+kubectl logs -l app=spark-connect-server --tail=100
+
+# View executor pods (managed by server)
 kubectl get pods -l spark-role=executor
 
-# Check Spark driver logs
-kubectl logs -l app=jupyterhub -c jupyterhub --tail=100
-
-# Port-forward to Spark UI
-kubectl port-forward deployment/jupyterhub 4040:4040
+# Access Spark UI (via port-forward)
+kubectl port-forward svc/spark-connect-server-driver-svc 4040:4040
 # Then open http://localhost:4040
 
-# Delete stuck executor pods
-kubectl delete pods -l spark-role=executor
+# Restart Spark Connect Server
+kubectl rollout restart deployment/spark-connect-server
 
-# Restart JupyterHub cleanly
-kubectl rollout restart deployment/jupyterhub -n default
-kubectl rollout status deployment/jupyterhub -n default
+# Check S3/MinIO connectivity
+kubectl exec deployment/spark-connect-server -- \
+  curl -s http://minio:9000/minio/health/ready
 ```
 
 ---
 
-## SQL Magic Example
+## SQL Example
 
 ```python
 # Create sample data
@@ -252,3 +247,23 @@ result = spark.sql("""
 """)
 result.show()
 ```
+
+**Expected Output:**
+```
++-----+---+
+| name|age|
++-----+---+
+|  Bob| 45|
+|Alice| 34|
++-----+---+
+```
+
+---
+
+## Legacy Mode (Deprecated)
+
+> [!WARNING]
+> The previous architecture where JupyterHub spawned its own executor pods is **deprecated**. 
+> All notebooks should now use Spark Connect mode with `SPARK_REMOTE` environment variable.
+> 
+> If you need legacy client mode for debugging, see [archived documentation](archive/).

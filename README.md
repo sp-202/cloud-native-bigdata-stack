@@ -1,3 +1,5 @@
+⚠️ Updated documentation as of 2026-01-15. See CHANGELOG for details.
+
 # 🚀 Cloud-Native Big Data Platform on Kubernetes (GKE)
 
 [![Version](https://img.shields.io/badge/version-0.1.0--beta-blue)](RELEASES.md)
@@ -50,13 +52,15 @@ The platform is divided into three logical domains:
 
 ### 2️⃣ Application Layer (Blue Domain)
 *   **Apache Airflow (2.x)**: The workflow orchestrator. It schedules DAGs that trigger Spark jobs, move data, and manage dependencies. configured with the **KubernetesExecutor** for scaling tasks.
+*   **Spark Connect Server**: A dedicated Spark server running in cluster mode with 4 dynamic executors. Provides gRPC endpoint (port 15002) for thin-client notebooks.
 *   **Notebook Suite**: 
-    *   **JupyterHub**: Standard interactive environment with **Zeppelin features** (SQL magic, Scala kernel, `z.show()`).
+    *   **JupyterHub**: Thin-client notebooks connecting to Spark Connect Server via `SPARK_REMOTE` environment variable.
     *   **Marimo**: Reactive Python notebooks with high-performance UI components.
     *   **Polynote**: IDE-focused notebook for Scala and multi-language Spark development.
-*   **Apache Spark (4.0.1)**: The distributed compute engine, pre-configured with **Delta Lake** and **Hadoop 3.3.4** support.
+*   **Apache Spark (4.0.1)**: The distributed compute engine, pre-configured with **Delta Lake 4.0.0** and **Hadoop 3.3.4** support.
 *   **Apache Superset**: Enterprise-ready BI. Connects to the platform for data visualization.
-*   **Hive Metastore (HMS)**: Standalone Thrift service acting as the central catalog for Spark and StarRocks.
+*   **Hive Metastore (HMS 4.0.0)**: Standalone Thrift service acting as the central catalog for Spark and StarRocks.
+*   **StarRocks (3.3)**: High-performance OLAP database with auto-initialized Delta Lake catalog (`hms_delta_catalog`).
 
 ### 3️⃣ Data & Persistence (Green Domain)
 *   **MinIO**: High-performance Object Storage (S3 Compatible). Acts as the "Data Lake" storage layer.

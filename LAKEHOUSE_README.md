@@ -1,3 +1,5 @@
+⚠️ Updated documentation as of 2026-01-15. See CHANGELOG for details.
+
 # Data Lakehouse Architecture & Troubleshooting Guide
 
 **Date:** 2026-01-13

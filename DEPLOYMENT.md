@@ -1,3 +1,5 @@
+⚠️ Updated documentation as of 2026-01-15. See CHANGELOG for details.
+
 # Deployment Guide
 
 This guide details how to set up the environment and deploy the Kubernetes Big Data Platform (v2).

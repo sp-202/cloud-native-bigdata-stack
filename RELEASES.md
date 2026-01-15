@@ -1,3 +1,5 @@
+⚠️ Updated documentation as of 2026-01-15. See CHANGELOG for details.
+
 # 🏷️ Release Notes: v0.2.0 (The HMS & StarRocks Lakehouse)
 
 This release stabilizes the **Data Lakehouse** architecture by completing the migration from Unity Catalog (OSS) to a production-ready **Hive Metastore (HMS)** setup. It creates a robust, end-to-end flow from Spark (ETL) to StarRocks (Analytics).

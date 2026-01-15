@@ -1,3 +1,5 @@
+⚠️ Updated documentation as of 2026-01-15. See CHANGELOG for details.
+
 # 🔌 Superset Connection Guide
 
 This guide details how to connect Apache Superset to the data sources running within your Kubernetes cluster.

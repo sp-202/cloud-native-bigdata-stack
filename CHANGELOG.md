@@ -1,3 +1,5 @@
+⚠️ Updated documentation as of 2026-01-15. See CHANGELOG for details.
+
 # 📜 CHANGELOG.md
 
 All notable changes to this project will be documented in this file.

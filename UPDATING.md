@@ -1,3 +1,5 @@
+⚠️ Updated documentation as of 2026-01-15. See CHANGELOG for details.
+
 # 🔄 UPDATING.md
 
 This document tracks breaking changes and significant updates to the platform that require manual intervention or specific migration steps.

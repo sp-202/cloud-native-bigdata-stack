@@ -1,3 +1,5 @@
+⚠️ Updated documentation as of 2026-01-15. See CHANGELOG for details.
+
 # 📊 Kubernetes Big Data Monitoring Guide
 
 This guide explains how to observe, debug, and monitor your Spark & Airflow workloads running on GKE.

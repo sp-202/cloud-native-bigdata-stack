@@ -59,13 +59,13 @@ To add a new component (e.g., Kafka):
 
 ---
 
-## � detailed Directory Guide
+## 📂 Detailed Directory Guide
 
 | Folder                                         | Purpose               | Key Components                          |
 | :--------------------------------------------- | :-------------------- | :-------------------------------------- |
 | **[`00-core`](00-core/README.md)**             | **Foundation**        | `Namespace`, `StorageClass`, `PVC`      |
 | **[`01-networking`](01-networking/README.md)** | **Traffic Control**   | `Traefik`, `IngressRoute`, `Middleware` |
 | **[`02-database`](02-database/README.md)**     | **State Layer**       | `Postgres`, `MinIO`, `Redis`            |
-| **[`03-apps`](03-apps/README.md)**             | **Application Layer** | `Airflow`, `Spark`, `Zeppelin`, `Hive`  |
-| **[`04-configs`](04-configs/README.md)**       | **Shared Configs**    | `Hadoop XMLs`, `Global Env Vars`        |
+| **[`03-apps`](03-apps/README.md)**             | **Application Layer** | `Spark Connect Server`, `JupyterHub`, `Airflow`, `StarRocks`, `HMS` |
+| **[`04-configs`](04-configs/README.md)**       | **Shared Configs**    | `Hadoop XMLs`, `Global Env Vars`, `spark-defaults.conf` |
 | **[`05-monitoring`](05-monitoring/README.md)** | **Observability**     | `Prometheus`, `Grafana`, `Loki`         |

@@ -6,8 +6,8 @@ This directory establishes the prerequisites for the platform. Nothing else can 
 
 ### 1. `namespaces.yaml`
 Creates the logical isolation boundaries.
-*   **`big-data`**: The main namespace where all our apps (Spark, Airflow, Zeppelin) reside.
-*   (Note: Monitoring often runs in `default` or `monitoring`, while Traefik runs in `kube-system`).
+*   **`default`**: The main namespace where all apps (Spark Connect Server, JupyterHub, Airflow, StarRocks) reside.
+*   (Note: Monitoring runs in `default`, while Traefik runs in `kube-system`).
 
 ### 2. `storage-class.yaml`
 Defines *how* data is typically stored on Google Cloud (GKE).
