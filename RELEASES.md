@@ -1,8 +1,102 @@
-⚠️ Updated documentation as of 2026-01-15. See CHANGELOG for details.
+# 🏷️ Release Notes: v0.3.0 (The Spark Connect Revolution)
+
+**Release Date:** 2026-01-16
+
+This release introduces the **Spark Connect** architecture, fundamentally changing how notebooks interact with Spark compute. JupyterHub and Marimo now operate as **thin clients**, connecting to a centralized Spark Connect Server.
+
+---
+
+## 🚀 Key Features
+
+### ⚡ Spark Connect Server
+- **Centralized Compute**: A dedicated Spark server running with 4 dynamic executors.
+- **gRPC Endpoint**: Port 15002 for thin-client connections.
+- **Resource Efficiency**: Notebooks no longer spawn individual executor pods.
+- **Delta Lake + HMS**: Pre-configured with Delta extensions and Hive Metastore integration.
+
+### 📚 Comprehensive Documentation
+- **HOW_TO_DEBUG.md**: New 6-step debugging guide for Spark Connect with commands and expected outputs.
+- **15+ Files Updated**: All documentation reflects current architecture.
+- **Architecture Diagrams**: Updated for thin-client model.
+
+### 🔧 Version Upgrades
+| Component | Previous | Current |
+|-----------|----------|---------|
+| Spark | 3.5.3 | **4.0.1** |
+| Delta Lake | 3.2.0 | **4.0.0** |
+| Hive Metastore | 3.x | **4.0.0** |
+| AWS SDK | v1 | **v2 (2.20.160)** |
+
+### 🗂 Repository Cleanup
+- **archive-v2/**: Created for legacy Unity Catalog configurations.
+- **Moved Files**: `patch-uc-*.yaml`, `uc-*.yaml`, legacy scripts.
+
+---
+
+## 🛠️ Deployment Instructions
+
+1. **Pull Latest Code**:
+   ```bash
+   git pull origin main
+   ```
+
+2. **Update Environment**:
+   ```bash
+   cp .env.example .env
+   # Verify SPARK_IMAGE_VERSION=fix-v4
+   ```
+
+3. **Deploy**:
+   ```bash
+   ./deploy-gke.sh
+   ```
+
+4. **Verify Spark Connect**:
+   ```bash
+   kubectl get pods -l app=spark-connect-server
+   kubectl logs -l app=spark-connect-server --tail=50
+   ```
+
+---
+
+## 🐛 Bug Fixes
+- Fixed legacy client-mode documentation that no longer applies.
+- Fixed outdated version references in docker READMEs.
+- Fixed namespace references in k8s-platform-v2 documentation.
+
+---
+
+## 📋 Roadmap (v0.4.0)
+
+> [!IMPORTANT]
+> The following features are planned for the next release:
+
+1. **Apache Iceberg Integration**
+   - Add Iceberg table format support alongside Delta Lake
+   - Configure Iceberg REST Catalog
+
+2. **Delta Lake UniForm**
+   - Enable UniForm for cross-format compatibility
+   - Test reading Delta tables as Iceberg from StarRocks
+
+3. **Unity Catalog (OSS) Re-integration**
+   - Deploy Unity Catalog with HMS fallback
+   - Configure storage credentials API for MinIO
+
+---
+
+## 🏷️ How to Tag this Release
+
+```bash
+git tag -a v0.3.0 -m "Release v0.3.0: Spark Connect Revolution"
+git push origin v0.3.0
+```
+
+---
 
 # 🏷️ Release Notes: v0.2.0 (The HMS & StarRocks Lakehouse)
 
-This release stabilizes the **Data Lakehouse** architecture by completing the migration from Unity Catalog (OSS) to a production-ready **Hive Metastore (HMS)** setup. It creates a robust, end-to-end flow from Spark (ETL) to StarRocks (Analytics).
+This release stabilizes the **Data Lakehouse** architecture by completing the migration from Unity Catalog (OSS) to a production-ready **Hive Metastore (HMS)** setup.
 
 ---
 
@@ -14,26 +108,14 @@ This release stabilizes the **Data Lakehouse** architecture by completing the mi
 - **Compatibility**: Verified support for both Spark 4.0.1 and StarRocks 3.x.
 
 ### ⚡ Confirmed StarRocks Integration
-- **Native Delta Catalog**: Successfully verified reading Delta Lake tables directly from S3 (MinIO) without manifest generation.
+- **Native Delta Catalog**: Successfully verified reading Delta Lake tables directly from S3 (MinIO).
 - **Performance**: Sub-second queries on Delta Lake data using the `deltalake` catalog type.
 
 ### 🛡️ Production-Grade Spark Configs
-- **Integer Timeouts**: Hardened `spark-defaults.conf` to use integer milliseconds (`600000`) instead of strings (`600s`), fixing legacy `NumberFormatException` crashes.
-- **AWS SDK v2**: Unified `hadoop-aws:3.3.4` and `aws-java-sdk-bundle:2.20.160` in the `fix-v4` image to resolve classpath conflicts.
-- **Auto-Initialization**: Fixed JupyterHub kernel setup to automatically define the `spark` session variable (`spark.kubernetes.driver.pod.name` fix).
+- **Integer Timeouts**: Hardened `spark-defaults.conf` to use integer milliseconds.
+- **AWS SDK v2**: Unified dependencies in the `fix-v4` image.
 
 ---
-
-## 🛠️ Deployment Instructions
-1.  **Update Configs**:
-    ```bash
-    cp .env.example .env
-    # Ensure SPARK_IMAGE_VERSION=fix-v4
-    ```
-2.  **Deploy**:
-    ```bash
-    ./deploy-gke.sh
-    ```
 
 ## 🐛 Bug Fixes
 - Fixed `NumberFormatException: For input string: "60s"` in S3A file system.
@@ -44,40 +126,14 @@ This release stabilizes the **Data Lakehouse** architecture by completing the mi
 
 # 🏷️ Release Notes: v0.1.0 (Initial Beta)
 
-We are proud to announce the first official beta release of the **Cloud-Native Big Data Platform on GKE**. This release marks the transition from a legacy monolithic notebook setup to a scalable, multi-engine, and persistent Big Data architecture.
-
----
+The first official beta release of the **Cloud-Native Big Data Platform on GKE**.
 
 ## 🚀 Key Features
+- **Multi-Notebook Suite**: JupyterHub, Marimo, and Polynote.
+- **Delta Lake Support**: ACID transactions on MinIO S3.
+- **Prometheus/Grafana**: Enterprise observability.
 
-### 🍱 The Multi-Notebook Suite
-Deploy three industry-leading notebook environments with a single command:
-- **JupyterHub**: Standardized for DE/DS teams with **Apache Toree** (Scala) and **SQL Magic**.
-- **Marimo**: A reactive Python environment with **Zero-Config Spark Auto-Import** (automatically injects `spark`, `mo`, `pd`, and `np`).
-- **Polynote**: IDE-quality Scala/Python interoperability from Netflix.
-
-### 💎 Robust Spark-on-K8s
-- **Python 3.11 Uniformity**: Zero-mismatch guarantee between Driver and Executors.
-- **Delta Lake 3.2.0**: Production-ready ACID transactions on S3/MinIO.
-- **Dynamic Config**: Runtime Pod-IP injection for stable Spark Client mode connections.
-
-### 📊 Enterprise Observability
-- **Prometheus/Grafana**: Deep-visibility dashboards for Spark JVM, Executor health, and Airflow task status.
-
----
-
-## 🛠️ Deployment Summary
-1. **Cluster**: GKE Standard/Autopilot (3+ nodes recommended).
-2. **Setup**: `./deploy-gke.sh` (Kustomize + Helm orchestration).
-3. **Persistence**: MinIO S3 for data lake and notebook storage.
-
-## 🚧 Status: Beta
-This version is stable for development and testing. **Unity Catalog** and **StarRocks** integration are currently in **Alpha/Experimental** state and are tracked for the `v0.2.0` milestone.
-
----
-
-## 🏷️ How to Tag this Release
-If you have Git configured, you can tag this version locally:
+## 🏷️ How to Tag
 ```bash
 git tag -a v0.1.0 -m "Release v0.1.0: Initial Big Data Beta"
 git push origin v0.1.0

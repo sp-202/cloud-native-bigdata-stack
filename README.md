@@ -1,9 +1,9 @@
-⚠️ Updated documentation as of 2026-01-15. See CHANGELOG for details.
+⚠️ Updated documentation as of 2026-01-16. See CHANGELOG for details.
 
 # 🚀 Cloud-Native Big Data Platform on Kubernetes (GKE)
 
-[![Version](https://img.shields.io/badge/version-0.1.0--beta-blue)](RELEASES.md)
-[![Status](https://img.shields.io/badge/status-initial--beta-success)](README.md#🚦-project-status)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue)](RELEASES.md)
+[![Status](https://img.shields.io/badge/status-stable-success)](README.md#🚦-project-status)
 
 > An enterprise-grade, cloud-native orchestration framework for distributed big data workloads. Built on Google Kubernetes Engine (GKE), this platform provides a decoupled, elastic environment for **Apache Spark**, **Delta Lake**, and **Airflow**, featuring a unified suite of modern interactive notebook environments.
 
