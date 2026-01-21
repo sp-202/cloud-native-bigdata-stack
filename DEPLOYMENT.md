@@ -117,4 +117,29 @@ After the script completes, verify the deployment:
     - **Traefik Dashboard**: `http://traefik.34.x.x.x.sslip.io/dashboard/`
 
 ## Troubleshooting
-- **Run Deployment Again**: The script is idempotent. If a step fails (e.g., waiting for IP), just run `./deploy-gke.sh` again.
+- **Run Deployment Again**: The script is idempotent. If a step fails (e.g., waiting for IP), just run `./deploy-v2.sh` again.
+
+## Maintenance & Updates
+
+### Force Reapply Configurations & Restart Services
+To force an update of all configurations (manifests) and restart only the JupyterHub and Spark components (leaving databases and other services infrastructure intact):
+
+1.  **Reapply Configurations**:
+    Run the deployment script again to regenerate and apply latest manifests:
+    ```bash
+    ./deploy-v2.sh
+    ```
+
+2.  **Restart JupyterHub and Spark**:
+    Delete the specific pods to force Kubernetes to recreate them with the new configurations:
+    ```bash
+    # Restart JupyterHub
+    kubectl delete pod -l app=jupyterhub
+
+    # Restart Spark Connect Server
+    kubectl delete pod -l app=spark-connect-server
+    
+    # Clean up Spark Executors (if stuck)
+    kubectl delete pod -l spark-role=executor
+    ```
+    *Note: Do not delete pods like `minio`, `postgres`, or `hive-metastore` unless you intend to reset those services.*
