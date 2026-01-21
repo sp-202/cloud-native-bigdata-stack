@@ -7,6 +7,7 @@ resources:
   - jupyterhub.yaml
 
   - spark-ui-service.yaml
+  - spark-connect-server.yaml
   - starrocks.yaml
   # Generated Helm Charts
   - charts/gen/spark-operator.yaml

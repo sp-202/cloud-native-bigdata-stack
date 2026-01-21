@@ -14,91 +14,66 @@ spec:
     metadata:
       labels:
         app: jupyterhub
-        spark-role: driver
     spec:
       serviceAccountName: jupyterhub
-      initContainers:
-        # Copy Spark binaries and set permissions for jovyan user (UID 1000)
-        - name: spark-home-init
-          image: $(SPARK_IMAGE)
-          imagePullPolicy: Always
-          command: ["sh", "-c", "cp -r /opt/spark/* /mnt/spark/ && chown -R 1000:100 /mnt/spark"]
-          volumeMounts:
-            - name: spark-home
-              mountPath: /mnt/spark
-
       containers:
         - name: jupyterhub
-          image: $(JUPYTERHUB_IMAGE)
+          image: subhodeep2022/spark-bigdata:jupyterhub-spark-connect-optimized-v2
           imagePullPolicy: Always
           ports:
             - containerPort: 8888
               name: web
-            - containerPort: 4040
-              name: spark-ui
           env:
-            # Spark Configuration
-            - name: SPARK_HOME
-              value: "/opt/spark"
+            # Spark Connect Configuration
+            - name: SPARK_REMOTE
+              value: "sc://spark-connect-server-driver-svc:15002"
             - name: PYSPARK_PYTHON
               value: "python3"
-            - name: PYSPARK_DRIVER_PYTHON
-              value: "python3"
-            - name: SPARK_IMAGE
-              value: "$(SPARK_IMAGE)"
-            
-            # Spark on K8s Configuration
-            - name: SPARK_DRIVER_HOST
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-            - name: SPARK_LOCAL_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-            - name: SPARK_DRIVER_BIND_ADDRESS
-              value: "0.0.0.0"
-            
-            # S3/MinIO Configuration
+
+            # S3/MinIO Configuration (Referencing global-config ConfigMap)
             - name: AWS_ACCESS_KEY_ID
-              value: "$(AWS_ACCESS_KEY_ID)"
+              valueFrom:
+                configMapKeyRef:
+                  name: global-config
+                  key: AWS_ACCESS_KEY_ID
             - name: AWS_SECRET_ACCESS_KEY
-              value: "$(AWS_SECRET_ACCESS_KEY)"
+              valueFrom:
+                configMapKeyRef:
+                  name: global-config
+                  key: AWS_SECRET_ACCESS_KEY
             - name: JUPYTER_S3_ENDPOINT
-              value: "$(MINIO_ENDPOINT)"
+              valueFrom:
+                configMapKeyRef:
+                  name: global-config
+                  key: MINIO_ENDPOINT
             - name: MINIO_ENDPOINT
-              value: "$(MINIO_ENDPOINT)"
-            
+              valueFrom:
+                configMapKeyRef:
+                  name: global-config
+                  key: MINIO_ENDPOINT
+
             # Jupyter Configuration
             - name: JUPYTER_ENABLE_LAB
               value: "yes"
             - name: JUPYTER_TOKEN
-              value: ""  # No token for dev (set for production)
+              value: "" # No token for dev (set for production)
             - name: GRANT_SUDO
               value: "yes"
-            
 
           resources:
             requests:
-              memory: "2Gi"
+              memory: "1Gi"
               cpu: "500m"
             limits:
-              memory: "4Gi"
-              cpu: "2000m"
-          
+              memory: "2Gi"
+              cpu: "1000m"
+
           volumeMounts:
-            # Spark binaries
-            - name: spark-home
-              mountPath: /opt/spark
-            # Spark config template (copied and extended at startup)
-            - name: spark-config
-              mountPath: /tmp/spark-config-template/spark-defaults.conf
-              subPath: spark-defaults.conf
             # JupyterHub config (mounted to standard Docker Stacks location)
             - name: jupyter-config
               mountPath: /etc/jupyter/jupyter_notebook_config.py
               subPath: jupyter_notebook_config.py
-            # Notebooks persistence (S3 sync handled by script)
+            # Notebooks persistence (S3 sync handled by s3contents)
             - name: notebooks
               mountPath: /home/jovyan/work
             # Startup script for kernel setup
@@ -107,16 +82,11 @@ spec:
               subPath: setup-kernels.sh
 
       volumes:
-        - name: spark-home
-          emptyDir: {}
-        - name: spark-config
-          configMap:
-            name: spark-config
         - name: jupyter-config
           configMap:
             name: jupyterhub-config
         - name: notebooks
-          emptyDir: {}  # Use PVC or S3 sync for persistence
+          emptyDir: {} # Use PVC or S3 sync for persistence
         - name: startup-script
           configMap:
             name: jupyterhub-config
@@ -136,29 +106,7 @@ spec:
       port: 8888
       targetPort: 8888
       name: web
-    - protocol: TCP
-      port: 4040
-      targetPort: 4040
-      name: spark-ui
   type: ClusterIP
----
-# Headless Service for Spark Driver communication
-apiVersion: v1
-kind: Service
-metadata:
-  name: jupyterhub-driver
-  namespace: default
-spec:
-  clusterIP: None
-  selector:
-    app: jupyterhub
-  ports:
-    - port: 22321
-      name: spark-driver
-    - port: 22322
-      name: spark-blockmanager
-    - port: 4040
-      name: spark-ui
 ---
 # ServiceAccount for JupyterHub
 apiVersion: v1
@@ -167,7 +115,7 @@ metadata:
   name: jupyterhub
   namespace: default
 ---
-# ClusterRoleBinding for Spark executor management
+# ClusterRoleBinding for basic permissions (minimal, no executor management needed)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -175,7 +123,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: cluster-admin  # For dev; use restricted role in production
+  name: view # Read-only access, no pod creation needed
 subjects:
   - kind: ServiceAccount
     name: jupyterhub
@@ -206,78 +154,25 @@ data:
     c.S3ContentsManager.bucket = "notebooks"
     c.S3ContentsManager.prefix = "jupyterhub"
     # Disable SSL verification for internal MinIO (if needed, s3contents uses session_kwargs)
-    # c.S3ContentsManager.session_kwargs = {"verify": False}
-    
+    c.S3ContentsManager.session_kwargs = {"verify": False}
+
   setup-kernels.sh: |
     #!/bin/bash
     set -e
-    
-    echo "=== Spark-on-Kubernetes Dynamic Configuration ==="
-    
-    # CRITICAL: Generate dynamic spark-defaults.conf with driver host
-    # The ConfigMap spark-defaults.conf is read-only, so we copy and extend it
-    # The pod IP (SPARK_DRIVER_HOST) is only known at runtime
-    
-    SPARK_CONF_DIR="/opt/spark/conf"
-    TEMPLATE_CONF="/tmp/spark-config-template/spark-defaults.conf"
-    FINAL_CONF="${SPARK_CONF_DIR}/spark-defaults.conf"
-    
-    echo "Pod IP: ${SPARK_DRIVER_HOST}"
-    
-    # Create conf directory if not exists
-    mkdir -p "${SPARK_CONF_DIR}"
-    
-    # Copy base config from template (mounted read-only from ConfigMap)
-    if [ -f "${TEMPLATE_CONF}" ]; then
-      cp "${TEMPLATE_CONF}" "${FINAL_CONF}"
-      echo "Copied base config from template"
-    else
-      echo "WARNING: No template config found, creating minimal config"
-      touch "${FINAL_CONF}"
-    fi
-    
-    # Append dynamic driver configuration (CRITICAL for executor connectivity)
-    cat >> "${FINAL_CONF}" << 'DRIVER_EOF'
 
-    # === DYNAMIC DRIVER CONFIG (generated at startup) ===
-    # These settings are critical for executor-to-driver communication
-    DRIVER_EOF
+    echo "=== Spark Connect Thin Client Setup ==="
+    echo "Spark Remote: ${SPARK_REMOTE}"
 
-    # Use echo to append with variable expansion
-    echo "spark.driver.host                   ${SPARK_DRIVER_HOST}" >> "${FINAL_CONF}"
-    echo "spark.driver.bindAddress            0.0.0.0" >> "${FINAL_CONF}"
-    echo "spark.driver.port                   22321" >> "${FINAL_CONF}"
-    echo "spark.blockManager.port             22322" >> "${FINAL_CONF}"
-    # CRITICAL: Client mode requires driver pod name to match actual pod name
-    echo "spark.kubernetes.driver.pod.name    ${HOSTNAME}" >> "${FINAL_CONF}"
-    echo "spark.kubernetes.container.image    ${SPARK_IMAGE}" >> "${FINAL_CONF}"
-    echo "spark.hadoop.fs.s3a.endpoint        ${MINIO_ENDPOINT}" >> "${FINAL_CONF}"
-    echo "spark.hadoop.fs.s3a.access.key      ${AWS_ACCESS_KEY_ID}" >> "${FINAL_CONF}"
-    echo "spark.hadoop.fs.s3a.secret.key      ${AWS_SECRET_ACCESS_KEY}" >> "${FINAL_CONF}"
-    
-    # Python executable path for driver and executors
-    echo "spark.pyspark.python                python3" >> "${FINAL_CONF}"
-    echo "spark.pyspark.driver.python          python3" >> "${FINAL_CONF}"
-    echo "spark.executorEnv.PYSPARK_PYTHON     python3" >> "${FINAL_CONF}"
-    
-    chmod 644 "${FINAL_CONF}"
-    
-    echo "Generated spark-defaults.conf with driver.host=${SPARK_DRIVER_HOST}"
-    echo "Driver config:"
-    cat "${FINAL_CONF}" | grep -E "^spark\.(driver|blockManager)" || true
-    
-    # Create PySpark kernel for Jupyter (specialized for K8s)
-    mkdir -p /home/jovyan/.local/share/jupyter/kernels/pyspark_k8s
-    cat > /home/jovyan/.local/share/jupyter/kernels/pyspark_k8s/kernel.json << 'KERNEL_EOF'
+    # Create PySpark kernel for Jupyter (Spark Connect mode)
+    mkdir -p /home/jovyan/.local/share/jupyter/kernels/pyspark_connect
+    cat > /home/jovyan/.local/share/jupyter/kernels/pyspark_connect/kernel.json << 'KERNEL_EOF'
     {
       "argv": ["python", "-m", "ipykernel_launcher", "-f", "{connection_file}"],
-      "display_name": "PySpark (Kubernetes)",
+      "display_name": "PySpark (Connect)",
       "language": "python",
       "env": {
-        "SPARK_HOME": "/opt/spark",
         "PYSPARK_PYTHON": "python3",
-        "PYSPARK_DRIVER_PYTHON": "python3",
-        "SPARK_DRIVER_HOST": "${SPARK_DRIVER_HOST}",
+        "SPARK_REMOTE": "${SPARK_REMOTE}",
         "MINIO_ENDPOINT": "${MINIO_ENDPOINT}",
         "AWS_ACCESS_KEY_ID": "${AWS_ACCESS_KEY_ID}",
         "AWS_SECRET_ACCESS_KEY": "${AWS_SECRET_ACCESS_KEY}"
@@ -285,62 +180,31 @@ data:
     }
     KERNEL_EOF
 
-    # Create IPython startup script (Best for Jupyter Notebooks)
+    # Create IPython startup script for auto-initialization
     mkdir -p /home/jovyan/.ipython/profile_default/startup/
     cat > /home/jovyan/.ipython/profile_default/startup/00-pyspark-setup.py << 'STARTUP_EOF'
     import os
-    import sys
-    import glob
 
-    spark_home = os.environ.get('SPARK_HOME', '/opt/spark')
-    sys.path.insert(0, os.path.join(spark_home, 'python'))
-    py4j_zip = glob.glob(os.path.join(spark_home, 'python/lib/py4j-*-src.zip'))
-    if py4j_zip:
-        sys.path.insert(0, py4j_zip[0])
+    spark_remote = os.environ.get('SPARK_REMOTE')
 
-    try:
-        from pyspark.sql import SparkSession
-        spark = SparkSession.builder.enableHiveSupport().getOrCreate()
-        # In IPython, direct assignment to global namespace is handled by the shell
-        # But let's also try builtins just in case
-        import builtins
-        builtins.spark = spark
-        print(f"✅ Auto-initialized Spark {spark.version}")
-    except Exception as e:
-        print(f"⚠️ Spark auto-init failed: {e}")
-    STARTUP_EOF
-    
-    # Create sitecustomize.py for global auto-initialization (robust)
-    SITE_PACKAGES="/home/jovyan/.local/lib/python3.11/site-packages"
-    mkdir -p "${SITE_PACKAGES}"
-    
-    cat > "${SITE_PACKAGES}/sitecustomize.py" << 'SITE_EOF'
-    import os
-    import sys
-    import builtins
-    import glob
-    
-    # 1. Ensure Spark is in path
-    spark_home = os.environ.get('SPARK_HOME', '/opt/spark')
-    if spark_home:
-        sys.path.insert(0, os.path.join(spark_home, 'python'))
-        # Dynamically find py4j zip
-        py4j_zip = glob.glob(os.path.join(spark_home, 'python/lib/py4j-*-src.zip'))
-        if py4j_zip:
-            sys.path.insert(0, py4j_zip[0])
-
-    # 2. Attempt Auto-Initialization
-    try:
-        # Avoid re-initializing in worker processes or irrelevant contexts
-        if 'pyspark' not in sys.modules and os.environ.get('SPARK_DRIVER_HOST'):
+    if spark_remote:
+        try:
             from pyspark.sql import SparkSession
-            spark = SparkSession.builder.enableHiveSupport().getOrCreate()
-            builtins.spark = spark  # Make it globally available
-            print(f"✅ Auto-initialized Spark {spark.version} (Master: {spark.sparkContext.master})")
-    except Exception as e:
-        # Fail silently to avoid breaking non-Spark scripts
-        pass
-    SITE_EOF
+            
+            # Connect to remote Spark Connect server
+            spark = SparkSession.builder.remote(spark_remote).getOrCreate()
+            
+            # Make spark available globally
+            import builtins
+            builtins.spark = spark
+            
+            print(f"✅ Connected to Spark {spark.version} via Spark Connect")
+            print(f"   Remote: {spark_remote}")
+        except Exception as e:
+            print(f"⚠️ Spark Connect initialization failed: {e}")
+            print(f"   Ensure Spark Connect Server is running at {spark_remote}")
+    else:
+        print("⚠️ SPARK_REMOTE not set. Spark session not initialized.")
+    STARTUP_EOF
 
-
-    echo "=== Spark configuration complete ==="
+    echo "=== Spark Connect configuration complete ==="

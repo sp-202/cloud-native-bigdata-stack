@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-connect-server
+  namespace: default
+  labels:
+    app: spark-connect-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-connect-server
+  template:
+    metadata:
+      labels:
+        app: spark-connect-server
+        spark-role: driver
+    spec:
+      serviceAccountName: spark-operator-spark  # Use the SA that has permissions to create pods
+      containers:
+        - name: spark-connect-server
+          image: $(SPARK_IMAGE)
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              /opt/spark/bin/spark-submit \
+              --master k8s://https://kubernetes.default.svc.cluster.local:443 \
+              --deploy-mode client \
+              --class org.apache.spark.sql.connect.service.SparkConnectServer \
+              --conf spark.driver.host=$POD_IP \
+              --conf spark.driver.bindAddress=0.0.0.0 \
+              --conf spark.dynamicAllocation.enabled=true \
+              --conf spark.dynamicAllocation.minExecutors=1 \
+              --conf spark.dynamicAllocation.maxExecutors=5 \
+              --conf spark.dynamicAllocation.maxExecutors=5 \
+              --conf spark.kubernetes.container.image=$(SPARK_IMAGE) \
+              --conf spark.kubernetes.driver.pod.name=$POD_NAME \
+              --conf spark.kubernetes.driver.pod.name=$POD_NAME \
+              --conf spark.kubernetes.namespace=default \
+              --conf spark.sql.connect.port=15002 \
+              --conf spark.sql.connect.common.enforce_pyspark_compat=true \
+              --conf spark.hadoop.fs.s3a.endpoint=$MINIO_ENDPOINT \
+              --conf spark.hadoop.fs.s3a.access.key=$AWS_ACCESS_KEY_ID \
+              --conf spark.hadoop.fs.s3a.secret.key=$AWS_SECRET_ACCESS_KEY \
+              --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
+              --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
+              --conf spark.sql.catalogImplementation=hive \
+              --conf spark.hadoop.hive.metastore.uris=thrift://hive-metastore.default.svc.cluster.local:9083 \
+              --conf spark.sql.warehouse.dir=s3a://warehouse/managed/ \
+              local:///opt/spark/jars/spark-connect_2.12-4.0.1.jar
+          ports:
+            - containerPort: 15002
+              name: spark-connect
+            - containerPort: 4040
+              name: spark-ui
+          envFrom:
+            - configMapRef:
+                name: global-config
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: spark-defaults
+              mountPath: /opt/spark/conf/spark-defaults.conf
+              subPath: spark-defaults.conf
+      volumes:
+        - name: spark-defaults
+          configMap:
+            name: spark-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-connect-server-driver-svc
+  namespace: default
+spec:
+  ports:
+    - name: spark-connect
+      port: 15002
+      targetPort: 15002
+    - name: spark-ui
+      port: 4040
+      targetPort: 4040
+  selector:
+    app: spark-connect-server
+    spark-role: driver
+  type: ClusterIP
