@@ -414,7 +414,7 @@ spec:
         envFrom:
         - secretRef:
             name: 'superset-env'
-        image: 'apache/superset:dockerize'
+        image: 'jwilder/dockerize:0.6.1'
         imagePullPolicy: 'IfNotPresent'
         name: wait-for-postgres-redis
       containers:
@@ -494,7 +494,7 @@ spec:
         envFrom:
         - secretRef:
             name: 'superset-env'
-        image: 'apache/superset:dockerize'
+        image: 'jwilder/dockerize:0.6.1'
         imagePullPolicy: 'IfNotPresent'
         name: wait-for-postgres
       containers:
@@ -545,11 +545,11 @@ spec:
             timeoutSeconds: 1
           resources:
             limits:
-              cpu: 1000m
-              memory: 4Gi
+              cpu: 4000m
+              memory: 6Gi
             requests:
-              cpu: 500m
-              memory: 2Gi
+              cpu: 2000m
+              memory: 4Gi
       volumes:
         - name: superset-config
           secret:
@@ -718,7 +718,7 @@ spec:
         envFrom:
         - secretRef:
             name: 'superset-env'
-        image: 'apache/superset:dockerize'
+        image: 'jwilder/dockerize:0.6.1'
         imagePullPolicy: 'IfNotPresent'
         name: wait-for-postgres
       containers:
