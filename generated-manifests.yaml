@@ -44718,7 +44718,7 @@ data:
     provisioning = /etc/grafana/provisioning
     [server]
     domain = ''
-    root_url = http://grafana.34.121.197.8.sslip.io
+    root_url = http://grafana.172.30.1.145.sslip.io
     serve_from_sub_path = true
 kind: ConfigMap
 metadata:
@@ -47409,11 +47409,11 @@ apiVersion: v1
 data:
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
-  INGRESS_DOMAIN: 34.121.197.8.sslip.io
+  INGRESS_DOMAIN: 172.30.1.145.sslip.io
   MINIO_ENDPOINT: http://minio.default.svc.cluster.local:9000
 kind: ConfigMap
 metadata:
-  name: global-config-kb52g7ttm8
+  name: global-config-d865752ck4
 ---
 apiVersion: v1
 data:
@@ -48645,7 +48645,7 @@ type: kubernetes.io/service-account-token
 ---
 apiVersion: v1
 data:
-  private.key: OUgvdUE5QWdidEQweFdkV2ZzTmtYWVR2RVNieDFPSThjYi9Fc0hwS0pZSWR2N2c4T1NnZ0h1RUtlOWc1NGxKeHM0VEhVU2tNT3hrdCsySmtvMGlQMjI2SEk4SWI2cmxuM2t0SWFtQzNkNFNDbWlDNkFoMHdETENOQTE0NUxXOUNVNmttZlkxY25iekxzcmU1VzFzVGlvSzZES2xXcGNPUDdLamtKZ0FaWGhlMlFnQ1JNZ1pOSGE4KzdMalIxcXZ2RG44NG1NNVZyeW5VWGdNWmNGUnZMRThmcEpiTXhlL2wrRkkxT0VjY0Z5VkdMcHh4d3Y2Qk92TDlMMFB2TlpmWGEyLzhxVEZOOHRrbVZYUGVuNDNCZU5wRTNsRld5TGJrVmpWYjkvN01YTGFsTWt5TTRGdXF4UHk4K3NWS0dhbTVqOEYxVjROSnI4RVo3Yjd1SlhTMXVRPT0=
+  private.key: U3VGS2ZsU051SWVRais1cjBEdllaMlBqV3ZjL0pBQlN3ZENmclZhL3pCdTZtQnpxdG56cHJTR21GSHFUTzFmMm1XaG4rUTN3dzJBZSsxQllVdVlRZGFldDVVNDc2emRoeXpiSTlBQ2VFL00rOWFCNVVia0RxWHY1NVE1b2MxVFVobmFPMFp0YXdaajhuNDJQNEJBend0ejNyZTVRWjBSMy9YSXpUcGF0S2pXT3FlbzdVS3U3RGtGSDRteFNBT2NHdm1sRkw3cXJDRy9sYi94U0VWV3lYcmVNNFlneDhVYXNaVHpyaU5RdnZ6ZFNuQmIrek1NSUlWOWdoaHBJaURQZ0RJVEpDS1VUZkc1YkhxR3VlKzZZdzBnN2E4ZzBtdlJBUHpnQ2tkMmw4amJJUXFpa0FUZ3JzdFJyMFJqaG92SGN3ZVUvajUxSytCT09wd3lYMmNOQUFnPT0=
 kind: Secret
 metadata:
   labels:
@@ -49654,22 +49654,22 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: AWS_ACCESS_KEY_ID
-              name: global-config-kb52g7ttm8
+              name: global-config-d865752ck4
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             configMapKeyRef:
               key: AWS_SECRET_ACCESS_KEY
-              name: global-config-kb52g7ttm8
+              name: global-config-d865752ck4
         - name: JUPYTER_S3_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-kb52g7ttm8
+              name: global-config-d865752ck4
         - name: MINIO_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-kb52g7ttm8
+              name: global-config-d865752ck4
         - name: JUPYTER_ENABLE_LAB
           value: "yes"
         - name: JUPYTER_TOKEN
@@ -50510,7 +50510,7 @@ spec:
               fieldPath: metadata.name
         envFrom:
         - configMapRef:
-            name: global-config-kb52g7ttm8
+            name: global-config-d865752ck4
         image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-fix-v4-mssql-opt
         imagePullPolicy: Always
         name: spark-connect-server
@@ -50739,7 +50739,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 000bf403b45086041374fe70c8a0b5c9be11b58fa3a9e179ade429d1a7ab39ec
+        checksum/config: 14da6b629c07ea46ebec70774bfb3e2d37398b86d5149edd72f93a72894125fb
       labels:
         app.kubernetes.io/component: api
         app.kubernetes.io/instance: kubernetes-dashboard
@@ -50825,7 +50825,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 7487690dba0014c2b2abee041ba08c8a8c5934a5fd7864e481b1b3b7ba00dec2
+        checksum/config: 4c09f1306092355da0d6698dd52fd1f931e6fc8b187b2c23ea5574138a0365c8
       labels:
         app.kubernetes.io/component: auth
         app.kubernetes.io/instance: kubernetes-dashboard
@@ -55966,7 +55966,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: airflow.34.121.197.8.sslip.io
+  - host: airflow.172.30.1.145.sslip.io
     http:
       paths:
       - backend:
@@ -55976,7 +55976,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: minio.34.121.197.8.sslip.io
+  - host: minio.172.30.1.145.sslip.io
     http:
       paths:
       - backend:
@@ -55986,7 +55986,7 @@ spec:
               name: console
         path: /
         pathType: Prefix
-  - host: s3.34.121.197.8.sslip.io
+  - host: s3.172.30.1.145.sslip.io
     http:
       paths:
       - backend:
@@ -55996,7 +55996,7 @@ spec:
               name: api
         path: /
         pathType: Prefix
-  - host: superset.34.121.197.8.sslip.io
+  - host: superset.172.30.1.145.sslip.io
     http:
       paths:
       - backend:
@@ -56006,7 +56006,7 @@ spec:
               name: http
         path: /
         pathType: Prefix
-  - host: jupyterhub.34.121.197.8.sslip.io
+  - host: jupyterhub.172.30.1.145.sslip.io
     http:
       paths:
       - backend:
@@ -56016,7 +56016,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: spark.34.121.197.8.sslip.io
+  - host: spark.172.30.1.145.sslip.io
     http:
       paths:
       - backend:
@@ -56037,7 +56037,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: grafana.34.121.197.8.sslip.io
+  - host: grafana.172.30.1.145.sslip.io
     http:
       paths:
       - backend:
@@ -56059,7 +56059,7 @@ metadata:
   namespace: default
 spec:
   rules:
-  - host: dashboard.34.121.197.8.sslip.io
+  - host: dashboard.172.30.1.145.sslip.io
     http:
       paths:
       - backend:
@@ -56078,7 +56078,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: starrocks.34.136.221.189.sslip.io
+  - host: starrocks.172.30.1.145.sslip.io
     http:
       paths:
       - backend:
@@ -56099,7 +56099,7 @@ spec:
   - web
   routes:
   - kind: Rule
-    match: Host(`traefik.34.121.197.8.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    match: Host(`traefik.172.30.1.145.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
     services:
     - kind: TraefikService
       name: api@internal
