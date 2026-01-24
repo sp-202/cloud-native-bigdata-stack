@@ -37,8 +37,8 @@ kubectl delete svc kubernetes-dashboard-web kubernetes-dashboard-api -n default 
 # 2. Generate Helm Manifests (Adapted from deploy-gke.sh)
 # ---------------------------------------------------
 # Define the static IP found in the codebase to be replaced (Legacy GKE artifact, kept for safety)
-STATIC_IP_TO_REPLACE="34.58.10.252"
-STATIC_DOMAIN_TO_REPLACE="34.58.10.252.sslip.io"
+STATIC_IP_TO_REPLACE="172.30.1.145"
+STATIC_DOMAIN_TO_REPLACE="172.30.1.145.sslip.io"
 
 echo "Generating Helm manifests..."
 mkdir -p k8s-platform-v2/03-apps/charts/gen
@@ -146,6 +146,11 @@ kubectl delete job superset-init-db -n default --ignore-not-found=true
 # Fix for "Forbidden: may not be specified when strategy type is Recreate"
 kubectl delete deployment postgres -n default --ignore-not-found=true
 
+echo "Pre-cleaning immutable RBAC..."
+kubectl delete clusterrolebinding jupyterhub-spark --ignore-not-found=true
+kubectl delete clusterrole jupyterhub-spark --ignore-not-found=true
+
+
 kubectl apply --server-side --force-conflicts -f generated-manifests.yaml
 
 echo "Waiting for Resources..."
@@ -154,7 +159,11 @@ kubectl wait --for=condition=available --timeout=300s deployment/postgres -n def
 
 echo "Deployment Complete!"
 echo "Superset: http://superset.$INGRESS_DOMAIN"
+echo "JupyterHub: https://dashboard.$INGRESS_DOMAIN"
 echo "JupyterHub: http://jupyterhub.$INGRESS_DOMAIN"
+echo "JupyterHub: http://minio.$INGRESS_DOMAIN"
+echo "JupyterHub: http://grafana.$INGRESS_DOMAIN"
+echo "JupyterHub: http://spark.$INGRESS_DOMAIN"
 
 # ---------------------------------------------------
 # 4. StarRocks Production Fix (Post-Deploy)
