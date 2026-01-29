@@ -10,6 +10,6 @@ spec:
     protocol: TCP
     targetPort: 4040
   selector:
+    app: spark-connect-server
     spark-role: driver
-    interpreterSettingName: spark
   type: NodePort
