@@ -13,6 +13,8 @@ spec:
       labels:
         app: airflow-webserver
     spec:
+      securityContext:
+        fsGroup: 50000 # Ensures the volume is accessible by the Airflow user
       containers:
       - name: airflow-webserver
         image: apache/airflow:2.7.1
@@ -34,6 +36,8 @@ spec:
           value: "admin"
         - name: _AIRFLOW_WWW_USER_PASSWORD
           value: "admin"
+        - name: AIRFLOW__CORE__DAGS_FOLDER
+          value: "/opt/airflow/dags/repo/airflow-dags"
         resources:
           requests:
             memory: "1Gi"
@@ -44,23 +48,26 @@ spec:
         ports:
         - containerPort: 8080
         volumeMounts:
-        - name: dags
+        - name: dags-data
           mountPath: /opt/airflow/dags
-      - name: minio-sync
-        image: minio/mc
-        command: ["/bin/sh", "-c"]
+
+      - name: git-sync
+        image: registry.k8s.io/git-sync/git-sync:v4.2.1
+        securityContext:
+          runAsUser: 50000 # Matches Airflow user ID to prevent permission errors
         args:
-        - |
-          mc alias set myminio http://minio.default.svc.cluster.local:9000 minioadmin minioadmin;
-          while true; do
-            mc mirror --overwrite myminio/dags /opt/airflow/dags;
-            sleep 60;
-          done
+          - "--repo=https://github.com/sp-202/cloud-native-bigdata-stack.git"
+          - "--branch=main"
+          - "--wait=60"
+          - "--root=/opt/airflow/dags"
+          - "--dest=repo"
+          - "--link=current"
         volumeMounts:
-        - name: dags
+        - name: dags-data
           mountPath: /opt/airflow/dags
+
       volumes:
-      - name: dags
+      - name: dags-data
         emptyDir: {}
 
 ---
@@ -79,6 +86,8 @@ spec:
       labels:
         app: airflow-scheduler
     spec:
+      securityContext:
+        fsGroup: 50000
       containers:
       - name: airflow-scheduler
         image: apache/airflow:2.7.1
@@ -92,6 +101,8 @@ spec:
           value: "46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho="
         - name: AIRFLOW__CORE__LOAD_EXAMPLES
           value: "True"
+        - name: AIRFLOW__CORE__DAGS_FOLDER
+          value: "/opt/airflow/dags/repo/airflow-dags"
         resources:
           requests:
             memory: "1Gi"
@@ -100,23 +111,26 @@ spec:
             memory: "2Gi"
             cpu: "1000m"
         volumeMounts:
-        - name: dags
+        - name: dags-data
           mountPath: /opt/airflow/dags
-      - name: minio-sync
-        image: minio/mc
-        command: ["/bin/sh", "-c"]
+
+      - name: git-sync
+        image: registry.k8s.io/git-sync/git-sync:v4.2.1
+        securityContext:
+          runAsUser: 50000
         args:
-        - |
-          mc alias set myminio http://minio.default.svc.cluster.local:9000 minioadmin minioadmin;
-          while true; do
-            mc mirror --overwrite myminio/dags /opt/airflow/dags;
-            sleep 60;
-          done
+          - "--repo=https://github.com/sp-202/cloud-native-bigdata-stack.git"
+          - "--branch=main"
+          - "--wait=60"
+          - "--root=/opt/airflow/dags"
+          - "--dest=repo"
+          - "--link=current"
         volumeMounts:
-        - name: dags
+        - name: dags-data
           mountPath: /opt/airflow/dags
+
       volumes:
-      - name: dags
+      - name: dags-data
         emptyDir: {}
 
 ---
@@ -126,9 +140,8 @@ metadata:
   name: airflow-webserver
   namespace: default
 spec:
-  # type: LoadBalancer
   ports:
-  - port: 8080 # Standard HTTP
+  - port: 8080
     targetPort: 8080
     name: web
   selector:
