@@ -15,6 +15,14 @@ spec:
     spec:
       securityContext:
         fsGroup: 50000
+      initContainers:
+      - name: wipe-old-files
+        image: busybox
+        # We delete everything to start fresh
+        command: ["sh", "-c", "rm -rf /opt/airflow/dags/*"]
+        volumeMounts:
+        - name: dags-data
+          mountPath: /opt/airflow/dags
       containers:
       - name: airflow-webserver
         image: apache/airflow:2.7.1
@@ -26,32 +34,34 @@ spec:
           value: "postgresql+psycopg2://airflow:airflow@postgres.default.svc.cluster.local/airflow"
         - name: AIRFLOW__CORE__FERNET_KEY
           value: "46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho="
+        - name: AIRFLOW__CORE__LOAD_EXAMPLES
+          value: "False"
         - name: AIRFLOW__CORE__DAGS_FOLDER
-          # DIRECT PATH
           value: "/opt/airflow/dags/repo"
         volumeMounts:
         - name: dags-data
           mountPath: /opt/airflow/dags
 
       - name: git-sync
-        image: registry.k8s.io/git-sync/git-sync:v3.6.9
+        # We use alpine/git to perform a REAL clone, not a 'link' sync
+        image: alpine/git
         securityContext:
           runAsUser: 50000
-        env:
-        - name: GIT_SYNC_REPO
-          value: "https://github.com/sp-202/airflow-dags.git"
-        - name: GIT_SYNC_BRANCH
-          value: "main"
-        # THE FIX: We set the root to the mount point directly
-        - name: GIT_SYNC_ROOT
-          value: "/opt/airflow/dags"
-        - name: GIT_SYNC_DEST
-          value: "repo" 
-        # THE FIX: Disabling the symlink creation behavior
-        - name: GIT_SYNC_LINK
-          value: ""
-        - name: GIT_SYNC_WAIT
-          value: "60"
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # 1. Clean up and Clone
+          cd /opt/airflow/dags
+          rm -rf repo
+          git clone https://github.com/sp-202/airflow-dags.git repo
+          
+          # 2. Infinite Loop to Pull changes
+          while true; do
+            echo "Pulling latest code..."
+            cd /opt/airflow/dags/repo && git pull
+            sleep 60
+          done
         volumeMounts:
         - name: dags-data
           mountPath: /opt/airflow/dags
@@ -78,6 +88,13 @@ spec:
     spec:
       securityContext:
         fsGroup: 50000
+      initContainers:
+      - name: wipe-old-files
+        image: busybox
+        command: ["sh", "-c", "rm -rf /opt/airflow/dags/*"]
+        volumeMounts:
+        - name: dags-data
+          mountPath: /opt/airflow/dags
       containers:
       - name: airflow-scheduler
         image: apache/airflow:2.7.1
@@ -96,22 +113,20 @@ spec:
           mountPath: /opt/airflow/dags
 
       - name: git-sync
-        image: registry.k8s.io/git-sync/git-sync:v3.6.9
+        image: alpine/git
         securityContext:
           runAsUser: 50000
-        env:
-        - name: GIT_SYNC_REPO
-          value: "https://github.com/sp-202/airflow-dags.git"
-        - name: GIT_SYNC_BRANCH
-          value: "main"
-        - name: GIT_SYNC_ROOT
-          value: "/opt/airflow/dags"
-        - name: GIT_SYNC_DEST
-          value: "repo"
-        - name: GIT_SYNC_LINK
-          value: ""
-        - name: GIT_SYNC_WAIT
-          value: "60"
+        command:
+        - /bin/sh
+        - -c
+        - |
+          cd /opt/airflow/dags
+          rm -rf repo
+          git clone https://github.com/sp-202/airflow-dags.git repo
+          while true; do
+            cd /opt/airflow/dags/repo && git pull
+            sleep 60
+          done
         volumeMounts:
         - name: dags-data
           mountPath: /opt/airflow/dags
@@ -120,7 +135,6 @@ spec:
       - name: dags-data
         persistentVolumeClaim:
           claimName: airflow-dags-pvc
-
 ---
 apiVersion: v1
 kind: Service
