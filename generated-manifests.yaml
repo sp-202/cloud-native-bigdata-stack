@@ -48645,7 +48645,7 @@ type: kubernetes.io/service-account-token
 ---
 apiVersion: v1
 data:
-  private.key: YVp1N1pCbnpKSHovWnlxYm5Vc3R6TldHaldFbnRhUTVkSWZGQmJRNFVWMFlsU2tkb0JrTW1mZjBQbDBIRjdsWTNqaE9yMHB2N3UrcnlpS21JMmZOa3F4VlRqY2lGNUZzUlZnc0ZMTGJQMWVRREhuMHVNdzlVQjFPN3FnM1dpRjMzYldjVlA5a29VdlZkR2VuME1TeWt2M0gwYmNpRHhNZUE2RkUvNzJqd2t2STF1L1BRRFovdEZ5WHRBUEF0V21xdWl2amY0NEx6M1VzS05EU1V1U2s0L3pvV2k1ZDZsajJaZk9pZVdnMWpHc1BrbGpnbFZjcnQyUjY1eUt1eFFOMlMzbGNpZXlFRjFFZm5GdTdUSU1zMmZWK0F1VmhHenIzS2dBSGh2dWxqQ2xUVXJHOHZMY2NrSGJhMkdmVlNXd1pRMkpYc1VUZnBvZUsyZ2ZmNmdWM2x3PT0=
+  private.key: VmJDYTRkQml5dy9HeUtOQ05zY2JkVDl2ZjJkSlM2bjRuckNvY0V2bEhvR1RmN21USm5tenU4dmlzbE5YbmEwbVFob1UveWZ0blQxZnFLT2dBKzJzalpiY2Q4WU9oY0Z4dmtSMDN5UndpWHErSnpDUTF3TzgvVHk5VGRJTHhBRzN3TTlHVjFqclR2OExEYTRURGk3SU8yZEJIWlludDdBVmJmcmRwVTZpeGlRQzZPUGt2Z2JNbTJYM0x2VFE3THNRL0YvK0dDcysyZUpKbStSdHVDeEdYWkh0M0RFeFUrNU50Mi9VNHBqRHZMQ1VrK0dIOHNqWVM0cGk5YnR5cnJCZklESmc1MGowWXlra2VIY0JpK2R6Yzdua0hNa2swVHI4OTR6RnVUWlMxQnRQTHd3TDZMUG1WRFM1MEw5M2VFVmVDejF3bDhKK3RSR2JvcWNPTjZLQjFnPT0=
 kind: Secret
 metadata:
   labels:
@@ -49416,6 +49416,18 @@ spec:
     requests:
       storage: 5Gi
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-dags-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: local-path
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -49442,50 +49454,38 @@ spec:
         - name: AIRFLOW__CORE__FERNET_KEY
           value: 46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
         - name: AIRFLOW__CORE__LOAD_EXAMPLES
-          value: "True"
+          value: "False"
         - name: AIRFLOW__CORE__DAGS_FOLDER
-          value: /opt/airflow/dags/repo/airflow-dags
+          value: /opt/airflow/dags/dags-v5/repo
         image: apache/airflow:2.7.1
         name: airflow-scheduler
-        resources:
-          limits:
-            cpu: 1000m
-            memory: 2Gi
-          requests:
-            cpu: 500m
-            memory: 1Gi
         volumeMounts:
         - mountPath: /opt/airflow/dags
           name: dags-data
-      - args:
-        - --repo=https://github.com/sp-202/cloud-native-bigdata-stack.git
-        - --ref=main
-        - --period=60s
-        - --root=/opt/airflow/dags
-        - --link=repo
-        - --git-config=safe.directory:*
-        image: registry.k8s.io/git-sync/git-sync:v4.2.1
+      - env:
+        - name: GIT_SYNC_REPO
+          value: https://github.com/sp-202/airflow-dags.git
+        - name: GIT_SYNC_BRANCH
+          value: main
+        - name: GIT_SYNC_ROOT
+          value: /opt/airflow/dags/dags-v5
+        - name: GIT_SYNC_DEST
+          value: repo
+        - name: GIT_SYNC_WAIT
+          value: "60"
+        image: registry.k8s.io/git-sync/git-sync:v3.6.9
         name: git-sync
         securityContext:
           runAsUser: 50000
         volumeMounts:
         - mountPath: /opt/airflow/dags
           name: dags-data
-      initContainers:
-      - command:
-        - sh
-        - -c
-        - rm -rf /opt/airflow/dags/.* /opt/airflow/dags/*
-        image: busybox:latest
-        name: wipe-stale-locks
-        volumeMounts:
-        - mountPath: /opt/airflow/dags
-          name: dags-data
       securityContext:
         fsGroup: 50000
       volumes:
-      - emptyDir: {}
-        name: dags-data
+      - name: dags-data
+        persistentVolumeClaim:
+          claimName: airflow-dags-pvc
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -49513,7 +49513,7 @@ spec:
         - name: AIRFLOW__CORE__FERNET_KEY
           value: 46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
         - name: AIRFLOW__CORE__LOAD_EXAMPLES
-          value: "True"
+          value: "False"
         - name: _AIRFLOW_DB_UPGRADE
           value: "true"
         - name: _AIRFLOW_WWW_USER_CREATE
@@ -49523,50 +49523,36 @@ spec:
         - name: _AIRFLOW_WWW_USER_PASSWORD
           value: admin
         - name: AIRFLOW__CORE__DAGS_FOLDER
-          value: /opt/airflow/dags/repo/airflow-dags
+          value: /opt/airflow/dags/dags-v5/repo
         image: apache/airflow:2.7.1
         name: airflow-webserver
-        ports:
-        - containerPort: 8080
-        resources:
-          limits:
-            cpu: 1000m
-            memory: 2Gi
-          requests:
-            cpu: 500m
-            memory: 1Gi
         volumeMounts:
         - mountPath: /opt/airflow/dags
           name: dags-data
-      - args:
-        - --repo=https://github.com/sp-202/cloud-native-bigdata-stack.git
-        - --ref=main
-        - --period=60s
-        - --root=/opt/airflow/dags
-        - --link=repo
-        - --git-config=safe.directory:*
-        image: registry.k8s.io/git-sync/git-sync:v4.2.1
+      - env:
+        - name: GIT_SYNC_REPO
+          value: https://github.com/sp-202/airflow-dags.git
+        - name: GIT_SYNC_BRANCH
+          value: main
+        - name: GIT_SYNC_ROOT
+          value: /opt/airflow/dags/dags-v5
+        - name: GIT_SYNC_DEST
+          value: repo
+        - name: GIT_SYNC_WAIT
+          value: "60"
+        image: registry.k8s.io/git-sync/git-sync:v3.6.9
         name: git-sync
         securityContext:
           runAsUser: 50000
         volumeMounts:
         - mountPath: /opt/airflow/dags
           name: dags-data
-      initContainers:
-      - command:
-        - sh
-        - -c
-        - rm -rf /opt/airflow/dags/.* /opt/airflow/dags/*
-        image: busybox:latest
-        name: wipe-stale-locks
-        volumeMounts:
-        - mountPath: /opt/airflow/dags
-          name: dags-data
       securityContext:
         fsGroup: 50000
       volumes:
-      - emptyDir: {}
-        name: dags-data
+      - name: dags-data
+        persistentVolumeClaim:
+          claimName: airflow-dags-pvc
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -50765,7 +50751,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 68204b336fee2e696c25eaf68f4506425ce50eb52594cf27a1f98565092945f3
+        checksum/config: 14c2b4430a0521215e3fef3706c7deac4938df327812b41d9b0d5e9447a7b2ff
       labels:
         app.kubernetes.io/component: api
         app.kubernetes.io/instance: kubernetes-dashboard
@@ -50851,7 +50837,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 767002c96f661a78da689955393251b87c446581262901a509c4fb277925e5f7
+        checksum/config: a7c7e02a45632158340cc08c8d17b38959b4c9e9c48a2c69b572ace074adfad3
       labels:
         app.kubernetes.io/component: auth
         app.kubernetes.io/instance: kubernetes-dashboard

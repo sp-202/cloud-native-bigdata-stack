@@ -13,6 +13,8 @@ This directory contains the actual Big Data logic. Every application here connec
 kubectl delete deployment airflow-webserver airflow-scheduler --now
 kubectl delete pods -l app=airflow-webserver --force --grace-period=0
 kubectl delete pods -l app=airflow-scheduler --force --grace-period=0
+
+kubectl exec -it <airflow-scheduler-pod-name> -c airflow-scheduler -- airflow dags reserialize
 ```
 
 
