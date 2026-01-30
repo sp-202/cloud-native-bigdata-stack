@@ -9,6 +9,13 @@ This directory contains the actual Big Data logic. Every application here connec
 *   **Key File**: `airflow-deployment.yaml`. Defines the Scheduler and Webserver.
 *   **Config**: Uses `env` vars to connect to Postgres and MinIO (for DAG sync).
 
+```
+kubectl delete deployment airflow-webserver airflow-scheduler --now
+kubectl delete pods -l app=airflow-webserver --force --grace-period=0
+kubectl delete pods -l app=airflow-scheduler --force --grace-period=0
+```
+
+
 ### `spark-operator/`
 *   **Role**: Kubernetes Operator for Spark.
 *   **Function**: Watches for `SparkApplication` YAMLs and creates Pods.

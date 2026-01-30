@@ -48645,7 +48645,7 @@ type: kubernetes.io/service-account-token
 ---
 apiVersion: v1
 data:
-  private.key: U3VGS2ZsU051SWVRais1cjBEdllaMlBqV3ZjL0pBQlN3ZENmclZhL3pCdTZtQnpxdG56cHJTR21GSHFUTzFmMm1XaG4rUTN3dzJBZSsxQllVdVlRZGFldDVVNDc2emRoeXpiSTlBQ2VFL00rOWFCNVVia0RxWHY1NVE1b2MxVFVobmFPMFp0YXdaajhuNDJQNEJBend0ejNyZTVRWjBSMy9YSXpUcGF0S2pXT3FlbzdVS3U3RGtGSDRteFNBT2NHdm1sRkw3cXJDRy9sYi94U0VWV3lYcmVNNFlneDhVYXNaVHpyaU5RdnZ6ZFNuQmIrek1NSUlWOWdoaHBJaURQZ0RJVEpDS1VUZkc1YkhxR3VlKzZZdzBnN2E4ZzBtdlJBUHpnQ2tkMmw4amJJUXFpa0FUZ3JzdFJyMFJqaG92SGN3ZVUvajUxSytCT09wd3lYMmNOQUFnPT0=
+  private.key: YVp1N1pCbnpKSHovWnlxYm5Vc3R6TldHaldFbnRhUTVkSWZGQmJRNFVWMFlsU2tkb0JrTW1mZjBQbDBIRjdsWTNqaE9yMHB2N3UrcnlpS21JMmZOa3F4VlRqY2lGNUZzUlZnc0ZMTGJQMWVRREhuMHVNdzlVQjFPN3FnM1dpRjMzYldjVlA5a29VdlZkR2VuME1TeWt2M0gwYmNpRHhNZUE2RkUvNzJqd2t2STF1L1BRRFovdEZ5WHRBUEF0V21xdWl2amY0NEx6M1VzS05EU1V1U2s0L3pvV2k1ZDZsajJaZk9pZVdnMWpHc1BrbGpnbFZjcnQyUjY1eUt1eFFOMlMzbGNpZXlFRjFFZm5GdTdUSU1zMmZWK0F1VmhHenIzS2dBSGh2dWxqQ2xUVXJHOHZMY2NrSGJhMkdmVlNXd1pRMkpYc1VUZnBvZUsyZ2ZmNmdWM2x3PT0=
 kind: Secret
 metadata:
   labels:
@@ -49039,7 +49039,7 @@ spec:
     protocol: TCP
     targetPort: 4040
   selector:
-    interpreterSettingName: spark
+    app: spark-connect-server
     spark-role: driver
   type: NodePort
 ---
@@ -49443,6 +49443,8 @@ spec:
           value: 46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
         - name: AIRFLOW__CORE__LOAD_EXAMPLES
           value: "True"
+        - name: AIRFLOW__CORE__DAGS_FOLDER
+          value: /opt/airflow/dags/repo/airflow-dags
         image: apache/airflow:2.7.1
         name: airflow-scheduler
         resources:
@@ -49454,25 +49456,36 @@ spec:
             memory: 1Gi
         volumeMounts:
         - mountPath: /opt/airflow/dags
-          name: dags
+          name: dags-data
       - args:
-        - |
-          mc alias set myminio http://minio.default.svc.cluster.local:9000 minioadmin minioadmin;
-          while true; do
-            mc mirror --overwrite myminio/dags /opt/airflow/dags;
-            sleep 60;
-          done
-        command:
-        - /bin/sh
-        - -c
-        image: minio/mc
-        name: minio-sync
+        - --repo=https://github.com/sp-202/cloud-native-bigdata-stack.git
+        - --ref=main
+        - --period=60s
+        - --root=/opt/airflow/dags
+        - --link=repo
+        - --git-config=safe.directory:*
+        image: registry.k8s.io/git-sync/git-sync:v4.2.1
+        name: git-sync
+        securityContext:
+          runAsUser: 50000
         volumeMounts:
         - mountPath: /opt/airflow/dags
-          name: dags
+          name: dags-data
+      initContainers:
+      - command:
+        - sh
+        - -c
+        - rm -rf /opt/airflow/dags/.* /opt/airflow/dags/*
+        image: busybox:latest
+        name: wipe-stale-locks
+        volumeMounts:
+        - mountPath: /opt/airflow/dags
+          name: dags-data
+      securityContext:
+        fsGroup: 50000
       volumes:
       - emptyDir: {}
-        name: dags
+        name: dags-data
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -49509,6 +49522,8 @@ spec:
           value: admin
         - name: _AIRFLOW_WWW_USER_PASSWORD
           value: admin
+        - name: AIRFLOW__CORE__DAGS_FOLDER
+          value: /opt/airflow/dags/repo/airflow-dags
         image: apache/airflow:2.7.1
         name: airflow-webserver
         ports:
@@ -49522,25 +49537,36 @@ spec:
             memory: 1Gi
         volumeMounts:
         - mountPath: /opt/airflow/dags
-          name: dags
+          name: dags-data
       - args:
-        - |
-          mc alias set myminio http://minio.default.svc.cluster.local:9000 minioadmin minioadmin;
-          while true; do
-            mc mirror --overwrite myminio/dags /opt/airflow/dags;
-            sleep 60;
-          done
-        command:
-        - /bin/sh
-        - -c
-        image: minio/mc
-        name: minio-sync
+        - --repo=https://github.com/sp-202/cloud-native-bigdata-stack.git
+        - --ref=main
+        - --period=60s
+        - --root=/opt/airflow/dags
+        - --link=repo
+        - --git-config=safe.directory:*
+        image: registry.k8s.io/git-sync/git-sync:v4.2.1
+        name: git-sync
+        securityContext:
+          runAsUser: 50000
         volumeMounts:
         - mountPath: /opt/airflow/dags
-          name: dags
+          name: dags-data
+      initContainers:
+      - command:
+        - sh
+        - -c
+        - rm -rf /opt/airflow/dags/.* /opt/airflow/dags/*
+        image: busybox:latest
+        name: wipe-stale-locks
+        volumeMounts:
+        - mountPath: /opt/airflow/dags
+          name: dags-data
+      securityContext:
+        fsGroup: 50000
       volumes:
       - emptyDir: {}
-        name: dags
+        name: dags-data
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -50739,7 +50765,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 14da6b629c07ea46ebec70774bfb3e2d37398b86d5149edd72f93a72894125fb
+        checksum/config: 68204b336fee2e696c25eaf68f4506425ce50eb52594cf27a1f98565092945f3
       labels:
         app.kubernetes.io/component: api
         app.kubernetes.io/instance: kubernetes-dashboard
@@ -50825,7 +50851,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 4c09f1306092355da0d6698dd52fd1f931e6fc8b187b2c23ea5574138a0365c8
+        checksum/config: 767002c96f661a78da689955393251b87c446581262901a509c4fb277925e5f7
       labels:
         app.kubernetes.io/component: auth
         app.kubernetes.io/instance: kubernetes-dashboard
