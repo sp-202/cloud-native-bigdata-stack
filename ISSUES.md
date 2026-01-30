@@ -89,3 +89,4 @@ PROPERTIES (
     "aws.s3.enable_path_style_access" = "true"
 );
 ```
+kubectl exec -it airflow-scheduler-665fbc584c-gcz57 -c airflow-scheduler -- ls -l /opt/airflow/dags/dags-v5/repo/
