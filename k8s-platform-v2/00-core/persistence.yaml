@@ -24,3 +24,16 @@ spec:
     requests:
       storage: 10Gi
   # storageClassName: standard # Use standard (HDD) to avoid SSD quota
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-dags-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce  # Change this from ReadWriteMany
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
