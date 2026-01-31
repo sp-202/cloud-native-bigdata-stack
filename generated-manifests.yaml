@@ -44718,7 +44718,7 @@ data:
     provisioning = /etc/grafana/provisioning
     [server]
     domain = ''
-    root_url = http://grafana.172.30.1.145.sslip.io
+    root_url = http://grafana.34.10.159.254.sslip.io
     serve_from_sub_path = true
 kind: ConfigMap
 metadata:
@@ -47409,11 +47409,11 @@ apiVersion: v1
 data:
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
-  INGRESS_DOMAIN: 172.30.1.145.sslip.io
+  INGRESS_DOMAIN: 34.10.159.254.sslip.io
   MINIO_ENDPOINT: http://minio.default.svc.cluster.local:9000
 kind: ConfigMap
 metadata:
-  name: global-config-d865752ck4
+  name: global-config-k4fm9tk54f
 ---
 apiVersion: v1
 data:
@@ -49453,30 +49453,38 @@ spec:
           value: postgresql+psycopg2://airflow:airflow@postgres.default.svc.cluster.local/airflow
         - name: AIRFLOW__CORE__FERNET_KEY
           value: 46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
-        - name: AIRFLOW__CORE__LOAD_EXAMPLES
-          value: "False"
         - name: AIRFLOW__CORE__DAGS_FOLDER
-          value: /opt/airflow/dags/dags-v5/repo
+          value: /opt/airflow/dags/repo
         image: apache/airflow:2.7.1
         name: airflow-scheduler
         volumeMounts:
         - mountPath: /opt/airflow/dags
           name: dags-data
-      - env:
-        - name: GIT_SYNC_REPO
-          value: https://github.com/sp-202/airflow-dags.git
-        - name: GIT_SYNC_BRANCH
-          value: main
-        - name: GIT_SYNC_ROOT
-          value: /opt/airflow/dags/dags-v5
-        - name: GIT_SYNC_DEST
-          value: repo
-        - name: GIT_SYNC_WAIT
-          value: "60"
-        image: registry.k8s.io/git-sync/git-sync:v3.6.9
+      - command:
+        - /bin/sh
+        - -c
+        - |
+          cd /opt/airflow/dags
+          rm -rf repo
+          git clone https://github.com/sp-202/airflow-dags.git repo
+          while true; do
+            cd /opt/airflow/dags/repo && git pull
+            sleep 60
+          done
+        image: alpine/git
         name: git-sync
         securityContext:
           runAsUser: 50000
+        volumeMounts:
+        - mountPath: /opt/airflow/dags
+          name: dags-data
+      initContainers:
+      - command:
+        - sh
+        - -c
+        - rm -rf /opt/airflow/dags/*
+        image: busybox
+        name: wipe-old-files
         volumeMounts:
         - mountPath: /opt/airflow/dags
           name: dags-data
@@ -49514,36 +49522,42 @@ spec:
           value: 46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
         - name: AIRFLOW__CORE__LOAD_EXAMPLES
           value: "False"
-        - name: _AIRFLOW_DB_UPGRADE
-          value: "true"
-        - name: _AIRFLOW_WWW_USER_CREATE
-          value: "true"
-        - name: _AIRFLOW_WWW_USER_USERNAME
-          value: admin
-        - name: _AIRFLOW_WWW_USER_PASSWORD
-          value: admin
         - name: AIRFLOW__CORE__DAGS_FOLDER
-          value: /opt/airflow/dags/dags-v5/repo
+          value: /opt/airflow/dags/repo
         image: apache/airflow:2.7.1
         name: airflow-webserver
         volumeMounts:
         - mountPath: /opt/airflow/dags
           name: dags-data
-      - env:
-        - name: GIT_SYNC_REPO
-          value: https://github.com/sp-202/airflow-dags.git
-        - name: GIT_SYNC_BRANCH
-          value: main
-        - name: GIT_SYNC_ROOT
-          value: /opt/airflow/dags/dags-v5
-        - name: GIT_SYNC_DEST
-          value: repo
-        - name: GIT_SYNC_WAIT
-          value: "60"
-        image: registry.k8s.io/git-sync/git-sync:v3.6.9
+      - command:
+        - /bin/sh
+        - -c
+        - |
+          # 1. Clean up and Clone
+          cd /opt/airflow/dags
+          rm -rf repo
+          git clone https://github.com/sp-202/airflow-dags.git repo
+
+          # 2. Infinite Loop to Pull changes
+          while true; do
+            echo "Pulling latest code..."
+            cd /opt/airflow/dags/repo && git pull
+            sleep 60
+          done
+        image: alpine/git
         name: git-sync
         securityContext:
           runAsUser: 50000
+        volumeMounts:
+        - mountPath: /opt/airflow/dags
+          name: dags-data
+      initContainers:
+      - command:
+        - sh
+        - -c
+        - rm -rf /opt/airflow/dags/*
+        image: busybox
+        name: wipe-old-files
         volumeMounts:
         - mountPath: /opt/airflow/dags
           name: dags-data
@@ -49666,22 +49680,22 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: AWS_ACCESS_KEY_ID
-              name: global-config-d865752ck4
+              name: global-config-k4fm9tk54f
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             configMapKeyRef:
               key: AWS_SECRET_ACCESS_KEY
-              name: global-config-d865752ck4
+              name: global-config-k4fm9tk54f
         - name: JUPYTER_S3_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-d865752ck4
+              name: global-config-k4fm9tk54f
         - name: MINIO_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-d865752ck4
+              name: global-config-k4fm9tk54f
         - name: JUPYTER_ENABLE_LAB
           value: "yes"
         - name: JUPYTER_TOKEN
@@ -50522,7 +50536,7 @@ spec:
               fieldPath: metadata.name
         envFrom:
         - configMapRef:
-            name: global-config-d865752ck4
+            name: global-config-k4fm9tk54f
         image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-fix-v4-mssql-opt
         imagePullPolicy: Always
         name: spark-connect-server
@@ -55978,7 +55992,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: airflow.172.30.1.145.sslip.io
+  - host: airflow.34.10.159.254.sslip.io
     http:
       paths:
       - backend:
@@ -55988,7 +56002,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: minio.172.30.1.145.sslip.io
+  - host: minio.34.10.159.254.sslip.io
     http:
       paths:
       - backend:
@@ -55998,7 +56012,7 @@ spec:
               name: console
         path: /
         pathType: Prefix
-  - host: s3.172.30.1.145.sslip.io
+  - host: s3.34.10.159.254.sslip.io
     http:
       paths:
       - backend:
@@ -56008,7 +56022,7 @@ spec:
               name: api
         path: /
         pathType: Prefix
-  - host: superset.172.30.1.145.sslip.io
+  - host: superset.34.10.159.254.sslip.io
     http:
       paths:
       - backend:
@@ -56018,7 +56032,7 @@ spec:
               name: http
         path: /
         pathType: Prefix
-  - host: jupyterhub.172.30.1.145.sslip.io
+  - host: jupyterhub.34.10.159.254.sslip.io
     http:
       paths:
       - backend:
@@ -56028,7 +56042,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: spark.172.30.1.145.sslip.io
+  - host: spark.34.10.159.254.sslip.io
     http:
       paths:
       - backend:
@@ -56049,7 +56063,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: grafana.172.30.1.145.sslip.io
+  - host: grafana.34.10.159.254.sslip.io
     http:
       paths:
       - backend:
@@ -56071,7 +56085,7 @@ metadata:
   namespace: default
 spec:
   rules:
-  - host: dashboard.172.30.1.145.sslip.io
+  - host: dashboard.34.10.159.254.sslip.io
     http:
       paths:
       - backend:
@@ -56090,7 +56104,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: starrocks.172.30.1.145.sslip.io
+  - host: starrocks.34.10.159.254.sslip.io
     http:
       paths:
       - backend:
@@ -56111,7 +56125,7 @@ spec:
   - web
   routes:
   - kind: Rule
-    match: Host(`traefik.172.30.1.145.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    match: Host(`traefik.34.10.159.254.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
     services:
     - kind: TraefikService
       name: api@internal

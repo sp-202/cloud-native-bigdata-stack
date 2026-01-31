@@ -37,8 +37,8 @@ kubectl delete svc kubernetes-dashboard-web kubernetes-dashboard-api -n default 
 # 2. Generate Helm Manifests (Adapted from deploy-gke.sh)
 # ---------------------------------------------------
 # Define the static IP found in the codebase to be replaced (Legacy GKE artifact, kept for safety)
-STATIC_IP_TO_REPLACE="172.30.1.145"
-STATIC_DOMAIN_TO_REPLACE="172.30.1.145.sslip.io"
+STATIC_IP_TO_REPLACE="34.10.159.254"
+STATIC_DOMAIN_TO_REPLACE="34.10.159.254.sslip.io"
 
 echo "Generating Helm manifests..."
 mkdir -p k8s-platform-v2/03-apps/charts/gen
@@ -84,13 +84,14 @@ helm template loki-stack grafana/loki-stack \
   > k8s-platform-v2/05-monitoring/charts/gen/loki-stack.yaml
 
 # kubernetes-dashboard
-helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/
-helm repo update kubernetes-dashboard
-helm template kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard \
-  --namespace default \
-  --version 7.5.0 \
-  -f k8s-platform-v2/05-monitoring/values-dashboard.yaml \
-  > k8s-platform-v2/05-monitoring/charts/gen/kubernetes-dashboard.yaml
+# kubernetes-dashboard
+# helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/
+# helm repo update kubernetes-dashboard
+# helm template kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard \
+#   --namespace default \
+#   --version 7.5.0 \
+#   -f k8s-platform-v2/05-monitoring/values-dashboard.yaml \
+#   > k8s-platform-v2/05-monitoring/charts/gen/kubernetes-dashboard.yaml
 
 
 

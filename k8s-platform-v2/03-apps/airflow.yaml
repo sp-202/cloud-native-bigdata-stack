@@ -18,8 +18,11 @@ spec:
       initContainers:
       - name: wipe-old-files
         image: busybox
-        # We delete everything to start fresh
-        command: ["sh", "-c", "rm -rf /opt/airflow/dags/*"]
+        # Use simple check or just skip wipe if sharing volume actively
+        # For hostPath sharing, maybe don't wipe? 
+        # Ideally, git-sync manages the repo.
+        # Let's keep it simple: git-sync owns the repo folder.
+        command: ["sh", "-c", "echo 'Shared Volume Mode'"] 
         volumeMounts:
         - name: dags-data
           mountPath: /opt/airflow/dags
@@ -37,39 +40,16 @@ spec:
         - name: AIRFLOW__CORE__LOAD_EXAMPLES
           value: "False"
         - name: AIRFLOW__CORE__DAGS_FOLDER
-          value: "/opt/airflow/dags/repo"
+          value: "/opt/airflow/dags/repo" # Git-sync syncs to <root>/repo
         volumeMounts:
         - name: dags-data
-          mountPath: /opt/airflow/dags
-
-      - name: git-sync
-        # We use alpine/git to perform a REAL clone, not a 'link' sync
-        image: alpine/git
-        securityContext:
-          runAsUser: 50000
-        command:
-        - /bin/sh
-        - -c
-        - |
-          # 1. Clean up and Clone
-          cd /opt/airflow/dags
-          rm -rf repo
-          git clone https://github.com/sp-202/airflow-dags.git repo
-          
-          # 2. Infinite Loop to Pull changes
-          while true; do
-            echo "Pulling latest code..."
-            cd /opt/airflow/dags/repo && git pull
-            sleep 60
-          done
-        volumeMounts:
-        - name: dags-data
-          mountPath: /opt/airflow/dags
+          mountPath: /opt/airflow/dags # Mount shared PVC here
+          readOnly: true # Webserver just reads
 
       volumes:
       - name: dags-data
         persistentVolumeClaim:
-          claimName: airflow-dags-pvc
+          claimName: airflow-dags-shared-pvc # Use shared PVC
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -88,13 +68,6 @@ spec:
     spec:
       securityContext:
         fsGroup: 50000
-      initContainers:
-      - name: wipe-old-files
-        image: busybox
-        command: ["sh", "-c", "rm -rf /opt/airflow/dags/*"]
-        volumeMounts:
-        - name: dags-data
-          mountPath: /opt/airflow/dags
       containers:
       - name: airflow-scheduler
         image: apache/airflow:2.7.1
@@ -111,30 +84,12 @@ spec:
         volumeMounts:
         - name: dags-data
           mountPath: /opt/airflow/dags
-
-      - name: git-sync
-        image: alpine/git
-        securityContext:
-          runAsUser: 50000
-        command:
-        - /bin/sh
-        - -c
-        - |
-          cd /opt/airflow/dags
-          rm -rf repo
-          git clone https://github.com/sp-202/airflow-dags.git repo
-          while true; do
-            cd /opt/airflow/dags/repo && git pull
-            sleep 60
-          done
-        volumeMounts:
-        - name: dags-data
-          mountPath: /opt/airflow/dags
+          readOnly: true
 
       volumes:
       - name: dags-data
         persistentVolumeClaim:
-          claimName: airflow-dags-pvc
+          claimName: airflow-dags-shared-pvc
 ---
 apiVersion: v1
 kind: Service
