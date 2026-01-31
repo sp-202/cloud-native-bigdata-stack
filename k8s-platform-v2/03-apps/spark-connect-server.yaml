@@ -40,6 +40,8 @@ spec:
               --conf spark.kubernetes.namespace=default \
               --conf spark.sql.connect.port=15002 \
               --conf spark.sql.connect.common.enforce_pyspark_compat=true \
+              --conf spark.hadoop.fs.s3a.path.style.access=true \
+              --conf spark.hadoop.fs.s3a.connection.ssl.enabled=false \
               --conf spark.hadoop.fs.s3a.endpoint=$MINIO_ENDPOINT \
               --conf spark.hadoop.fs.s3a.access.key=$AWS_ACCESS_KEY_ID \
               --conf spark.hadoop.fs.s3a.secret.key=$AWS_SECRET_ACCESS_KEY \
