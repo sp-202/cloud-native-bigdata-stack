@@ -47851,7 +47851,7 @@ data:
     spark.master                     k8s://https://kubernetes.default.svc
     spark.submit.deployMode          client
     spark.kubernetes.namespace       default
-    spark.kubernetes.container.image subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-fix-v6-proper-way
+    spark.kubernetes.container.image subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars
     spark.kubernetes.authenticate.driver.serviceAccountName spark-operator-spark
 
     # --- SQL & ANSI Mode ---
@@ -47929,7 +47929,7 @@ data:
     spark.sql.adaptive.enabled               true
 kind: ConfigMap
 metadata:
-  name: spark-config-6ctg8hb4fd
+  name: spark-config-t96t625g74
 ---
 apiVersion: v1
 data:
@@ -50459,7 +50459,7 @@ spec:
           --conf spark.dynamicAllocation.minExecutors=1 \
           --conf spark.dynamicAllocation.maxExecutors=5 \
           --conf spark.dynamicAllocation.maxExecutors=5 \
-          --conf spark.kubernetes.container.image=subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-fix-v6-proper-way \
+          --conf spark.kubernetes.container.image=subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars \
           --conf spark.kubernetes.driver.pod.name=$POD_NAME \
           --conf spark.kubernetes.driver.pod.name=$POD_NAME \
           --conf spark.kubernetes.namespace=default \
@@ -50489,7 +50489,7 @@ spec:
         envFrom:
         - configMapRef:
             name: global-config-k4fm9tk54f
-        image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-fix-v6-proper-way
+        image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars
         imagePullPolicy: Always
         name: spark-connect-server
         ports:
@@ -50504,7 +50504,7 @@ spec:
       serviceAccountName: spark-operator-spark
       volumes:
       - configMap:
-          name: spark-config-6ctg8hb4fd
+          name: spark-config-t96t625g74
         name: spark-defaults
 ---
 apiVersion: apps/v1
