@@ -71,5 +71,18 @@ WORKDIR $SPARK_HOME
 RUN cp $SPARK_HOME/kubernetes/dockerfiles/spark/entrypoint.sh /opt/entrypoint.sh && \
     chmod +x /opt/entrypoint.sh
 
+# Create baseline spark-defaults.conf with integer timeouts to avoid NumberFormatException
+RUN echo "spark.network.timeout 120\n\
+spark.files.fetchTimeout 60\n\
+spark.executor.heartbeatInterval 10\n\
+spark.hadoop.fs.s3a.connection.timeout 60\n\
+spark.hadoop.fs.s3a.connection.establish.timeout 30\n\
+spark.hadoop.fs.s3a.connection.acquisition.timeout 60\n\
+spark.hadoop.fs.s3a.threads.keepalivetime 60\n\
+spark.hadoop.fs.s3a.multipart.purge.age 86400\n\
+spark.sql.extensions io.delta.sql.DeltaSparkSessionExtension\n\
+spark.sql.catalog.spark_catalog org.apache.spark.sql.delta.catalog.DeltaCatalog\n\
+spark.sql.catalogImplementation hive" > $SPARK_HOME/conf/spark-defaults.conf
+
 ENTRYPOINT ["/opt/entrypoint.sh"]
 CMD ["bash"]
