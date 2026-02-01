@@ -56,7 +56,7 @@ metadata:
   namespace: default
 spec:
   rules:
-  - host: git-sync.34.10.159.254.sslip.io
+  - host: git-sync.136.116.16.17.sslip.io
     http:
       paths:
       - path: /
