@@ -44718,7 +44718,7 @@ data:
     provisioning = /etc/grafana/provisioning
     [server]
     domain = ''
-    root_url = http://grafana.34.10.159.254.sslip.io
+    root_url = http://grafana.136.116.16.17.sslip.io
     serve_from_sub_path = true
 kind: ConfigMap
 metadata:
@@ -47409,11 +47409,11 @@ apiVersion: v1
 data:
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
-  INGRESS_DOMAIN: 34.10.159.254.sslip.io
+  INGRESS_DOMAIN: 136.116.16.17.sslip.io
   MINIO_ENDPOINT: http://minio.default.svc.cluster.local:9000
 kind: ConfigMap
 metadata:
-  name: global-config-k4fm9tk54f
+  name: global-config-ddhc826hm6
 ---
 apiVersion: v1
 data:
@@ -49632,22 +49632,22 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: AWS_ACCESS_KEY_ID
-              name: global-config-k4fm9tk54f
+              name: global-config-ddhc826hm6
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             configMapKeyRef:
               key: AWS_SECRET_ACCESS_KEY
-              name: global-config-k4fm9tk54f
+              name: global-config-ddhc826hm6
         - name: JUPYTER_S3_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-k4fm9tk54f
+              name: global-config-ddhc826hm6
         - name: MINIO_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-k4fm9tk54f
+              name: global-config-ddhc826hm6
         - name: JUPYTER_ENABLE_LAB
           value: "yes"
         - name: JUPYTER_TOKEN
@@ -50465,6 +50465,8 @@ spec:
           --conf spark.kubernetes.namespace=default \
           --conf spark.sql.connect.port=15002 \
           --conf spark.sql.connect.common.enforce_pyspark_compat=true \
+          --conf spark.hadoop.fs.s3a.path.style.access=true \
+          --conf spark.hadoop.fs.s3a.connection.ssl.enabled=false \
           --conf spark.hadoop.fs.s3a.endpoint=$MINIO_ENDPOINT \
           --conf spark.hadoop.fs.s3a.access.key=$AWS_ACCESS_KEY_ID \
           --conf spark.hadoop.fs.s3a.secret.key=$AWS_SECRET_ACCESS_KEY \
@@ -50488,7 +50490,7 @@ spec:
               fieldPath: metadata.name
         envFrom:
         - configMapRef:
-            name: global-config-k4fm9tk54f
+            name: global-config-ddhc826hm6
         image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars
         imagePullPolicy: Always
         name: spark-connect-server
@@ -55944,7 +55946,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: airflow.34.10.159.254.sslip.io
+  - host: airflow.136.116.16.17.sslip.io
     http:
       paths:
       - backend:
@@ -55954,7 +55956,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: minio.34.10.159.254.sslip.io
+  - host: minio.136.116.16.17.sslip.io
     http:
       paths:
       - backend:
@@ -55964,7 +55966,7 @@ spec:
               name: console
         path: /
         pathType: Prefix
-  - host: s3.34.10.159.254.sslip.io
+  - host: s3.136.116.16.17.sslip.io
     http:
       paths:
       - backend:
@@ -55974,7 +55976,7 @@ spec:
               name: api
         path: /
         pathType: Prefix
-  - host: superset.34.10.159.254.sslip.io
+  - host: superset.136.116.16.17.sslip.io
     http:
       paths:
       - backend:
@@ -55984,7 +55986,7 @@ spec:
               name: http
         path: /
         pathType: Prefix
-  - host: jupyterhub.34.10.159.254.sslip.io
+  - host: jupyterhub.136.116.16.17.sslip.io
     http:
       paths:
       - backend:
@@ -55994,7 +55996,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: spark.34.10.159.254.sslip.io
+  - host: spark.136.116.16.17.sslip.io
     http:
       paths:
       - backend:
@@ -56015,7 +56017,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: grafana.34.10.159.254.sslip.io
+  - host: grafana.136.116.16.17.sslip.io
     http:
       paths:
       - backend:
@@ -56037,7 +56039,7 @@ metadata:
   namespace: default
 spec:
   rules:
-  - host: dashboard.34.10.159.254.sslip.io
+  - host: dashboard.136.116.16.17.sslip.io
     http:
       paths:
       - backend:
@@ -56056,7 +56058,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: starrocks.34.10.159.254.sslip.io
+  - host: starrocks.136.116.16.17.sslip.io
     http:
       paths:
       - backend:
@@ -56077,7 +56079,7 @@ spec:
   - web
   routes:
   - kind: Rule
-    match: Host(`traefik.34.10.159.254.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    match: Host(`traefik.136.116.16.17.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
     services:
     - kind: TraefikService
       name: api@internal
