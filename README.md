@@ -212,4 +212,37 @@ Superset is pre-connected to the internal Postgres and Hive Metastore.
 ├── MONITORING_GUIDE.md       # Observability instructions
 ├── README.md                 # Entry point
 └── SUPERSET_CONNECTION_GUIDE.md # BI connectivity instructions
+
+---
+
+## 🔧 Manual DAG Deployment (Bypass Git-Sync)
+
+For rapid development and testing, you can bypass the Git synchronizer and manually upload DAGs directly to the cluster. This is useful when you want to test changes immediately without committing to the repository.
+
+### 1. Identify the Git-Sync Pod
+The `airflow-git-sync` pod has write access to the DAGs volume.
+
+```bash
+kubectl get pods -n default -l app=airflow-git-sync
+# Example Output: airflow-git-sync-5669c94965-t52rx
 ```
+
+### 2. Upload Files
+Use `kubectl exec` to pipe file contents directly to the pod (this bypasses some read-only/ownership issues with `kubectl cp`).
+
+**Syntax:**
+```bash
+cat <local-file> | kubectl exec -i -n default <git-sync-pod-name> -- tee /dags/repo/dags/<filename> > /dev/null
+```
+
+**Example:**
+```bash
+# Upload DAG file
+cat airflow-dags/dags/my_dag.py | kubectl exec -i -n default airflow-git-sync-5669c94965-t52rx -- tee /dags/repo/dags/my_dag.py > /dev/null
+
+# Upload Spark Manifest
+cat airflow-dags/dags/my_manifest.yaml | kubectl exec -i -n default airflow-git-sync-5669c94965-t52rx -- tee /dags/repo/dags/my_manifest.yaml > /dev/null
+```
+
+> [!WARNING]
+> Changes made this way are **ephemeral** and will be overwritten the next time the Git-Sync sidecar pulls from the remote repository. Always commit your final changes to Git.
