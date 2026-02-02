@@ -18,11 +18,7 @@ spec:
       initContainers:
       - name: wipe-old-files
         image: busybox
-        # Use simple check or just skip wipe if sharing volume actively
-        # For hostPath sharing, maybe don't wipe? 
-        # Ideally, git-sync manages the repo.
-        # Let's keep it simple: git-sync owns the repo folder.
-        command: ["sh", "-c", "echo 'Shared Volume Mode'"] 
+        command: ["sh", "-c", "echo 'Shared Volume Mode'"]
         volumeMounts:
         - name: dags-data
           mountPath: /opt/airflow/dags
@@ -40,16 +36,15 @@ spec:
         - name: AIRFLOW__CORE__LOAD_EXAMPLES
           value: "False"
         - name: AIRFLOW__CORE__DAGS_FOLDER
-          value: "/opt/airflow/dags/repo" # Git-sync syncs to <root>/repo
+          value: "/opt/airflow/dags/repo/dags"
         volumeMounts:
         - name: dags-data
-          mountPath: /opt/airflow/dags # Mount shared PVC here
-          readOnly: true # Webserver just reads
-
+          mountPath: /opt/airflow/dags
+          readOnly: true
       volumes:
       - name: dags-data
         persistentVolumeClaim:
-          claimName: airflow-dags-shared-pvc # Use shared PVC
+          claimName: airflow-dags-shared-pvc
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -80,12 +75,11 @@ spec:
         - name: AIRFLOW__CORE__FERNET_KEY
           value: "46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho="
         - name: AIRFLOW__CORE__DAGS_FOLDER
-          value: "/opt/airflow/dags/repo"
+          value: "/opt/airflow/dags/repo/dags"
         volumeMounts:
         - name: dags-data
           mountPath: /opt/airflow/dags
           readOnly: true
-
       volumes:
       - name: dags-data
         persistentVolumeClaim:
