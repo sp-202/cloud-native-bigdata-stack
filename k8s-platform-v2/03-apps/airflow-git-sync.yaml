@@ -16,6 +16,23 @@ spec:
       securityContext:
         fsGroup: 65533
         fsGroupChangePolicy: "OnRootMismatch"
+      initContainers:
+      - name: download-mc
+        image: curlimages/curl
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /bin-utils/mc
+            chmod +x /bin-utils/mc
+            cat <<EOF > /bin-utils/sync-hook.sh
+            #!/bin/sh
+            /bin-utils/mc alias set myminio http://minio.default.svc.cluster.local:9000 \$MINIO_ACCESS_KEY \$MINIO_SECRET_KEY
+            /bin-utils/mc mirror --overwrite /dags/repo myminio/dags
+            EOF
+            chmod +x /bin-utils/sync-hook.sh
+        volumeMounts:
+        - name: bin-utils
+          mountPath: /bin-utils
       containers:
       - name: git-sync
         image: registry.k8s.io/git-sync/git-sync:v4.2.3
@@ -23,6 +40,11 @@ spec:
           runAsUser: 0
           runAsGroup: 0
           allowPrivilegeEscalation: false
+        env:
+          - name: MINIO_ACCESS_KEY
+            value: "minioadmin"
+          - name: MINIO_SECRET_KEY
+            value: "minioadmin"
         args:
           - "--repo=https://github.com/sp-202/airflow-dags.git"
           - "--ref=main"
@@ -31,10 +53,15 @@ spec:
           - "--period=60s"
           - "--webhook-method=POST"
           - "--http-bind=0.0.0.0:9533"
+          - "--exechook-command=/bin-utils/sync-hook.sh"
         volumeMounts:
+        - name: bin-utils
+          mountPath: /bin-utils
         - name: dags-shared
           mountPath: /dags
       volumes:
+      - name: bin-utils
+        emptyDir: {}
       - name: dags-shared
         persistentVolumeClaim:
           claimName: airflow-dags-shared-pvc
