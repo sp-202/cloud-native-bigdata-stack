@@ -2,6 +2,7 @@ from airflow import DAG
 from airflow.providers.cncf.kubernetes.operators.spark_kubernetes import SparkKubernetesOperator
 from airflow.utils.dates import days_ago
 import os
+import yaml
 
 default_args = {
     'owner': 'airflow',
