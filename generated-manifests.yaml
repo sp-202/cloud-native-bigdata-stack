@@ -44718,7 +44718,7 @@ data:
     provisioning = /etc/grafana/provisioning
     [server]
     domain = ''
-    root_url = http://grafana.172.30.1.145.sslip.io
+    root_url = http://grafana.35.225.56.250.sslip.io
     serve_from_sub_path = true
 kind: ConfigMap
 metadata:
@@ -47409,11 +47409,11 @@ apiVersion: v1
 data:
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
-  INGRESS_DOMAIN: 172.30.1.145.sslip.io
+  INGRESS_DOMAIN: 35.225.56.250.sslip.io
   MINIO_ENDPOINT: http://minio.default.svc.cluster.local:9000
 kind: ConfigMap
 metadata:
-  name: global-config-d865752ck4
+  name: global-config-4mm29bhfcc
 ---
 apiVersion: v1
 data:
@@ -49419,7 +49419,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: airflow-dags-pvc
+  name: airflow-dags-shared-pvc
 spec:
   accessModes:
   - ReadWriteOnce
@@ -49454,7 +49454,7 @@ spec:
         - name: AIRFLOW__CORE__FERNET_KEY
           value: 46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
         - name: AIRFLOW__CORE__DAGS_FOLDER
-          value: /opt/airflow/dags/repo
+          value: /opt/airflow/dags/repo/dags
         image: apache/airflow:2.7.1
         name: airflow-scheduler
         volumeMounts:
@@ -49496,7 +49496,7 @@ spec:
         - name: AIRFLOW__CORE__LOAD_EXAMPLES
           value: "False"
         - name: AIRFLOW__CORE__DAGS_FOLDER
-          value: /opt/airflow/dags/repo
+          value: /opt/airflow/dags/repo/dags
         image: apache/airflow:2.7.1
         name: airflow-webserver
         volumeMounts:
@@ -49632,22 +49632,22 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: AWS_ACCESS_KEY_ID
-              name: global-config-d865752ck4
+              name: global-config-4mm29bhfcc
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             configMapKeyRef:
               key: AWS_SECRET_ACCESS_KEY
-              name: global-config-d865752ck4
+              name: global-config-4mm29bhfcc
         - name: JUPYTER_S3_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-d865752ck4
+              name: global-config-4mm29bhfcc
         - name: MINIO_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-d865752ck4
+              name: global-config-4mm29bhfcc
         - name: JUPYTER_ENABLE_LAB
           value: "yes"
         - name: JUPYTER_TOKEN
@@ -50490,7 +50490,7 @@ spec:
               fieldPath: metadata.name
         envFrom:
         - configMapRef:
-            name: global-config-d865752ck4
+            name: global-config-4mm29bhfcc
         image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars
         imagePullPolicy: Always
         name: spark-connect-server
@@ -55946,7 +55946,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: airflow.172.30.1.145.sslip.io
+  - host: airflow.35.225.56.250.sslip.io
     http:
       paths:
       - backend:
@@ -55956,7 +55956,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: minio.172.30.1.145.sslip.io
+  - host: minio.35.225.56.250.sslip.io
     http:
       paths:
       - backend:
@@ -55966,7 +55966,7 @@ spec:
               name: console
         path: /
         pathType: Prefix
-  - host: s3.172.30.1.145.sslip.io
+  - host: s3.35.225.56.250.sslip.io
     http:
       paths:
       - backend:
@@ -55976,7 +55976,7 @@ spec:
               name: api
         path: /
         pathType: Prefix
-  - host: superset.172.30.1.145.sslip.io
+  - host: superset.35.225.56.250.sslip.io
     http:
       paths:
       - backend:
@@ -55986,7 +55986,7 @@ spec:
               name: http
         path: /
         pathType: Prefix
-  - host: jupyterhub.172.30.1.145.sslip.io
+  - host: jupyterhub.35.225.56.250.sslip.io
     http:
       paths:
       - backend:
@@ -55996,7 +55996,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: spark.172.30.1.145.sslip.io
+  - host: spark.35.225.56.250.sslip.io
     http:
       paths:
       - backend:
@@ -56017,7 +56017,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: grafana.172.30.1.145.sslip.io
+  - host: grafana.35.225.56.250.sslip.io
     http:
       paths:
       - backend:
@@ -56039,7 +56039,7 @@ metadata:
   namespace: default
 spec:
   rules:
-  - host: dashboard.172.30.1.145.sslip.io
+  - host: dashboard.35.225.56.250.sslip.io
     http:
       paths:
       - backend:
@@ -56058,7 +56058,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: starrocks.172.30.1.145.sslip.io
+  - host: starrocks.35.225.56.250.sslip.io
     http:
       paths:
       - backend:
@@ -56079,7 +56079,7 @@ spec:
   - web
   routes:
   - kind: Rule
-    match: Host(`traefik.172.30.1.145.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    match: Host(`traefik.35.225.56.250.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
     services:
     - kind: TraefikService
       name: api@internal

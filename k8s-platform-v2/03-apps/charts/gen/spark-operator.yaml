@@ -125,6 +125,7 @@ spec:
       labels:
         app.kubernetes.io/name: spark-operator
         app.kubernetes.io/instance: spark-operator
+        app.kubernetes.io/component: webhook
     spec:
       serviceAccountName: spark-operator
       securityContext:
