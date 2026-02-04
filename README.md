@@ -246,3 +246,15 @@ cat airflow-dags/dags/my_manifest.yaml | kubectl exec -i -n default airflow-git-
 
 > [!WARNING]
 > Changes made this way are **ephemeral** and will be overwritten the next time the Git-Sync sidecar pulls from the remote repository. Always commit your final changes to Git.
+
+---
+
+## 🔧 Spark Configuration Management
+
+The `spark-production-defaults` ConfigMap provides global defaults for all Spark applications. When you make changes to `production-spark-defaults.conf`, you must sync them to the cluster:
+
+```bash
+# Update ConfigMap from local file
+kubectl create configmap spark-production-defaults --from-file=spark-defaults.conf=production-spark-defaults.conf --dry-run=client -o yaml | kubectl apply -f -
+```
+

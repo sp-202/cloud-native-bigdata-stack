@@ -5,6 +5,7 @@ resources:
   - airflow.yaml
   - hive.yaml
   - jupyterhub.yaml
+  - airflow-git-sync.yaml
 
   - spark-ui-service.yaml
   - spark-connect-server.yaml

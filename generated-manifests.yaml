@@ -44718,7 +44718,7 @@ data:
     provisioning = /etc/grafana/provisioning
     [server]
     domain = ''
-    root_url = http://grafana.35.225.56.250.sslip.io
+    root_url = http://grafana.136.114.41.60.sslip.io
     serve_from_sub_path = true
 kind: ConfigMap
 metadata:
@@ -47409,11 +47409,11 @@ apiVersion: v1
 data:
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
-  INGRESS_DOMAIN: 35.225.56.250.sslip.io
+  INGRESS_DOMAIN: 136.114.41.60.sslip.io
   MINIO_ENDPOINT: http://minio.default.svc.cluster.local:9000
 kind: ConfigMap
 metadata:
-  name: global-config-4mm29bhfcc
+  name: global-config-69kckgf62b
 ---
 apiVersion: v1
 data:
@@ -47496,7 +47496,7 @@ data:
     </configuration>
 kind: ConfigMap
 metadata:
-  name: hive-config-bth8gd7d8t
+  name: hive-config
 ---
 apiVersion: v1
 data:
@@ -47835,101 +47835,6 @@ data:
 kind: ConfigMap
 metadata:
   name: postgres-init-ck7cgh8g2c
----
-apiVersion: v1
-data:
-  spark-defaults.conf: |
-    # =============================================================================
-    # Spark Configuration (Kubernetes)
-    # =============================================================================
-
-    # --- Application & Naming ---
-    spark.app.name                   spark-bigdata
-    spark.kubernetes.executor.podNamePrefix spark-executor
-
-    # --- Master & Deployment ---
-    spark.master                     k8s://https://kubernetes.default.svc
-    spark.submit.deployMode          client
-    spark.kubernetes.namespace       default
-    spark.kubernetes.container.image subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars
-    spark.kubernetes.authenticate.driver.serviceAccountName spark-operator-spark
-
-    # --- SQL & ANSI Mode ---
-    # Disable ANSI mode to fix NumberFormatException or similar parsing issues
-    spark.sql.ansi.enabled           false
-
-    # --- Dynamic Resource Allocation ---
-    spark.dynamicAllocation.enabled              true
-    spark.dynamicAllocation.shuffleTracking.enabled true
-    spark.dynamicAllocation.minExecutors         1
-    spark.dynamicAllocation.maxExecutors         5
-    # Use bare integers (seconds) to avoid parsing issues
-    spark.dynamicAllocation.executorIdleTimeout  600
-    spark.dynamicAllocation.schedulerBacklogTimeout 5
-
-    # --- Networking & Timeouts ---
-    # Set explicit timeouts as integers (seconds) to bypass invalid defaults like "60s"
-    spark.network.timeout            120
-    spark.files.fetchTimeout         60
-    spark.executor.heartbeatInterval 10
-    spark.rpc.askTimeout             120
-
-    # --- Hadoop S3A Configuration (CRITICAL Fixes for Spark 4.0) ---
-    # Override properties that default to "60s" or "24h" causing NumberFormatException
-    spark.hadoop.fs.s3a.threads.keepalivetime    60
-    spark.hadoop.fs.s3a.connection.timeout       200
-    spark.hadoop.fs.s3a.connection.establish.timeout 30
-    spark.hadoop.fs.s3a.connection.acquisition.timeout 60
-    spark.hadoop.fs.s3a.connection.idle.time     60
-    spark.hadoop.fs.s3a.connection.request.timeout 60
-    spark.hadoop.fs.s3a.connection.ttl           300
-    spark.hadoop.fs.s3a.multipart.purge.age      86400
-    spark.hadoop.fs.s3a.paging.maximum           5000
-
-    # --- Executor & Driver Resources ---
-    spark.executor.cores             1
-    spark.executor.memory            2g
-    spark.driver.cores               1
-    spark.driver.memory              2g
-
-    # --- Metrics & Monitoring ---
-    spark.ui.prometheus.enabled      true
-    spark.metrics.namespace          spark
-
-    # --- SQL & Catalogs (Delta Lake & Hive) ---
-    # Iceberg extensions removed to fix DELTA_MISSING_ICEBERG_CLASS
-    spark.sql.extensions             io.delta.sql.DeltaSparkSessionExtension
-    spark.sql.defaultCatalog         spark_catalog
-    spark.sql.catalog.spark_catalog  org.apache.spark.sql.delta.catalog.DeltaCatalog
-    spark.sql.catalogImplementation  hive
-    spark.hadoop.hive.metastore.uris thrift://hive-metastore.default.svc.cluster.local:9083
-    spark.sql.warehouse.dir          s3a://warehouse/managed/
-
-    # --- Delta Lake Features ---
-    # UniForm (Iceberg compatibility) disabled completely
-    # Ensure UniForm is OFF by default
-    spark.databricks.delta.universalFormat.enabledFormats none
-    spark.databricks.delta.allowArbitraryProperties.enabled true
-
-    # --- S3 / MinIO Configuration ---
-    spark.hadoop.fs.s3a.impl                 org.apache.hadoop.fs.s3a.S3AFileSystem
-    spark.hadoop.fs.s3.impl                  org.apache.hadoop.fs.s3a.S3AFileSystem
-    spark.hadoop.fs.s3a.path.style.access    true
-    spark.hadoop.fs.s3a.connection.ssl.enabled false
-    spark.hadoop.fs.s3a.aws.credentials.provider org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
-    spark.hadoop.fs.s3a.fast.upload          true
-
-    # --- Networking & UI ---
-    spark.ui.bindHost                        0.0.0.0
-    spark.ui.port                            4040
-    spark.driver.bindAddress                 0.0.0.0
-
-    # --- Performance Tuning ---
-    spark.sql.shuffle.partitions             200
-    spark.sql.adaptive.enabled               true
-kind: ConfigMap
-metadata:
-  name: spark-config-t96t625g74
 ---
 apiVersion: v1
 data:
@@ -48410,6 +48315,101 @@ data:
 kind: ConfigMap
 metadata:
   name: spark-log4j-5gh78h85k7
+---
+apiVersion: v1
+data:
+  spark-defaults.conf: |
+    # =============================================================================
+    # Spark Configuration (Kubernetes)
+    # =============================================================================
+
+    # --- Application & Naming ---
+    spark.app.name                   spark-bigdata
+    spark.kubernetes.executor.podNamePrefix spark-executor
+
+    # --- Master & Deployment ---
+    spark.master                     k8s://https://kubernetes.default.svc
+    spark.submit.deployMode          client
+    spark.kubernetes.namespace       default
+    spark.kubernetes.container.image subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars
+    spark.kubernetes.authenticate.driver.serviceAccountName spark-operator-spark
+
+    # --- SQL & ANSI Mode ---
+    # Disable ANSI mode to fix NumberFormatException or similar parsing issues
+    spark.sql.ansi.enabled           false
+
+    # --- Dynamic Resource Allocation ---
+    spark.dynamicAllocation.enabled              true
+    spark.dynamicAllocation.shuffleTracking.enabled true
+    spark.dynamicAllocation.minExecutors         1
+    spark.dynamicAllocation.maxExecutors         5
+    # Use bare integers (seconds) to avoid parsing issues
+    spark.dynamicAllocation.executorIdleTimeout  600
+    spark.dynamicAllocation.schedulerBacklogTimeout 5
+
+    # --- Networking & Timeouts ---
+    # Set explicit timeouts as integers (seconds) to bypass invalid defaults like "60s"
+    spark.network.timeout            120
+    spark.files.fetchTimeout         60
+    spark.executor.heartbeatInterval 10
+    spark.rpc.askTimeout             120
+
+    # --- Hadoop S3A Configuration (CRITICAL Fixes for Spark 4.0) ---
+    # Override properties that default to "60s" or "24h" causing NumberFormatException
+    spark.hadoop.fs.s3a.threads.keepalivetime    60
+    spark.hadoop.fs.s3a.connection.timeout       200
+    spark.hadoop.fs.s3a.connection.establish.timeout 30
+    spark.hadoop.fs.s3a.connection.acquisition.timeout 60
+    spark.hadoop.fs.s3a.connection.idle.time     60
+    spark.hadoop.fs.s3a.connection.request.timeout 60
+    spark.hadoop.fs.s3a.connection.ttl           300
+    spark.hadoop.fs.s3a.multipart.purge.age      86400
+    spark.hadoop.fs.s3a.paging.maximum           5000
+
+    # --- Executor & Driver Resources ---
+    spark.executor.cores             1
+    spark.executor.memory            2g
+    spark.driver.cores               1
+    spark.driver.memory              2g
+
+    # --- Metrics & Monitoring ---
+    spark.ui.prometheus.enabled      true
+    spark.metrics.namespace          spark
+
+    # --- SQL & Catalogs (Delta Lake & Hive) ---
+    # Iceberg extensions removed to fix DELTA_MISSING_ICEBERG_CLASS
+    spark.sql.extensions             io.delta.sql.DeltaSparkSessionExtension
+    # spark.sql.defaultCatalog         spark_catalog
+    spark.sql.catalog.spark_catalog  org.apache.spark.sql.delta.catalog.DeltaCatalog
+    spark.sql.catalogImplementation  hive
+    spark.hadoop.hive.metastore.uris thrift://hive-metastore.default.svc.cluster.local:9083
+    spark.sql.warehouse.dir          s3a://warehouse/managed/
+
+    # --- Delta Lake Features ---
+    # UniForm (Iceberg compatibility) disabled completely
+    # Ensure UniForm is OFF by default
+    spark.databricks.delta.universalFormat.enabledFormats none
+    spark.databricks.delta.allowArbitraryProperties.enabled true
+
+    # --- S3 / MinIO Configuration ---
+    spark.hadoop.fs.s3a.impl                 org.apache.hadoop.fs.s3a.S3AFileSystem
+    spark.hadoop.fs.s3.impl                  org.apache.hadoop.fs.s3a.S3AFileSystem
+    spark.hadoop.fs.s3a.path.style.access    true
+    spark.hadoop.fs.s3a.connection.ssl.enabled false
+    spark.hadoop.fs.s3a.aws.credentials.provider org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
+    spark.hadoop.fs.s3a.fast.upload          true
+
+    # --- Networking & UI ---
+    spark.ui.bindHost                        0.0.0.0
+    spark.ui.port                            4040
+    spark.driver.bindAddress                 0.0.0.0
+
+    # --- Performance Tuning ---
+    spark.sql.shuffle.partitions             200
+    spark.sql.adaptive.enabled               true
+kind: ConfigMap
+metadata:
+  name: spark-production-defaults
 ---
 apiVersion: v1
 data:
@@ -49431,6 +49431,57 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  name: airflow-git-sync
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-git-sync
+  template:
+    metadata:
+      labels:
+        app: airflow-git-sync
+    spec:
+      containers:
+      - args:
+        - --repo=https://github.com/sp-202/airflow-dags.git
+        - --ref=main
+        - --root=/dags
+        - --link=repo
+        - --period=60s
+        - --webhook-method=POST
+        - --http-bind=0.0.0.0:9533
+        - --exechook-command=/usr/local/bin/sync-hook.sh
+        env:
+        - name: MINIO_ACCESS_KEY
+          value: minioadmin
+        - name: MINIO_SECRET_KEY
+          value: minioadmin
+        image: subhodeep2022/k8s-git-sync:v2
+        name: git-sync
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsGroup: 0
+          runAsUser: 0
+        volumeMounts:
+        - mountPath: /bin-utils
+          name: bin-utils
+        - mountPath: /dags
+          name: dags-shared
+      securityContext:
+        fsGroup: 65533
+        fsGroupChangePolicy: OnRootMismatch
+      volumes:
+      - emptyDir: {}
+        name: bin-utils
+      - name: dags-shared
+        persistentVolumeClaim:
+          claimName: airflow-dags-shared-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
   name: airflow-scheduler
   namespace: default
 spec:
@@ -49600,7 +49651,7 @@ spec:
           name: hive-scratch
       volumes:
       - configMap:
-          name: hive-config-bth8gd7d8t
+          name: hive-config
         name: hive-config
       - emptyDir: {}
         name: hive-scratch
@@ -49632,22 +49683,22 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: AWS_ACCESS_KEY_ID
-              name: global-config-4mm29bhfcc
+              name: global-config-69kckgf62b
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             configMapKeyRef:
               key: AWS_SECRET_ACCESS_KEY
-              name: global-config-4mm29bhfcc
+              name: global-config-69kckgf62b
         - name: JUPYTER_S3_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-4mm29bhfcc
+              name: global-config-69kckgf62b
         - name: MINIO_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-4mm29bhfcc
+              name: global-config-69kckgf62b
         - name: JUPYTER_ENABLE_LAB
           value: "yes"
         - name: JUPYTER_TOKEN
@@ -50490,7 +50541,7 @@ spec:
               fieldPath: metadata.name
         envFrom:
         - configMapRef:
-            name: global-config-4mm29bhfcc
+            name: global-config-69kckgf62b
         image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars
         imagePullPolicy: Always
         name: spark-connect-server
@@ -50506,7 +50557,7 @@ spec:
       serviceAccountName: spark-operator-spark
       volumes:
       - configMap:
-          name: spark-config-t96t625g74
+          name: spark-config
         name: spark-defaults
 ---
 apiVersion: apps/v1
@@ -55946,7 +55997,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: airflow.35.225.56.250.sslip.io
+  - host: airflow.136.114.41.60.sslip.io
     http:
       paths:
       - backend:
@@ -55956,7 +56007,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: minio.35.225.56.250.sslip.io
+  - host: minio.136.114.41.60.sslip.io
     http:
       paths:
       - backend:
@@ -55966,7 +56017,7 @@ spec:
               name: console
         path: /
         pathType: Prefix
-  - host: s3.35.225.56.250.sslip.io
+  - host: s3.136.114.41.60.sslip.io
     http:
       paths:
       - backend:
@@ -55976,7 +56027,7 @@ spec:
               name: api
         path: /
         pathType: Prefix
-  - host: superset.35.225.56.250.sslip.io
+  - host: superset.136.114.41.60.sslip.io
     http:
       paths:
       - backend:
@@ -55986,7 +56037,7 @@ spec:
               name: http
         path: /
         pathType: Prefix
-  - host: jupyterhub.35.225.56.250.sslip.io
+  - host: jupyterhub.136.114.41.60.sslip.io
     http:
       paths:
       - backend:
@@ -55996,7 +56047,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: spark.35.225.56.250.sslip.io
+  - host: spark.136.114.41.60.sslip.io
     http:
       paths:
       - backend:
@@ -56017,7 +56068,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: grafana.35.225.56.250.sslip.io
+  - host: grafana.136.114.41.60.sslip.io
     http:
       paths:
       - backend:
@@ -56039,7 +56090,7 @@ metadata:
   namespace: default
 spec:
   rules:
-  - host: dashboard.35.225.56.250.sslip.io
+  - host: dashboard.136.114.41.60.sslip.io
     http:
       paths:
       - backend:
@@ -56058,7 +56109,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: starrocks.35.225.56.250.sslip.io
+  - host: starrocks.136.114.41.60.sslip.io
     http:
       paths:
       - backend:
@@ -56079,7 +56130,7 @@ spec:
   - web
   routes:
   - kind: Rule
-    match: Host(`traefik.35.225.56.250.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    match: Host(`traefik.136.114.41.60.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
     services:
     - kind: TraefikService
       name: api@internal
