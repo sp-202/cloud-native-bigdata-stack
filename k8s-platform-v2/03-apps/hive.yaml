@@ -59,10 +59,10 @@ spec:
           value: "2048"
         resources:
           requests:
-            memory: "2Gi"
+            memory: "1Gi"
             cpu: "500m"
           limits:
-            memory: "3Gi"
+            memory: "2Gi"
             cpu: "1000m"
         ports:
         - containerPort: 10000

@@ -6,6 +6,10 @@ resources:
   - hive.yaml
   - jupyterhub.yaml
   - airflow-git-sync.yaml
+  - airflow-spark-rbac.yaml
+  - airflow-rbac.yaml
+
+  - spark-history-server.yaml
 
   - spark-ui-service.yaml
   - spark-connect-server.yaml
