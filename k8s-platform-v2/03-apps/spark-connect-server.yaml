@@ -69,11 +69,13 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
           volumeMounts:
-            - name: spark-defaults
+            # --- UPDATED SECTION ---
+            - name: spark-config-volume
               mountPath: /opt/spark/conf/spark-defaults.conf
               subPath: spark-defaults.conf
       volumes:
-        - name: spark-defaults
+        # --- UPDATED SECTION ---
+        - name: spark-config-volume
           configMap:
             name: spark-config
 ---
