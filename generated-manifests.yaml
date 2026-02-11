@@ -48912,6 +48912,8 @@ stringData:
     CSV_EXTENSIONS = {"csv", "tsv", "txt"}
     FEATURE_FLAGS = {
         "ENABLE_TEMPLATE_PROCESSING": True,
+        "DASHBOARD_CROSS_FILTERS": True,
+        "DASHBOARD_NATIVE_FILTERS": True,
     }
     CACHE_CONFIG = {
         "CACHE_TYPE": "RedisCache",
@@ -49867,10 +49869,10 @@ spec:
         resources:
           limits:
             cpu: 2000m
-            memory: 2Gi
+            memory: 1.5Gi
           requests:
             cpu: 1000m
-            memory: 1.5Gi
+            memory: 1Gi
         volumeMounts:
         - mountPath: /opt/airflow/dags
           name: dags-data
@@ -49924,10 +49926,10 @@ spec:
         resources:
           limits:
             cpu: 1000m
-            memory: 1.5Gi
+            memory: 1Gi
           requests:
             cpu: 500m
-            memory: 1Gi
+            memory: 0.5Gi
         volumeMounts:
         - mountPath: /opt/airflow/dags
           name: dags-data
@@ -50997,14 +50999,14 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configOverrides: e638d22b9aa095d22e8176549182dca402d4b5a2f151115b700a58b7ffd51f4c
+        checksum/configOverrides: 32e71106a8cc657354ac950fef44f98649ace8273ce06856d506f760b656fe9d
         checksum/configOverridesFiles: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/connections: e7f30467cae4a759489d5401c10d9353b502ede8f01ac87d3eec37d257175218
         checksum/extraConfigs: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/extraSecretEnv: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/extraSecrets: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/superset_bootstrap.sh: 1bcc4d5361706aff63b693642682183b34a8b6071750616ab926a4f5f8952c17
-        checksum/superset_config.py: bd8a4acaf626264c22c62782c49eb27406453be62a05d5e8ce6dc371bc8b91ae
+        checksum/superset_config.py: cc96ac6f6bdb97926febf7a591f797ef51ec4b4520394c170b6576253726b98b
         checksum/superset_init.sh: 8f292dbc07bf626a68a4c98ab8d90ed7cdddd486aa6418760384880cfeedfac1
       labels:
         app: superset
@@ -51103,14 +51105,14 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configOverrides: e638d22b9aa095d22e8176549182dca402d4b5a2f151115b700a58b7ffd51f4c
+        checksum/configOverrides: 32e71106a8cc657354ac950fef44f98649ace8273ce06856d506f760b656fe9d
         checksum/configOverridesFiles: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/connections: e7f30467cae4a759489d5401c10d9353b502ede8f01ac87d3eec37d257175218
         checksum/extraConfigs: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/extraSecretEnv: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/extraSecrets: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/superset_bootstrap.sh: 1bcc4d5361706aff63b693642682183b34a8b6071750616ab926a4f5f8952c17
-        checksum/superset_config.py: bd8a4acaf626264c22c62782c49eb27406453be62a05d5e8ce6dc371bc8b91ae
+        checksum/superset_config.py: cc96ac6f6bdb97926febf7a591f797ef51ec4b4520394c170b6576253726b98b
       labels:
         app: superset-worker
         release: superset

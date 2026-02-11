@@ -165,6 +165,7 @@ echo "JupyterHub: http://jupyterhub.$INGRESS_DOMAIN"
 echo "Minio: http://minio.$INGRESS_DOMAIN"
 echo "Grafana: http://grafana.$INGRESS_DOMAIN"
 echo "Spark: http://spark.$INGRESS_DOMAIN"
+echo "Spark-History: http://spark-history.$INGRESS_DOMAIN"
 
 # ---------------------------------------------------
 # 4. StarRocks Production Fix (Post-Deploy)
