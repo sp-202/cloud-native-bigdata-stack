@@ -25,21 +25,6 @@ spec:
       storage: 80Gi
   # storageClassName: standard # Use standard (HDD) to avoid SSD quota
 
-
-# ---
-# apiVersion: v1
-# kind: PersistentVolume
-# metadata:
-#   name: airflow-dags-pv
-# spec:
-#   storageClassName: local-path
-#   capacity:
-#     storage: 2Gi
-#   accessModes:
-#     - ReadWriteOnce
-#   hostPath:
-#     path: "/mnt/k8s/airflow-dags"
-
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
