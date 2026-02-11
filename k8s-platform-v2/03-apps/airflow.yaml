@@ -26,6 +26,13 @@ spec:
       - name: airflow-webserver
         image: apache/airflow:2.7.1
         args: ["webserver"]
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "0.5Gi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
         env:
         - name: AIRFLOW__CORE__EXECUTOR
           value: "LocalExecutor"
@@ -37,6 +44,15 @@ spec:
           value: "False"
         - name: AIRFLOW__CORE__DAGS_FOLDER
           value: "/opt/airflow/dags/repo/dags"
+        # --- HIGH CONCURRENCY LOGIC ---
+        - name: AIRFLOW__CORE__PARALLELISM
+          value: "64"
+        - name: AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG
+          value: "20"
+        - name: AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG
+          value: "20"
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_POOL_SIZE
+          value: "15"
         volumeMounts:
         - name: dags-data
           mountPath: /opt/airflow/dags
@@ -67,6 +83,13 @@ spec:
       - name: airflow-scheduler
         image: apache/airflow:2.7.1
         args: ["scheduler"]
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m"
+            memory: "1.5Gi"
         env:
         - name: AIRFLOW__CORE__EXECUTOR
           value: "LocalExecutor"
@@ -76,6 +99,15 @@ spec:
           value: "46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho="
         - name: AIRFLOW__CORE__DAGS_FOLDER
           value: "/opt/airflow/dags/repo/dags"
+        # --- HIGH CONCURRENCY LOGIC ---
+        - name: AIRFLOW__CORE__PARALLELISM
+          value: "64"
+        - name: AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG
+          value: "20"
+        - name: AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG
+          value: "20"
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_POOL_SIZE
+          value: "15"
         volumeMounts:
         - name: dags-data
           mountPath: /opt/airflow/dags

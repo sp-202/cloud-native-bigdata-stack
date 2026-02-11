@@ -49854,8 +49854,23 @@ spec:
           value: 46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
         - name: AIRFLOW__CORE__DAGS_FOLDER
           value: /opt/airflow/dags/repo/dags
+        - name: AIRFLOW__CORE__PARALLELISM
+          value: "64"
+        - name: AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG
+          value: "20"
+        - name: AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG
+          value: "20"
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_POOL_SIZE
+          value: "15"
         image: apache/airflow:2.7.1
         name: airflow-scheduler
+        resources:
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+          requests:
+            cpu: 1000m
+            memory: 1.5Gi
         volumeMounts:
         - mountPath: /opt/airflow/dags
           name: dags-data
@@ -49896,8 +49911,23 @@ spec:
           value: "False"
         - name: AIRFLOW__CORE__DAGS_FOLDER
           value: /opt/airflow/dags/repo/dags
+        - name: AIRFLOW__CORE__PARALLELISM
+          value: "64"
+        - name: AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG
+          value: "20"
+        - name: AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG
+          value: "20"
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_POOL_SIZE
+          value: "15"
         image: apache/airflow:2.7.1
         name: airflow-webserver
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1.5Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
         volumeMounts:
         - mountPath: /opt/airflow/dags
           name: dags-data
