@@ -76,6 +76,8 @@ configOverrides:
     CSV_EXTENSIONS = {"csv", "tsv", "txt"}
     FEATURE_FLAGS = {
         "ENABLE_TEMPLATE_PROCESSING": True,
+        "DASHBOARD_CROSS_FILTERS": True,
+        "DASHBOARD_NATIVE_FILTERS": True,
     }
     CACHE_CONFIG = {
         "CACHE_TYPE": "RedisCache",
