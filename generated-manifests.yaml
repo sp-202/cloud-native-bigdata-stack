@@ -44781,7 +44781,7 @@ data:
     provisioning = /etc/grafana/provisioning
     [server]
     domain = ''
-    root_url = http://grafana.172.30.1.145.sslip.io
+    root_url = http://grafana.100.53.224.0.sslip.io
     serve_from_sub_path = true
 kind: ConfigMap
 metadata:
@@ -47472,11 +47472,11 @@ apiVersion: v1
 data:
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
-  INGRESS_DOMAIN: 172.30.1.145.sslip.io
+  INGRESS_DOMAIN: 100.53.224.0.sslip.io
   MINIO_ENDPOINT: http://minio.default.svc.cluster.local:9000
 kind: ConfigMap
 metadata:
-  name: global-config-d865752ck4
+  name: global-config-24t58d69hd
 ---
 apiVersion: v1
 data:
@@ -49752,7 +49752,7 @@ spec:
   - ReadWriteOnce
   resources:
     requests:
-      storage: 80Gi
+      storage: 20Gi
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -49819,6 +49819,8 @@ spec:
           name: bin-utils
         - mountPath: /dags
           name: dags-shared
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
       securityContext:
         fsGroup: 65533
         fsGroupChangePolicy: OnRootMismatch
@@ -49877,6 +49879,8 @@ spec:
         - mountPath: /opt/airflow/dags
           name: dags-data
           readOnly: true
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
       securityContext:
         fsGroup: 50000
       volumes:
@@ -49944,6 +49948,8 @@ spec:
         volumeMounts:
         - mountPath: /opt/airflow/dags
           name: dags-data
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
       securityContext:
         fsGroup: 50000
       volumes:
@@ -50029,6 +50035,8 @@ spec:
         volumeMounts:
         - mountPath: /tmp/hive
           name: hive-scratch
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
       volumes:
       - configMap:
           name: hive-config-bth8gd7d8t
@@ -50063,22 +50071,22 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: AWS_ACCESS_KEY_ID
-              name: global-config-d865752ck4
+              name: global-config-24t58d69hd
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             configMapKeyRef:
               key: AWS_SECRET_ACCESS_KEY
-              name: global-config-d865752ck4
+              name: global-config-24t58d69hd
         - name: JUPYTER_S3_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-d865752ck4
+              name: global-config-24t58d69hd
         - name: MINIO_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-d865752ck4
+              name: global-config-24t58d69hd
         - name: JUPYTER_ENABLE_LAB
           value: "yes"
         - name: JUPYTER_TOKEN
@@ -50107,6 +50115,8 @@ spec:
         - mountPath: /usr/local/bin/before-notebook.d/setup-kernels.sh
           name: startup-script
           subPath: setup-kernels.sh
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
       serviceAccountName: jupyterhub
       volumes:
       - configMap:
@@ -50789,6 +50799,8 @@ spec:
         volumeMounts:
         - mountPath: /data
           name: storage
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
       volumes:
       - name: storage
         persistentVolumeClaim:
@@ -50851,6 +50863,8 @@ spec:
           name: storage
         - mountPath: /docker-entrypoint-initdb.d
           name: init-scripts
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
       volumes:
       - name: storage
         persistentVolumeClaim:
@@ -50921,7 +50935,7 @@ spec:
               fieldPath: metadata.name
         envFrom:
         - configMapRef:
-            name: global-config-d865752ck4
+            name: global-config-24t58d69hd
         image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars
         imagePullPolicy: Always
         name: spark-connect-server
@@ -56417,7 +56431,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: airflow.172.30.1.145.sslip.io
+  - host: airflow.100.53.224.0.sslip.io
     http:
       paths:
       - backend:
@@ -56427,7 +56441,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: minio.172.30.1.145.sslip.io
+  - host: minio.100.53.224.0.sslip.io
     http:
       paths:
       - backend:
@@ -56437,7 +56451,7 @@ spec:
               name: console
         path: /
         pathType: Prefix
-  - host: s3.172.30.1.145.sslip.io
+  - host: s3.100.53.224.0.sslip.io
     http:
       paths:
       - backend:
@@ -56447,7 +56461,7 @@ spec:
               name: api
         path: /
         pathType: Prefix
-  - host: superset.172.30.1.145.sslip.io
+  - host: superset.100.53.224.0.sslip.io
     http:
       paths:
       - backend:
@@ -56457,7 +56471,7 @@ spec:
               name: http
         path: /
         pathType: Prefix
-  - host: jupyterhub.172.30.1.145.sslip.io
+  - host: jupyterhub.100.53.224.0.sslip.io
     http:
       paths:
       - backend:
@@ -56467,7 +56481,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: spark.172.30.1.145.sslip.io
+  - host: spark.100.53.224.0.sslip.io
     http:
       paths:
       - backend:
@@ -56488,7 +56502,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: grafana.172.30.1.145.sslip.io
+  - host: grafana.100.53.224.0.sslip.io
     http:
       paths:
       - backend:
@@ -56510,7 +56524,7 @@ metadata:
   namespace: default
 spec:
   rules:
-  - host: dashboard.172.30.1.145.sslip.io
+  - host: dashboard.100.53.224.0.sslip.io
     http:
       paths:
       - backend:
@@ -56529,7 +56543,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: spark-history.172.30.1.145.sslip.io
+  - host: spark-history.100.53.224.0.sslip.io
     http:
       paths:
       - backend:
@@ -56548,7 +56562,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: starrocks.172.30.1.145.sslip.io
+  - host: starrocks.100.53.224.0.sslip.io
     http:
       paths:
       - backend:
@@ -56569,7 +56583,7 @@ spec:
   - web
   routes:
   - kind: Rule
-    match: Host(`traefik.172.30.1.145.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    match: Host(`traefik.100.53.224.0.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
     services:
     - kind: TraefikService
       name: api@internal

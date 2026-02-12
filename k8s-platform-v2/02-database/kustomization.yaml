@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   - minio.yaml
   - postgres.yaml
+  - db-init-airflow.yaml
 
 configMapGenerator:
   - name: minio-scripts

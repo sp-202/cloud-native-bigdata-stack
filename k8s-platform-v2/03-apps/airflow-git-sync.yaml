@@ -13,6 +13,9 @@ spec:
       labels:
         app: airflow-git-sync
     spec:
+      # --- Pinning to Master Node ---
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
       securityContext:
         fsGroup: 65533
         fsGroupChangePolicy: "OnRootMismatch"
