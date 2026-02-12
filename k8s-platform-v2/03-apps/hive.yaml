@@ -13,6 +13,9 @@ spec:
       labels:
         app: hive-metastore
     spec:
+      # --- Pinning to Master Node ---
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
       initContainers:
       - name: init-permissions
         image: subhodeep2022/spark-bigdata:hive-3.1.3-custom
