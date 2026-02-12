@@ -47925,7 +47925,7 @@ data:
     spark.dynamicAllocation.enabled              true
     spark.dynamicAllocation.shuffleTracking.enabled true
     spark.dynamicAllocation.minExecutors         1
-    spark.dynamicAllocation.maxExecutors         5
+    spark.dynamicAllocation.maxExecutors         3
     # Use bare integers (seconds) to avoid parsing issues
     spark.dynamicAllocation.executorIdleTimeout  600
     spark.dynamicAllocation.schedulerBacklogTimeout 5
@@ -47950,9 +47950,9 @@ data:
     spark.hadoop.fs.s3a.paging.maximum           5000
 
     # --- Executor & Driver Resources ---
-    spark.executor.cores             1
-    spark.executor.memory            2g
-    spark.driver.cores               1
+    spark.executor.cores             4
+    spark.executor.memory            20g
+    spark.driver.cores               2
     spark.driver.memory              2g
 
     # --- Metrics & Monitoring ---
@@ -47999,7 +47999,7 @@ data:
     spark.sql.adaptive.enabled               true
 kind: ConfigMap
 metadata:
-  name: spark-config-74tmfbbm69
+  name: spark-config-4cf68hfb82
 ---
 apiVersion: v1
 data:
@@ -50951,7 +50951,7 @@ spec:
       serviceAccountName: spark-operator-spark
       volumes:
       - configMap:
-          name: spark-config-74tmfbbm69
+          name: spark-config-4cf68hfb82
         name: spark-config-volume
 ---
 apiVersion: apps/v1
@@ -52180,6 +52180,37 @@ spec:
           path: /var/log/pods
         name: pods
   updateStrategy: {}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: airflow-db-init
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - args:
+        - |
+          airflow db migrate && \
+          airflow users create \
+            --username admin \
+            --firstname admin \
+            --lastname admin \
+            --role Admin \
+            --email admin@example.com \
+            --password admin
+        command:
+        - /bin/bash
+        - -c
+        env:
+        - name: AIRFLOW__CORE__SQL_ALCHEMY_CONN
+          value: postgresql+psycopg2://airflow:airflow@postgres.default.svc.cluster.local/airflow
+        image: apache/airflow:2.7.1
+        name: airflow-init
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
+      restartPolicy: OnFailure
 ---
 apiVersion: batch/v1
 kind: Job
