@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nyc-taxi-bulk-ingestor
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: ingest-worker
+        image: amazon/aws-cli
+        env:
+        - name: MINIO_ACCESS_KEY
+          value: "minioadmin"
+        - name: MINIO_SECRET_KEY
+          value: "minioadmin"
+        - name: MINIO_URL
+          value: "http://minio.default.svc.cluster.local:9000"
+        - name: TARGET_BUCKET
+          value: "taxi-data"
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          
+          # 1. Setup MinIO Credentials for the destination
+          aws configure set aws_access_key_id ${MINIO_ACCESS_KEY} --profile minio
+          aws configure set aws_secret_access_key ${MINIO_SECRET_KEY} --profile minio
+          
+          # 2. Create the bucket if it doesn't exist (using the minio profile)
+          echo "Ensuring bucket ${TARGET_BUCKET} exists..."
+          aws s3 mb s3://${TARGET_BUCKET} --endpoint-url ${MINIO_URL} --profile minio || true
+
+          # 3. Ingestion Loop
+          YEAR=2025
+          for MONTH in 01 02 03 04 05 06 07 08 09 10 11 12; do
+            FILE="yellow_tripdata_${YEAR}-${MONTH}.parquet"
+            # We use the HTTPS CloudFront URL for the source to avoid AWS CLI endpoint confusion
+            SOURCE_URL="https://d37ci6vzurychx.cloudfront.net/trip-data/${FILE}"
+            DEST_S3="s3://${TARGET_BUCKET}/nyc-taxi/${YEAR}/${MONTH}/${FILE}"
+            
+            echo "----------------------------------------------------"
+            echo "Downloading: ${FILE}"
+            
+            # Use curl to pipe the data directly into the AWS CLI (streaming it to MinIO)
+            # This avoids the "Could not connect to endpoint" error entirely
+            if curl -sL "${SOURCE_URL}" | aws s3 cp - "${DEST_S3}" \
+              --endpoint-url ${MINIO_URL} \
+              --profile minio; then
+              echo "SUCCESS: Saved to MinIO"
+            else
+              echo "SKIP: ${FILE} not available yet."
+            fi
+          done
+          
+          echo "Bulk Ingestion Complete!"
+      restartPolicy: OnFailure
+  backoffLimit: 2
