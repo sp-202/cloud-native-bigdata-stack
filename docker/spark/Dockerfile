@@ -10,6 +10,9 @@ ENV ICEBERG_VERSION=1.10.0
 ENV HADOOP_AWS_VERSION=3.4.1
 ENV AWS_SDK_V2_VERSION=2.29.52
 ENV POSTGRES_VERSION=42.6.0
+ENV SEDONA_VERSION=1.8.1
+ENV GEOTOOLS_WRAPPER_VERSION=1.8.1-28.5
+ENV H3_VERSION=4.1.1
 ENV SPARK_HOME=/opt/spark
 
 # Install build dependencies
@@ -34,7 +37,10 @@ RUN wget https://jdbc.postgresql.org/download/postgresql-${POSTGRES_VERSION}.jar
     wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_AWS_VERSION}/hadoop-aws-${HADOOP_AWS_VERSION}.jar -P $SPARK_HOME/jars/ && \
     wget https://repo1.maven.org/maven2/software/amazon/awssdk/bundle/${AWS_SDK_V2_VERSION}/bundle-${AWS_SDK_V2_VERSION}.jar -P $SPARK_HOME/jars/ && \
     wget https://repo1.maven.org/maven2/software/amazon/awssdk/url-connection-client/${AWS_SDK_V2_VERSION}/url-connection-client-${AWS_SDK_V2_VERSION}.jar -P $SPARK_HOME/jars/ && \
-    wget https://repo1.maven.org/maven2/com/microsoft/sqlserver/mssql-jdbc/12.8.1.jre11/mssql-jdbc-12.8.1.jre11.jar -P $SPARK_HOME/jars/
+    wget https://repo1.maven.org/maven2/com/microsoft/sqlserver/mssql-jdbc/12.8.1.jre11/mssql-jdbc-12.8.1.jre11.jar -P $SPARK_HOME/jars/ && \
+    wget https://repo1.maven.org/maven2/org/apache/sedona/sedona-spark-shaded-4.0_2.13/${SEDONA_VERSION}/sedona-spark-shaded-4.0_2.13-${SEDONA_VERSION}.jar -P $SPARK_HOME/jars/ && \
+    wget https://repo1.maven.org/maven2/org/datasyslab/geotools-wrapper/${GEOTOOLS_WRAPPER_VERSION}/geotools-wrapper-${GEOTOOLS_WRAPPER_VERSION}.jar -P $SPARK_HOME/jars/ && \
+    wget https://repo1.maven.org/maven2/com/uber/h3/${H3_VERSION}/h3-${H3_VERSION}.jar -P $SPARK_HOME/jars/
 
 # Final Stage
 FROM eclipse-temurin:17-jdk-jammy
@@ -71,16 +77,18 @@ RUN cp $SPARK_HOME/kubernetes/dockerfiles/spark/entrypoint.sh /opt/entrypoint.sh
 
 # Create baseline spark-defaults.conf with integer timeouts to avoid NumberFormatException
 RUN echo "spark.network.timeout 120\n\
-spark.files.fetchTimeout 60\n\
-spark.executor.heartbeatInterval 10\n\
-spark.hadoop.fs.s3a.connection.timeout 60\n\
-spark.hadoop.fs.s3a.connection.establish.timeout 30\n\
-spark.hadoop.fs.s3a.connection.acquisition.timeout 60\n\
-spark.hadoop.fs.s3a.threads.keepalivetime 60\n\
-spark.hadoop.fs.s3a.multipart.purge.age 86400\n\
-spark.sql.extensions io.delta.sql.DeltaSparkSessionExtension\n\
-spark.sql.catalog.spark_catalog org.apache.spark.sql.delta.catalog.DeltaCatalog\n\
-spark.sql.catalogImplementation hive" > $SPARK_HOME/conf/spark-defaults.conf
+    spark.files.fetchTimeout 60\n\
+    spark.executor.heartbeatInterval 10\n\
+    spark.hadoop.fs.s3a.connection.timeout 60\n\
+    spark.hadoop.fs.s3a.connection.establish.timeout 30\n\
+    spark.hadoop.fs.s3a.connection.acquisition.timeout 60\n\
+    spark.hadoop.fs.s3a.threads.keepalivetime 60\n\
+    spark.hadoop.fs.s3a.multipart.purge.age 86400\n\
+    spark.serializer org.apache.spark.serializer.KryoSerializer\n\
+    spark.kryo.registrator org.apache.sedona.spark.SedonaKryoRegistrator\n\
+    spark.sql.extensions org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,io.delta.sql.DeltaSparkSessionExtension\n\
+    spark.sql.catalog.spark_catalog org.apache.spark.sql.delta.catalog.DeltaCatalog\n\
+    spark.sql.catalogImplementation hive" > $SPARK_HOME/conf/spark-defaults.conf
 
 ENTRYPOINT ["/opt/entrypoint.sh"]
 CMD ["bash"]
