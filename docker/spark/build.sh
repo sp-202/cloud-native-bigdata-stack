@@ -13,7 +13,7 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 else
     echo "⚠️  Warning: $ENV_FILE not found, using default values"
-    SPARK_VERSION="4.0.1"
+    SPARK_VERSION="4.1.1"
     UNITY_CATALOG_VERSION="0.3.1"
     SPARK_IMAGE_VERSION="v4"
 fi

@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: spark-history-server
-        image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars
+        image: $(SPARK_IMAGE)
         command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.history.HistoryServer"]
         resources:
           requests:

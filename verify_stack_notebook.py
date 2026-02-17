@@ -4,7 +4,7 @@
 #
 # **Prerequisites**:
 # - Run this inside the Kubernetes cluster (e.g., via JupyterHub or a Spark Pod) or ensure network connectivity/port-forwarding.
-# - Image used: `subhodeep2022/spark-bigdata:spark-4.0.1-uc-fix-v3`
+# - Image used: `subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3.0.1-uc-fix-v3`
 
 # %% [python]
 import os

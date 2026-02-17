@@ -6,7 +6,7 @@ metadata:
 spec:
   type: "Python"
   mode: "cluster"
-  image: "subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars"
+  image: "subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3.0.1-uc-0.3.1-proper-way-v7-compatible-jars"
   imagePullPolicy: "Always"
   mainApplicationFile: "local:///opt/spark/repo/repo/scripts/ingest_dri_data.py"
   sparkConf:
