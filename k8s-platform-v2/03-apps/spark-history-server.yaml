@@ -65,7 +65,7 @@ metadata:
 spec:
   ingressClassName: traefik  # <--- This replaces the deprecated annotation
   rules:
-  - host: spark-history.44.211.118.82.sslip.io
+  - host: spark-history.3.238.150.107.sslip.io
     http:
       paths:
       - path: /

@@ -31,9 +31,9 @@ spec:
               --conf spark.driver.host=$POD_IP \
               --conf spark.driver.bindAddress=0.0.0.0 \
               --conf spark.dynamicAllocation.enabled=true \
-              --conf spark.dynamicAllocation.minExecutors=1 \
-              --conf spark.dynamicAllocation.maxExecutors=5 \
-              --conf spark.dynamicAllocation.maxExecutors=5 \
+              --conf spark.dynamicAllocation.minExecutors=2 \
+              --conf spark.dynamicAllocation.maxExecutors=4 \
+              --conf spark.dynamicAllocation.maxExecutors=4 \
               --conf spark.kubernetes.container.image=$(SPARK_IMAGE) \
               --conf spark.kubernetes.driver.pod.name=$POD_NAME \
               --conf spark.kubernetes.driver.pod.name=$POD_NAME \
