@@ -67,7 +67,7 @@ The platform relies on a `.env` file for dynamic configuration (like Spark image
     ```bash
     # Content of .env
     SPARK_IMAGE_VERSION=fix-v4
-    SPARK_IMAGE=subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-fix-v4
+    SPARK_IMAGE=subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3.0.1-uc-0.3.1-fix-v4
     ```
 
 ## Deployment

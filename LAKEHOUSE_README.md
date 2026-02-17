@@ -7,12 +7,12 @@
 This deployment integrates **Spark**, **Hive Metastore (HMS)**, and **StarRocks** into a coherent Data Lakehouse.
 
 ### Component Matrix
-| Component | Version | Role | Configuration Note |
-| :--- | :--- | :--- | :--- |
-| **Apache Spark** | **4.0.1** (Scala 2.13) | **Writer** (ETL) | Writes Delta Tables to MinIO; Registers in HMS |
-| **Hive Metastore** | **3.1.3** | **Metadata** | Standalone Thrift Service (`thrift://hive-metastore:9083`) |
-| **StarRocks** | **3.x** | **Reader** (Analytics) | Reads MinIO directly via Native Delta Catalog |
-| **MinIO** | Latest | **Storage** (S3) | Bucket: `test-bucket` |
+| Component          | Version                | Role                   | Configuration Note                                         |
+| :----------------- | :--------------------- | :--------------------- | :--------------------------------------------------------- |
+| **Apache Spark**   | **4.0.1** (Scala 2.13) | **Writer** (ETL)       | Writes Delta Tables to MinIO; Registers in HMS             |
+| **Hive Metastore** | **3.1.3**              | **Metadata**           | Standalone Thrift Service (`thrift://hive-metastore:9083`) |
+| **StarRocks**      | **3.x**                | **Reader** (Analytics) | Reads MinIO directly via Native Delta Catalog              |
+| **MinIO**          | Latest                 | **Storage** (S3)       | Bucket: `test-bucket`                                      |
 
 ---
 
@@ -47,7 +47,7 @@ This deployment integrates **Spark**, **Hive Metastore (HMS)**, and **StarRocks*
 ## 3. Deployment Workflow
 
 ### Prerequisites
-*   Use the unified Spark image: `subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-fix-v4`
+*   Use the unified Spark image: `subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3.0.1-uc-0.3.1-fix-v4`
 *   Ensure `.env` is loaded before deploying.
 
 ### Validation Steps

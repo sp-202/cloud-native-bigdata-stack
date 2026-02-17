@@ -47914,7 +47914,7 @@ data:
     spark.master                     k8s://https://kubernetes.default.svc
     spark.submit.deployMode          client
     spark.kubernetes.namespace       default
-    spark.kubernetes.container.image subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars
+    spark.kubernetes.container.image subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3.0.1-uc-0.3.1-proper-way-v7-compatible-jars
     spark.kubernetes.authenticate.driver.serviceAccountName spark-operator-spark
 
     # --- SQL & ANSI Mode ---
@@ -50904,7 +50904,7 @@ spec:
           --conf spark.dynamicAllocation.minExecutors=2 \
           --conf spark.dynamicAllocation.maxExecutors=4 \
           --conf spark.dynamicAllocation.maxExecutors=4 \
-          --conf spark.kubernetes.container.image=subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars \
+          --conf spark.kubernetes.container.image=subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3.0.1-uc-0.3.1-proper-way-v7-compatible-jars \
           --conf spark.kubernetes.driver.pod.name=$POD_NAME \
           --conf spark.kubernetes.driver.pod.name=$POD_NAME \
           --conf spark.kubernetes.namespace=default \
@@ -50936,7 +50936,7 @@ spec:
         envFrom:
         - configMapRef:
             name: global-config-86tcft7t59
-        image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars
+        image: subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3.0.1-uc-0.3.1-proper-way-v7-compatible-jars
         imagePullPolicy: Always
         name: spark-connect-server
         ports:
@@ -50982,7 +50982,7 @@ spec:
             -Dspark.hadoop.fs.s3a.path.style.access=true -Dspark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
             -Dspark.history.fs.subpath.enabled=true -Dspark.history.fs.cleaner.enabled=false
             -Dspark.history.retainedApplications=500 -Dspark.history.fs.update.interval=10s
-        image: subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars
+        image: subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3.0.1-uc-0.3.1-proper-way-v7-compatible-jars
         name: spark-history-server
         ports:
         - containerPort: 18080
