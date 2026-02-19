@@ -35,11 +35,10 @@ if ! docker info > /dev/null 2>&1; then
   exit 1
 fi
 
-echo "🔨 Building Docker image: $IMAGE_NAME (Platform: linux/amd64)"
-docker build --platform linux/amd64 -t $IMAGE_NAME -f $DOCKERFILE_PATH .
+echo "🔨 Building Multi-Arch Docker image: $IMAGE_NAME (Platforms: linux/amd64, linux/arm64)"
+# Use buildx for multi-arch support
+docker buildx build --platform linux/amd64,linux/arm64 -t $IMAGE_NAME -f $DOCKERFILE_PATH --push .
 
-echo "📤 Pushing Docker image: $IMAGE_NAME"
-# Note: User must be logged in (docker login)
-docker push $IMAGE_NAME
+echo "✅ Multi-Arch Build and Push Complete: $IMAGE_NAME"
 
 echo "✅ Build and Push Complete: $IMAGE_NAME"

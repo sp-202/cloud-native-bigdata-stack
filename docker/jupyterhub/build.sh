@@ -35,12 +35,9 @@ if ! docker info > /dev/null 2>&1; then
   exit 1
 fi
 
-echo "🔨 Building Docker image: $JUPYTERHUB_CUSTOM_IMAGE (Platform: linux/amd64)"
-docker build --platform linux/amd64 -t $JUPYTERHUB_CUSTOM_IMAGE -f $DOCKERFILE_PATH .
-
-echo "📤 Pushing Docker image: $JUPYTERHUB_CUSTOM_IMAGE"
-# Note: User must be logged in (docker login)
-docker push $JUPYTERHUB_CUSTOM_IMAGE
+echo "🔨 Building Multi-Arch Docker image: $JUPYTERHUB_CUSTOM_IMAGE (Platforms: linux/amd64, linux/arm64)"
+# Use buildx for multi-arch support
+docker buildx build --platform linux/amd64,linux/arm64 -t $JUPYTERHUB_CUSTOM_IMAGE -f $DOCKERFILE_PATH --push .
 
 echo "✅ Build and Push Complete: $JUPYTERHUB_CUSTOM_IMAGE"
 echo ""
