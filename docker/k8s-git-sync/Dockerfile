@@ -17,8 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy git-sync binary from the official image
 COPY --from=source /git-sync /usr/local/bin/git-sync
 
-# Install mc (MinIO Client)
-RUN curl https://dl.min.io/client/mc/release/linux-amd64/mc \
+# Install mc (MinIO Client) - Dynamic Architecture
+ARG TARGETARCH
+RUN curl https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc \
     --create-dirs \
     -o /usr/local/bin/mc && \
     chmod +x /usr/local/bin/mc
