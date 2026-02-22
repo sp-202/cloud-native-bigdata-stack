@@ -20,34 +20,41 @@ spec:
         fsGroup: 65533
         fsGroupChangePolicy: "OnRootMismatch"
       containers:
-      - name: git-sync
-        image: subhodeep2022/k8s-git-sync:v2-prod
-        securityContext:
-          runAsUser: 0
-          runAsGroup: 0
-          allowPrivilegeEscalation: false
-        env:
-          - name: MINIO_ACCESS_KEY
-            value: "minioadmin"
-          - name: MINIO_SECRET_KEY
-            value: "minioadmin"
-        args:
-          - "--repo=https://github.com/sp-202/airflow-dags.git"
-          - "--ref=main"
-          - "--root=/dags"
-          - "--link=repo"
-          - "--period=60s"
-          - "--webhook-method=POST"
-          - "--http-bind=0.0.0.0:9533"
-          - "--exechook-command=/usr/local/bin/sync-hook.sh"
-        volumeMounts:
-        - name: bin-utils
-          mountPath: /bin-utils
-        - name: dags-shared
-          mountPath: /dags
+        - name: git-sync
+          image: subhodeep2022/k8s-git-sync:v2-prod
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+          env:
+            - name: MINIO_ACCESS_KEY
+              value: "minioadmin"
+            - name: MINIO_SECRET_KEY
+              value: "minioadmin"
+          args:
+            - "--repo=https://github.com/sp-202/airflow-dags.git"
+            - "--ref=main"
+            - "--root=/dags"
+            - "--link=repo"
+            - "--period=60s"
+            - "--webhook-method=POST"
+            - "--http-bind=0.0.0.0:9533"
+            - "--exechook-command=/usr/local/bin/sync-hook.sh"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: bin-utils
+              mountPath: /bin-utils
+            - name: dags-shared
+              mountPath: /dags
       volumes:
-      - name: bin-utils
-        emptyDir: {}
-      - name: dags-shared
-        persistentVolumeClaim:
-          claimName: airflow-dags-shared-pvc
+        - name: bin-utils
+          emptyDir: {}
+        - name: dags-shared
+          persistentVolumeClaim:
+            claimName: airflow-dags-shared-pvc

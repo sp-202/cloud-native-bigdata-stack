@@ -16,7 +16,7 @@ spec:
         app: spark-connect-server
         spark-role: driver
     spec:
-      serviceAccountName: spark-operator-spark  # Use the SA that has permissions to create pods
+      serviceAccountName: spark-operator-spark # Use the SA that has permissions to create pods
       containers:
         - name: spark-connect-server
           image: $(SPARK_IMAGE)
@@ -68,6 +68,13 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
           volumeMounts:
             # --- UPDATED SECTION ---
             - name: spark-config-volume
