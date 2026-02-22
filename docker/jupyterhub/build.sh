@@ -13,14 +13,12 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 else
     echo "⚠️  Warning: $ENV_FILE not found, using default values"
+    JUPYTERHUB_VERSION_TAG="4.0.7"
+    JUPYTERHUB_IMAGE_VERSION_TAG="prod-v2"
 fi
 
-# Define custom image name
-# Repo: subhodeep2022/spark-bigdata
-# Tag: jupyterhub-<jupyter_version>-pyspark-scala-sql-<vN>
-JUPYTER_VERSION_TAG="4.0.7"
-VERSION_TAG="v2"
-JUPYTERHUB_CUSTOM_IMAGE="subhodeep2022/spark-bigdata:jupyterhub-${JUPYTER_VERSION_TAG}-pyspark-scala-sql-${VERSION_TAG}"
+# Define custom image name fallback or use exact from .env
+JUPYTERHUB_CUSTOM_IMAGE=${JUPYTERHUB_IMAGE:-"subhodeep2022/spark-bigdata:jupyterhub-${JUPYTERHUB_VERSION_TAG}-pyspark-scala-sql-${JUPYTERHUB_IMAGE_VERSION_TAG}"}
 DOCKERFILE_PATH="Dockerfile"
 
 echo "=============================================="

@@ -6,6 +6,7 @@ metadata:
   labels:
     app: starrocks-fe
 spec:
+  serviceName: "starrocks-fe"
   replicas: 1
   selector:
     matchLabels:
@@ -52,7 +53,7 @@ spec:
               echo "FE is ready! Creating 'demo' database..."
               # Create DB immediately after FE is ready
               mysql -h 127.0.0.1 -P 9030 -u root -e "CREATE DATABASE IF NOT EXISTS demo;" || echo "Failed to create demo DB"
-              
+
               echo "Starting BE Registration..."
               for i in {1..60}; do
                   echo "Attempt $i: Resolving BE (starrocks-be-0)..."
@@ -149,6 +150,7 @@ metadata:
   labels:
     app: starrocks-be
 spec:
+  serviceName: "starrocks-be"
   replicas: 1
   selector:
     matchLabels:

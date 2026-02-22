@@ -21,7 +21,7 @@ spec:
       serviceAccountName: jupyterhub
       containers:
         - name: jupyterhub
-          image: subhodeep2022/spark-bigdata:jupyterhub-spark-connect-optimized-v2
+          image: $(JUPYTERHUB_IMAGE)
           imagePullPolicy: Always
           ports:
             - containerPort: 8888
