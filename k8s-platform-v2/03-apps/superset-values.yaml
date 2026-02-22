@@ -23,6 +23,8 @@ supersetNode:
     limits:
       memory: "6Gi"
       cpu: "4000m"
+nodeSelector:
+  node-role.kubernetes.io/k8s-gp-node: ""
 
 bootstrapScript: |
   pip install --no-cache-dir --no-deps starrocks==1.0.6 pymysql

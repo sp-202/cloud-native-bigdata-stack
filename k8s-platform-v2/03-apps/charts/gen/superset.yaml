@@ -447,6 +447,8 @@ spec:
             timeoutSeconds: 60
           resources:
             {}
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
       volumes:
         - name: superset-config
           secret:
@@ -552,6 +554,8 @@ spec:
             requests:
               cpu: 2000m
               memory: 4Gi
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
       volumes:
         - name: superset-config
           secret:
@@ -737,6 +741,8 @@ spec:
         command: ["/bin/sh","-c",". /app/pythonpath/superset_bootstrap.sh; . /app/pythonpath/superset_init.sh"]
         resources:
           {}
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
       volumes:
         - name: superset-config
           secret:

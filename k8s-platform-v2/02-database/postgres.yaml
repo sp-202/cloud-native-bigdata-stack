@@ -15,50 +15,50 @@ spec:
       labels:
         app: postgres
     spec:
-      # --- Pinning to Master Node ---
+      # --- Pinning to GP Node ---
       nodeSelector:
-        node-role.kubernetes.io/control-plane: "true"
+        node-role.kubernetes.io/k8s-gp-node: ""
       containers:
-      - name: postgres
-        image: postgres:13
-        env:
-        - name: POSTGRES_USER
-          value: "postgres"
-        - name: POSTGRES_PASSWORD
-          value: "password" # Root password (internal only)
-        - name: PGDATA
-          value: "/var/lib/postgresql/data/pgdata"
-        livenessProbe:
-          exec:
-            command: ["pg_isready", "-U", "postgres"]
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          exec:
-            command: ["pg_isready", "-U", "postgres"]
-          initialDelaySeconds: 15
-          periodSeconds: 5
-        resources:
-          requests:
-            memory: "1Gi"
-            cpu: "500m"
-          limits:
-            memory: "2Gi"
-            cpu: "1000m"
-        ports:
-        - containerPort: 5432
-        volumeMounts:
-        - name: storage
-          mountPath: /var/lib/postgresql/data
-        - name: init-scripts
-          mountPath: /docker-entrypoint-initdb.d
+        - name: postgres
+          image: postgres:13
+          env:
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              value: "password" # Root password (internal only)
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/postgresql/data
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
       volumes:
-      - name: storage
-        persistentVolumeClaim:
-          claimName: postgres-data-pvc
-      - name: init-scripts
-        configMap:
-          name: postgres-init
+        - name: storage
+          persistentVolumeClaim:
+            claimName: postgres-data-pvc
+        - name: init-scripts
+          configMap:
+            name: postgres-init
 ---
 apiVersion: v1
 kind: Service
@@ -67,7 +67,7 @@ metadata:
   namespace: default
 spec:
   ports:
-  - port: 5432
-    targetPort: 5432
+    - port: 5432
+      targetPort: 5432
   selector:
     app: postgres

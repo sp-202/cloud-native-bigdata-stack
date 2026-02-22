@@ -16,6 +16,9 @@ spec:
       labels:
         app: starrocks-fe
     spec:
+      # --- Pinning to GP Node ---
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
       containers:
         - name: starrocks-fe
           image: starrocks/fe-ubuntu:3.3-latest
@@ -117,6 +120,7 @@ spec:
     - metadata:
         name: fe-meta
       spec:
+        storageClassName: local-storage
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
@@ -160,6 +164,9 @@ spec:
       labels:
         app: starrocks-be
     spec:
+      # --- Pinning to GP Node ---
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
       containers:
         - name: starrocks-be
           image: starrocks/be-ubuntu:3.3-latest
@@ -203,10 +210,11 @@ spec:
     - metadata:
         name: be-storage
       spec:
+        storageClassName: local-storage
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 10Gi
+            storage: 20Gi
 ---
 apiVersion: v1
 kind: Service
