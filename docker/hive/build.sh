@@ -13,17 +13,13 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 else
     echo "⚠️  Warning: $ENV_FILE not found, using default values"
-    SPARK_VERSION="4.0.1"
-    UNITY_CATALOG_VERSION="0.3.1"
-    SPARK_IMAGE_VERSION="v4"
 fi
 
-# Image name as requested
-IMAGE_NAME="subhodeep2022/k8s-git-sync:v2-prod"
+IMAGE_NAME="subhodeep2022/spark-bigdata:hive-3.1.3-custom-prod"
 DOCKERFILE_PATH="Dockerfile"
 
 echo "=============================================="
-echo "Building k8s-git-sync image (Optimized)"
+echo "Building Hive image (Optimized)"
 echo "Target Image: $IMAGE_NAME"
 echo "=============================================="
 

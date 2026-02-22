@@ -229,7 +229,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: starrocks.3.238.103.234.sslip.io
+    - host: starrocks.34.239.93.55.sslip.io
       http:
         paths:
           - path: /

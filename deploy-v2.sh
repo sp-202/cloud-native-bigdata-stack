@@ -37,8 +37,8 @@ kubectl delete svc kubernetes-dashboard-web kubernetes-dashboard-api -n default 
 # 2. Generate Helm Manifests (Adapted from deploy-gke.sh)
 # ---------------------------------------------------
 # Define the static IP found in the codebase to be replaced (Legacy GKE artifact, kept for safety)
-STATIC_IP_TO_REPLACE="3.238.103.234"
-STATIC_DOMAIN_TO_REPLACE="3.238.103.234.sslip.io"
+STATIC_IP_TO_REPLACE="34.239.93.55"
+STATIC_DOMAIN_TO_REPLACE="34.239.93.55.sslip.io"
 
 echo "Generating Helm manifests..."
 mkdir -p k8s-platform-v2/03-apps/charts/gen

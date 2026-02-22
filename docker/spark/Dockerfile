@@ -1,10 +1,10 @@
 # Builder Stage
 FROM eclipse-temurin:17-jdk-jammy AS builder
 
-ENV SPARK_VERSION=4.1.1
+ENV SPARK_VERSION=4.0.1
 ENV HADOOP_VERSION=3
 ENV SCALA_VERSION=2.13
-ENV DELTA_VERSION=4.0.0
+ENV DELTA_VERSION=4.0.1
 ENV UC_VERSION=0.3.1
 ENV ICEBERG_VERSION=1.10.0
 ENV HADOOP_AWS_VERSION=3.4.1
@@ -12,14 +12,14 @@ ENV AWS_SDK_V2_VERSION=2.29.52
 ENV POSTGRES_VERSION=42.6.0
 ENV SEDONA_VERSION=1.8.1
 ENV GEOTOOLS_WRAPPER_VERSION=1.8.1-33.1
-ENV H3_VERSION=4.1.1
+ENV H3_VERSION=4.0.1
 ENV SPARK_HOME=/opt/spark
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y wget curl
 
 # Download and install Spark
-RUN wget https://dlcdn.apache.org/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz && \
+RUN wget https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz && \
     tar -xzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz && \
     mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} ${SPARK_HOME} && \
     rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz

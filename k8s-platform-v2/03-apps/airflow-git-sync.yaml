@@ -21,7 +21,7 @@ spec:
         fsGroupChangePolicy: "OnRootMismatch"
       containers:
       - name: git-sync
-        image: subhodeep2022/k8s-git-sync:v2
+        image: subhodeep2022/k8s-git-sync:v2-prod
         securityContext:
           runAsUser: 0
           runAsGroup: 0
