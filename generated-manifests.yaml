@@ -44781,7 +44781,7 @@ data:
     provisioning = /etc/grafana/provisioning
     [server]
     domain = ''
-    root_url = http://grafana.34.239.93.55.sslip.io
+    root_url = http://grafana.100.53.223.140.sslip.io
     serve_from_sub_path = true
 kind: ConfigMap
 metadata:
@@ -47472,11 +47472,11 @@ apiVersion: v1
 data:
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
-  INGRESS_DOMAIN: 34.239.93.55.sslip.io
+  INGRESS_DOMAIN: 100.53.223.140.sslip.io
   MINIO_ENDPOINT: http://minio.default.svc.cluster.local:9000
 kind: ConfigMap
 metadata:
-  name: global-config-6km5g969hc
+  name: global-config-9hkh6827mm
 ---
 apiVersion: v1
 data:
@@ -49808,8 +49808,15 @@ spec:
           value: minioadmin
         - name: MINIO_SECRET_KEY
           value: minioadmin
-        image: subhodeep2022/k8s-git-sync:v2
+        image: subhodeep2022/k8s-git-sync:v2-prod
         name: git-sync
+        resources:
+          limits:
+            cpu: 250m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
         securityContext:
           allowPrivilegeEscalation: false
           runAsGroup: 0
@@ -49820,7 +49827,7 @@ spec:
         - mountPath: /dags
           name: dags-shared
       nodeSelector:
-        node-role.kubernetes.io/control-plane: "true"
+        node-role.kubernetes.io/k8s-gp-node: ""
       securityContext:
         fsGroup: 65533
         fsGroupChangePolicy: OnRootMismatch
@@ -49880,7 +49887,7 @@ spec:
           name: dags-data
           readOnly: true
       nodeSelector:
-        node-role.kubernetes.io/control-plane: "true"
+        node-role.kubernetes.io/k8s-gp-node: ""
       securityContext:
         fsGroup: 50000
       volumes:
@@ -49949,7 +49956,7 @@ spec:
         - mountPath: /opt/airflow/dags
           name: dags-data
       nodeSelector:
-        node-role.kubernetes.io/control-plane: "true"
+        node-role.kubernetes.io/k8s-gp-node: ""
       securityContext:
         fsGroup: 50000
       volumes:
@@ -50036,7 +50043,7 @@ spec:
         - mountPath: /tmp/hive
           name: hive-scratch
       nodeSelector:
-        node-role.kubernetes.io/control-plane: "true"
+        node-role.kubernetes.io/k8s-gp-node: ""
       volumes:
       - configMap:
           name: hive-config-bth8gd7d8t
@@ -50071,29 +50078,29 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: AWS_ACCESS_KEY_ID
-              name: global-config-6km5g969hc
+              name: global-config-9hkh6827mm
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             configMapKeyRef:
               key: AWS_SECRET_ACCESS_KEY
-              name: global-config-6km5g969hc
+              name: global-config-9hkh6827mm
         - name: JUPYTER_S3_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-6km5g969hc
+              name: global-config-9hkh6827mm
         - name: MINIO_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-6km5g969hc
+              name: global-config-9hkh6827mm
         - name: JUPYTER_ENABLE_LAB
           value: "yes"
         - name: JUPYTER_TOKEN
           value: ""
         - name: GRANT_SUDO
           value: "yes"
-        image: subhodeep2022/spark-bigdata:jupyterhub-spark-connect-optimized-v2
+        image: subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v2
         imagePullPolicy: Always
         name: jupyterhub
         ports:
@@ -50116,7 +50123,7 @@ spec:
           name: startup-script
           subPath: setup-kernels.sh
       nodeSelector:
-        node-role.kubernetes.io/control-plane: "true"
+        node-role.kubernetes.io/k8s-gp-node: ""
       serviceAccountName: jupyterhub
       volumes:
       - configMap:
@@ -50308,12 +50315,18 @@ spec:
         - mountPath: /etc/grafana/provisioning/datasources
           name: sc-datasources-volume
       enableServiceLinks: true
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
       securityContext:
         fsGroup: 472
         runAsGroup: 472
         runAsNonRoot: true
         runAsUser: 472
       serviceAccountName: kube-prometheus-stack-grafana
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+        operator: Exists
       volumes:
       - configMap:
           name: kube-prometheus-stack-grafana
@@ -50800,11 +50813,16 @@ spec:
         - mountPath: /data
           name: storage
       nodeSelector:
-        node-role.kubernetes.io/control-plane: "true"
+        node-role.kubernetes.io/minio-worker: ""
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/minio-worker
+        operator: Exists
       volumes:
-      - name: storage
-        persistentVolumeClaim:
-          claimName: minio-data-pvc
+      - hostPath:
+          path: /mnt/spark-nvme/minio-data
+          type: DirectoryOrCreate
+        name: storage
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -50864,7 +50882,7 @@ spec:
         - mountPath: /docker-entrypoint-initdb.d
           name: init-scripts
       nodeSelector:
-        node-role.kubernetes.io/control-plane: "true"
+        node-role.kubernetes.io/k8s-gp-node: ""
       volumes:
       - name: storage
         persistentVolumeClaim:
@@ -50903,9 +50921,7 @@ spec:
           --conf spark.dynamicAllocation.enabled=true \
           --conf spark.dynamicAllocation.minExecutors=2 \
           --conf spark.dynamicAllocation.maxExecutors=4 \
-          --conf spark.dynamicAllocation.maxExecutors=4 \
           --conf spark.kubernetes.container.image=subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3 \
-          --conf spark.kubernetes.driver.pod.name=$POD_NAME \
           --conf spark.kubernetes.driver.pod.name=$POD_NAME \
           --conf spark.kubernetes.namespace=default \
           --conf spark.sql.connect.port=15002 \
@@ -50920,6 +50936,10 @@ spec:
           --conf spark.sql.catalogImplementation=hive \
           --conf spark.hadoop.hive.metastore.uris=thrift://hive-metastore.default.svc.cluster.local:9083 \
           --conf spark.sql.warehouse.dir=s3a://warehouse/managed/ \
+          --conf spark.kubernetes.executor.node.selector.node-role.kubernetes.io/spark-worker="" \
+          --conf spark.kubernetes.executor.volumes.hostPath.spark-local-dir.mount.path=/mnt/spark-nvme \
+          --conf spark.kubernetes.executor.volumes.hostPath.spark-local-dir.options.path=/mnt/spark-nvme/spark-shuffle \
+          --conf spark.local.dir=/mnt/spark-nvme \
           local:///opt/spark/jars/spark-connect_2.12-4.0.1.jar
         command:
         - /bin/bash
@@ -50935,7 +50955,7 @@ spec:
               fieldPath: metadata.name
         envFrom:
         - configMapRef:
-            name: global-config-6km5g969hc
+            name: global-config-9hkh6827mm
         image: subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3
         imagePullPolicy: Always
         name: spark-connect-server
@@ -50944,10 +50964,19 @@ spec:
           name: spark-connect
         - containerPort: 4040
           name: spark-ui
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
         volumeMounts:
         - mountPath: /opt/spark/conf/spark-defaults.conf
           name: spark-config-volume
           subPath: spark-defaults.conf
+      nodeSelector:
+        node-role.kubernetes.io/spark-node: ""
       serviceAccountName: spark-operator-spark
       volumes:
       - configMap:
@@ -50993,6 +51022,8 @@ spec:
           requests:
             cpu: 1000m
             memory: 1Gi
+      nodeSelector:
+        node-role.kubernetes.io/spark-node: ""
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -51093,6 +51124,8 @@ spec:
         image: jwilder/dockerize:0.6.1
         imagePullPolicy: IfNotPresent
         name: wait-for-postgres
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
       securityContext:
         runAsUser: 0
       volumes:
@@ -51174,6 +51207,8 @@ spec:
         image: jwilder/dockerize:0.6.1
         imagePullPolicy: IfNotPresent
         name: wait-for-postgres-redis
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
       securityContext:
         runAsUser: 0
       volumes:
@@ -51684,6 +51719,7 @@ spec:
   selector:
     matchLabels:
       app: starrocks-be
+  serviceName: starrocks-be
   template:
     metadata:
       labels:
@@ -51731,6 +51767,8 @@ spec:
         volumeMounts:
         - mountPath: /data/storage
           name: be-storage
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
   volumeClaimTemplates:
   - metadata:
       name: be-storage
@@ -51753,6 +51791,7 @@ spec:
   selector:
     matchLabels:
       app: starrocks-fe
+  serviceName: starrocks-fe
   template:
     metadata:
       labels:
@@ -51826,6 +51865,8 @@ spec:
         volumeMounts:
         - mountPath: /data/meta
           name: fe-meta
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
   volumeClaimTemplates:
   - metadata:
       name: fe-meta
@@ -52209,7 +52250,7 @@ spec:
         image: apache/airflow:2.7.1
         name: airflow-init
       nodeSelector:
-        node-role.kubernetes.io/control-plane: "true"
+        node-role.kubernetes.io/k8s-gp-node: ""
       restartPolicy: OnFailure
 ---
 apiVersion: batch/v1
@@ -52397,6 +52438,8 @@ spec:
         image: jwilder/dockerize:0.6.1
         imagePullPolicy: IfNotPresent
         name: wait-for-postgres
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
       restartPolicy: Never
       securityContext:
         runAsUser: 0
@@ -52541,6 +52584,8 @@ spec:
   listenLocal: false
   logFormat: logfmt
   logLevel: info
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
   paused: false
   podMonitorNamespaceSelector: {}
   podMonitorSelector: {}
@@ -52580,6 +52625,10 @@ spec:
           requests:
             storage: 10Gi
         storageClassName: standard
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
   tsdb:
     outOfOrderTimeWindow: 0s
   version: v2.49.1
@@ -56462,7 +56511,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: airflow.34.239.93.55.sslip.io
+  - host: airflow.100.53.223.140.sslip.io
     http:
       paths:
       - backend:
@@ -56472,7 +56521,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: minio.34.239.93.55.sslip.io
+  - host: minio.100.53.223.140.sslip.io
     http:
       paths:
       - backend:
@@ -56482,7 +56531,7 @@ spec:
               name: console
         path: /
         pathType: Prefix
-  - host: s3.34.239.93.55.sslip.io
+  - host: s3.100.53.223.140.sslip.io
     http:
       paths:
       - backend:
@@ -56492,7 +56541,7 @@ spec:
               name: api
         path: /
         pathType: Prefix
-  - host: superset.34.239.93.55.sslip.io
+  - host: superset.100.53.223.140.sslip.io
     http:
       paths:
       - backend:
@@ -56502,7 +56551,7 @@ spec:
               name: http
         path: /
         pathType: Prefix
-  - host: jupyterhub.34.239.93.55.sslip.io
+  - host: jupyterhub.100.53.223.140.sslip.io
     http:
       paths:
       - backend:
@@ -56512,7 +56561,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: spark.34.239.93.55.sslip.io
+  - host: spark.100.53.223.140.sslip.io
     http:
       paths:
       - backend:
@@ -56533,7 +56582,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: grafana.34.239.93.55.sslip.io
+  - host: grafana.100.53.223.140.sslip.io
     http:
       paths:
       - backend:
@@ -56555,7 +56604,7 @@ metadata:
   namespace: default
 spec:
   rules:
-  - host: dashboard.34.239.93.55.sslip.io
+  - host: dashboard.100.53.223.140.sslip.io
     http:
       paths:
       - backend:
@@ -56574,7 +56623,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: spark-history.34.239.93.55.sslip.io
+  - host: spark-history.100.53.223.140.sslip.io
     http:
       paths:
       - backend:
@@ -56593,7 +56642,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: starrocks.34.239.93.55.sslip.io
+  - host: starrocks.100.53.223.140.sslip.io
     http:
       paths:
       - backend:
@@ -56607,6 +56656,22 @@ spec:
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
+  name: hubble-ui-route
+  namespace: default
+spec:
+  entryPoints:
+  - web
+  routes:
+  - kind: Rule
+    match: Host(`hubble.100.53.223.140.sslip.io`)
+    services:
+    - name: hubble-ui
+      namespace: kube-system
+      port: 80
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
   name: traefik-dashboard-route
   namespace: default
 spec:
@@ -56614,7 +56679,7 @@ spec:
   - web
   routes:
   - kind: Rule
-    match: Host(`traefik.34.239.93.55.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    match: Host(`traefik.100.53.223.140.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
     services:
     - kind: TraefikService
       name: api@internal
@@ -56662,8 +56727,14 @@ spec:
     - mountPath: /tests
       name: tests
       readOnly: true
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
   restartPolicy: Never
   serviceAccountName: kube-prometheus-stack-grafana-test
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
   volumes:
   - configMap:
       name: kube-prometheus-stack-grafana-test

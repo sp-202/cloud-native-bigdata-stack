@@ -13,34 +13,41 @@ spec:
       labels:
         app: spark-history-server
     spec:
+      # --- Pinning to Spark Node ---
+      nodeSelector:
+        node-role.kubernetes.io/spark-node: ""
       containers:
-      - name: spark-history-server
-        image: $(SPARK_IMAGE)
-        command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.history.HistoryServer"]
-        resources:
-          requests:
-            cpu: "1000m"
-            memory: "1Gi"
-          limits:
-            cpu: "1500m"
-            memory: "1.5Gi"
-        env:
-        - name: SPARK_DAEMON_MEMORY
-          value: "1g"
-        - name: SPARK_HISTORY_OPTS
-          value: >-
-            -Dspark.history.fs.logDirectory=s3a://spark-logs/
-            -Dspark.hadoop.fs.s3a.endpoint=http://minio.default.svc.cluster.local:9000
-            -Dspark.hadoop.fs.s3a.access.key=minioadmin
-            -Dspark.hadoop.fs.s3a.secret.key=minioadmin
-            -Dspark.hadoop.fs.s3a.path.style.access=true
-            -Dspark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
-            -Dspark.history.fs.subpath.enabled=true
-            -Dspark.history.fs.cleaner.enabled=false
-            -Dspark.history.retainedApplications=500
-            -Dspark.history.fs.update.interval=10s
-        ports:
-        - containerPort: 18080
+        - name: spark-history-server
+          image: $(SPARK_IMAGE)
+          command:
+            [
+              "/opt/spark/bin/spark-class",
+              "org.apache.spark.deploy.history.HistoryServer",
+            ]
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "1Gi"
+            limits:
+              cpu: "1500m"
+              memory: "1.5Gi"
+          env:
+            - name: SPARK_DAEMON_MEMORY
+              value: "1g"
+            - name: SPARK_HISTORY_OPTS
+              value: >-
+                -Dspark.history.fs.logDirectory=s3a://spark-logs/
+                -Dspark.hadoop.fs.s3a.endpoint=http://minio.default.svc.cluster.local:9000
+                -Dspark.hadoop.fs.s3a.access.key=minioadmin
+                -Dspark.hadoop.fs.s3a.secret.key=minioadmin
+                -Dspark.hadoop.fs.s3a.path.style.access=true
+                -Dspark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
+                -Dspark.history.fs.subpath.enabled=true
+                -Dspark.history.fs.cleaner.enabled=false
+                -Dspark.history.retainedApplications=500
+                -Dspark.history.fs.update.interval=10s
+          ports:
+            - containerPort: 18080
 ---
 apiVersion: v1
 kind: Service
@@ -50,10 +57,10 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - port: 18080
-    targetPort: 18080
-    protocol: TCP
-    name: http
+    - port: 18080
+      targetPort: 18080
+      protocol: TCP
+      name: http
   selector:
     app: spark-history-server
 ---
@@ -63,15 +70,15 @@ metadata:
   name: spark-history-ingress
   namespace: default
 spec:
-  ingressClassName: traefik  # <--- This replaces the deprecated annotation
+  ingressClassName: traefik # <--- This replaces the deprecated annotation
   rules:
-  - host: spark-history.34.239.93.55.sslip.io
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: spark-history-server
-            port:
-              number: 18080
+    - host: spark-history.34.239.93.55.sslip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: spark-history-server
+                port:
+                  number: 18080

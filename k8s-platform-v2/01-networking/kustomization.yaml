@@ -3,7 +3,5 @@ kind: Kustomization
 
 resources:
   - traefik-ingressroute.yaml
-
+  - hubble-ui-ingressroute.yaml
   - traefik-transport.yaml
-
-

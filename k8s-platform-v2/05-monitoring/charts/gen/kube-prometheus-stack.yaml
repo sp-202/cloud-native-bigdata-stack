@@ -45020,6 +45020,12 @@ spec:
             httpGet:
               path: /api/health
               port: 3000
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+          operator: Exists
       volumes:
         - name: config
           configMap:
@@ -45354,6 +45360,8 @@ spec:
   image: "quay.io/prometheus/prometheus:v2.49.1"
   version: v2.49.1
   externalUrl: http://kube-prometheus-stack-prometheus.default:9090
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
   paused: false
   replicas: 1
   shards: 1
@@ -45402,6 +45410,10 @@ spec:
           requests:
             storage: 10Gi
         storageClassName: standard
+  tolerations:
+    - effect: NoSchedule
+      key: node-role.kubernetes.io/control-plane
+      operator: Exists
   portName: http-web
   hostNetwork: false
 ---
@@ -49284,6 +49296,12 @@ metadata:
   namespace: default
 spec:
   serviceAccountName: kube-prometheus-stack-grafana-test
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
+  tolerations:
+    - effect: NoSchedule
+      key: node-role.kubernetes.io/control-plane
+      operator: Exists
   containers:
     - name: kube-prometheus-stack-test
       image: "docker.io/bats/bats:v1.4.1"

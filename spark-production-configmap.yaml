@@ -69,6 +69,16 @@ data:
     spark.ui.bindHost                        0.0.0.0
     spark.ui.port                            4040
     spark.driver.bindAddress                 0.0.0.0
+
+    # --- Node Placement ---
+    # Driver on spark-node, executors on spark-worker
+    spark.kubernetes.driver.node.selector.node-role.kubernetes.io/spark-node
+    spark.kubernetes.executor.node.selector.node-role.kubernetes.io/spark-worker
+
+    # --- Local NVMe for Shuffle/Spill ---
+    spark.local.dir                          /mnt/spark-nvme
+    spark.kubernetes.executor.volumes.hostPath.spark-local-dir.mount.path /mnt/spark-nvme
+    spark.kubernetes.executor.volumes.hostPath.spark-local-dir.options.path /mnt/spark-nvme/spark-shuffle
 kind: ConfigMap
 metadata:
   name: spark-production-defaults

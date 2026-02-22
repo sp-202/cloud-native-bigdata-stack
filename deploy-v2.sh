@@ -43,7 +43,33 @@ STATIC_DOMAIN_TO_REPLACE="34.239.93.55.sslip.io"
 echo "Generating Helm manifests..."
 mkdir -p k8s-platform-v2/03-apps/charts/gen
 
-# 2.1 Spark Operator
+# 2.1 Traefik Ingress Controller (pinned to control-plane, hostNetwork for bare-metal)
+echo "Installing Traefik..."
+helm repo add traefik https://traefik.github.io/charts
+helm repo update traefik
+if helm list -n kube-system | grep -q traefik; then
+  echo "Traefik is already installed. Upgrading..."
+fi
+helm upgrade --install traefik traefik/traefik \
+  --namespace kube-system \
+  --set ports.web.nodePort=null \
+  --set ports.websecure.nodePort=null \
+  --set global.checkNewVersion=false \
+  --set global.sendAnonymousUsage=false \
+  --set "additionalArguments={--api.insecure=true,--api.dashboard=true}" \
+  --set "nodeSelector.node-role\.kubernetes\.io/control-plane=" \
+  --set "tolerations[0].key=node-role.kubernetes.io/control-plane" \
+  --set "tolerations[0].operator=Exists" \
+  --set "tolerations[0].effect=NoSchedule" \
+  --set hostNetwork=true \
+  --set service.type=ClusterIP \
+  --set "ingressRoute.dashboard.enabled=false" \
+  --timeout 10m
+
+# Manually expose Traefik API port 9000 -> 8080
+kubectl patch svc traefik -n kube-system -p '{"spec":{"ports":[{"name":"traefik","port":9000,"targetPort":8080}]}}' || true
+
+# 2.2 Spark Operator
 helm repo add spark-operator https://kubeflow.github.io/spark-operator
 helm repo update spark-operator
 helm template spark-operator spark-operator/spark-operator \
@@ -166,6 +192,7 @@ echo "Minio: http://minio.$INGRESS_DOMAIN"
 echo "Grafana: http://grafana.$INGRESS_DOMAIN"
 echo "Spark: http://spark.$INGRESS_DOMAIN"
 echo "Spark-History: http://spark-history.$INGRESS_DOMAIN"
+echo "Hubble UI: http://hubble.$INGRESS_DOMAIN"
 
 # ---------------------------------------------------
 # 4. StarRocks Production Fix (Post-Deploy)

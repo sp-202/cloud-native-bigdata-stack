@@ -1,5 +1,11 @@
 grafana:
   adminPassword: prom-operator
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
+  tolerations:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
   additionalDataSources:
     - name: Loki
       type: loki
@@ -15,13 +21,19 @@ grafana:
 
 prometheus:
   prometheusSpec:
+    nodeSelector:
+      node-role.kubernetes.io/control-plane: ""
+    tolerations:
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
     podMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelectorNilUsesHelmValues: false
     retention: 168h
     storageSpec:
       volumeClaimTemplate:
         spec:
-          storageClassName: standard
+          storageClassName: local-storage
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:

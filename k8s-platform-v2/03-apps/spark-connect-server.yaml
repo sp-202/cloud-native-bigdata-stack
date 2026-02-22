@@ -17,6 +17,9 @@ spec:
         spark-role: driver
     spec:
       serviceAccountName: spark-operator-spark # Use the SA that has permissions to create pods
+      # --- Pinning Spark Driver to spark-node ---
+      nodeSelector:
+        node-role.kubernetes.io/spark-node: ""
       containers:
         - name: spark-connect-server
           image: $(SPARK_IMAGE)
@@ -33,9 +36,7 @@ spec:
               --conf spark.dynamicAllocation.enabled=true \
               --conf spark.dynamicAllocation.minExecutors=2 \
               --conf spark.dynamicAllocation.maxExecutors=4 \
-              --conf spark.dynamicAllocation.maxExecutors=4 \
               --conf spark.kubernetes.container.image=$(SPARK_IMAGE) \
-              --conf spark.kubernetes.driver.pod.name=$POD_NAME \
               --conf spark.kubernetes.driver.pod.name=$POD_NAME \
               --conf spark.kubernetes.namespace=default \
               --conf spark.sql.connect.port=15002 \
@@ -50,6 +51,10 @@ spec:
               --conf spark.sql.catalogImplementation=hive \
               --conf spark.hadoop.hive.metastore.uris=thrift://hive-metastore.default.svc.cluster.local:9083 \
               --conf spark.sql.warehouse.dir=s3a://warehouse/managed/ \
+              --conf spark.kubernetes.executor.node.selector.node-role.kubernetes.io/spark-worker="" \
+              --conf spark.kubernetes.executor.volumes.hostPath.spark-local-dir.mount.path=/mnt/spark-nvme \
+              --conf spark.kubernetes.executor.volumes.hostPath.spark-local-dir.options.path=/mnt/spark-nvme/spark-shuffle \
+              --conf spark.local.dir=/mnt/spark-nvme \
               local:///opt/spark/jars/spark-connect_2.12-4.0.1.jar
           ports:
             - containerPort: 15002

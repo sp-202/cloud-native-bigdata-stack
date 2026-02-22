@@ -15,9 +15,9 @@ spec:
       labels:
         app: jupyterhub
     spec:
-      # --- Pinning to Master Node ---
+      # --- Pinning to GP Node ---
       nodeSelector:
-        node-role.kubernetes.io/control-plane: "true"
+        node-role.kubernetes.io/k8s-gp-node: ""
       serviceAccountName: jupyterhub
       containers:
         - name: jupyterhub
