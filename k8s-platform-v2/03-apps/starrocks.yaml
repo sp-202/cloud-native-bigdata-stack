@@ -120,7 +120,7 @@ spec:
     - metadata:
         name: fe-meta
       spec:
-        storageClassName: local-storage
+        storageClassName: openebs-hostpath
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
@@ -210,7 +210,7 @@ spec:
     - metadata:
         name: be-storage
       spec:
-        storageClassName: local-storage
+        storageClassName: openebs-hostpath
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
