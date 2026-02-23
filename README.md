@@ -1,4 +1,4 @@
-# 🚀 Cloud-Native Big Data Platform on Kubernetes (GKE)
+# 🚀 Cloud-Native Big Data Platform on Kubernetes (Raw K8s / AWS)
 
 [![Version](https://img.shields.io/badge/version-0.1.0--beta-blue)](RELEASES.md)
 [![Status](https://img.shields.io/badge/status-initial--beta-success)](README.md#🚦-project-status)
@@ -45,8 +45,9 @@ This repository contains a **Data Platform as Code (DPaC)** implementation, desi
 The platform is divided into three logical domains:
 
 ### 1️⃣ Ingress & Networking (Orange Domain)
-*   **Traefik Proxy (v2/v3)**: The unified ingress controller. It handles all external traffic on ports `80` (HTTP) and `443` (HTTPS) and routes it to internal services based on hostnames (e.g., `airflow.example.com`).
-*   **SSLP/NIP.IO**: Automatic DNS resolution for LoadBalancer IPs to simplify local development and testing.
+*   **MetalLB**: Provides a network load-balancer implementation for standard Kubernetes clusters. It handles the assignment of the static IP `100.53.223.140`.
+*   **Traefik Proxy (v2/v3)**: The unified ingress controller. It handles all external traffic on ports `80` (HTTP) and `443` (HTTPS) and routes it to internal services. Now running in a secure, non-host-network mode using the MetalLB LoadBalancer.
+*   **SSLP/NIP.IO**: Automatic DNS resolution for LoadBalancer IPs to simplify development.
 
 ### 2️⃣ Application Layer (Blue Domain)
 *   **Apache Airflow (2.x)**: The workflow orchestrator. It schedules DAGs that trigger Spark jobs, move data, and manage dependencies. configured with the **KubernetesExecutor** for scaling tasks.
@@ -59,9 +60,10 @@ The platform is divided into three logical domains:
 *   **Hive Metastore (HMS)**: Standalone Thrift service acting as the central catalog for Spark and StarRocks.
 
 ### 3️⃣ Data & Persistence (Green Domain)
+*   **OpenEBS (Hostpath)**: Dynamic storage provisioner that manages local node storage. Replaces static PersistentVolumes for an automated storage lifecycle.
 *   **MinIO**: High-performance Object Storage (S3 Compatible). Acts as the "Data Lake" storage layer.
-*   **PostgreSQL**: The relational metadata backbone. Stores state for Airflow (DAG runs), Superset (dashboards), and Hive (schemas).
-*   **Redis**: In-memory cache used by Superset to speed up query results and dashboard loading.
+*   **PostgreSQL**: The relational metadata backbone. Stores state for Airflow, Superset, and Hive.
+*   **Redis**: In-memory cache used by Superset.
 *   **StarRocks**: High-performance analytical (OLAP) database. Reads directly from MinIO via Delta Native Catalog.
 *   **Kong Gateway (Experimental)**: Secondary API gateway for external service management.
 
