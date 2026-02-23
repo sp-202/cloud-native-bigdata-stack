@@ -33,7 +33,7 @@ prometheus:
     storageSpec:
       volumeClaimTemplate:
         spec:
-          storageClassName: local-storage
+          storageClassName: openebs-hostpath
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:

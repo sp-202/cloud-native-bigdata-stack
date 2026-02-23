@@ -61,8 +61,8 @@ helm upgrade --install traefik traefik/traefik \
   --set "tolerations[0].key=node-role.kubernetes.io/control-plane" \
   --set "tolerations[0].operator=Exists" \
   --set "tolerations[0].effect=NoSchedule" \
-  --set hostNetwork=true \
-  --set service.type=ClusterIP \
+  --set hostNetwork=false \
+  --set service.type=LoadBalancer \
   --set "ingressRoute.dashboard.enabled=false" \
   --timeout 10m
 

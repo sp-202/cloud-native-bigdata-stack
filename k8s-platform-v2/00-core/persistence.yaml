@@ -1,150 +1,5 @@
-# --- StorageClass for Local Volumes (no provisioner needed) ---
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: local-storage
-provisioner: kubernetes.io/no-provisioner
-volumeBindingMode: WaitForFirstConsumer
-
----
 # =============================================
-# Local PersistentVolumes (Node-Affinity Bound)
-# =============================================
-
-# --- MinIO Data (on minio-worker, NVMe) ---
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: minio-data-pv
-spec:
-  capacity:
-    storage: 100Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: local-storage
-  local:
-    path: /mnt/spark-nvme/minio-data
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-role.kubernetes.io/minio-worker
-              operator: Exists
-
----
-# --- Postgres Data (on k8s-gp-node) ---
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: postgres-data-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: local-storage
-  local:
-    path: /mnt/spark-nvme/postgres-data
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-role.kubernetes.io/k8s-gp-node
-              operator: Exists
-
----
-# --- Airflow DAGs Shared (on k8s-gp-node) ---
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: airflow-dags-pv
-spec:
-  capacity:
-    storage: 5Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: local-storage
-  local:
-    path: /mnt/spark-nvme/airflow-dags
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-role.kubernetes.io/k8s-gp-node
-              operator: Exists
-
----
-# --- StarRocks FE Meta (on k8s-gp-node) ---
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: starrocks-fe-meta-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: local-storage
-  local:
-    path: /mnt/spark-nvme/starrocks-fe-meta
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-role.kubernetes.io/k8s-gp-node
-              operator: Exists
-
----
-# --- StarRocks BE Storage (on k8s-gp-node) ---
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: starrocks-be-storage-pv
-spec:
-  capacity:
-    storage: 20Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: local-storage
-  local:
-    path: /mnt/spark-nvme/starrocks-be-storage
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-role.kubernetes.io/k8s-gp-node
-              operator: Exists
-
----
-# --- Prometheus Storage (on control-plane) ---
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: prometheus-data-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: local-storage
-  local:
-    path: /mnt/spark-nvme/prometheus-data
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: node-role.kubernetes.io/control-plane
-              operator: Exists
-
----
-# =============================================
-# PersistentVolumeClaims (bound to Local PVs)
+# PersistentVolumeClaims (using OpenEBS Hostpath)
 # =============================================
 
 apiVersion: v1
@@ -153,7 +8,7 @@ metadata:
   name: postgres-data-pvc
   namespace: default
 spec:
-  storageClassName: local-storage
+  storageClassName: openebs-hostpath
   accessModes:
     - ReadWriteOnce
   resources:
@@ -167,7 +22,7 @@ metadata:
   name: minio-data-pvc
   namespace: default
 spec:
-  storageClassName: local-storage
+  storageClassName: openebs-hostpath
   accessModes:
     - ReadWriteOnce
   resources:
@@ -181,7 +36,7 @@ metadata:
   name: airflow-dags-shared-pvc
   namespace: default
 spec:
-  storageClassName: local-storage
+  storageClassName: openebs-hostpath
   accessModes:
     - ReadWriteOnce
   resources:
