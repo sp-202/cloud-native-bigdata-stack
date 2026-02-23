@@ -89,4 +89,25 @@ PROPERTIES (
     "aws.s3.enable_path_style_access" = "true"
 );
 ```
+
+---
+
+## 5. Manual Storage Burden & HostNetwork Security Risks
+
+**Issue:**
+The platform relied on manually defined `PersistentVolumes` bound to specific node paths and `hostNetwork: true` for Traefik, creating several problems:
+*   **Operational Overhead**: Adding new services required manual PV/PVC pairing.
+*   **Security Risks**: `hostNetwork` exposed the ingress controller directly to the host's network stack.
+*   **Port Conflicts**: Potential conflicts on the host for port 80/443.
+
+**Optimization & Resolution:**
+Migrated to a modern, dynamic infrastructure stack:
+1.  **OpenEBS Integration**: Replaced static PVs with the `openebs-hostpath` storage class. This enables **dynamic provisioning**, where Kubernetes automatically handles the lifecycle of local storage on nodes.
+2.  **MetalLB Integration**: Installed MetalLB to handle `type: LoadBalancer` services on raw K8s. This provides a clean abstraction for external access.
+3.  **Traefik Refactor**: Switched Traefik to `type: LoadBalancer` and disabled `hostNetwork`. It now receives a dedicated static IP (`100.53.223.140`) from MetalLB, improving isolation and scalability.
+
+**Benefits:**
+*   **Zero-Touch Storage**: No more manual YAML for individual disks.
+*   **Network Isolation**: Traefik runs in its own network namespace.
+*   **Cloud-Like UX**: Bare-metal cluster now behaves like a cloud provider with automated LB/Storage.
 kubectl exec -it airflow-scheduler-665fbc584c-gcz57 -c airflow-scheduler -- ls -l /opt/airflow/dags/dags-v5/repo/
