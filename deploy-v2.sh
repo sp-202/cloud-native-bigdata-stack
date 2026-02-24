@@ -52,8 +52,10 @@ if helm list -n kube-system | grep -q traefik; then
 fi
 helm upgrade --install traefik traefik/traefik \
   --namespace kube-system \
-  --set ports.web.nodePort=null \
-  --set ports.websecure.nodePort=null \
+  --set ports.web.port=80 \
+  --set ports.websecure.port=443 \
+  --set ports.traefik.port=9000 \
+  --set ports.metrics.port=9101 \
   --set global.checkNewVersion=false \
   --set global.sendAnonymousUsage=false \
   --set "additionalArguments={--api.insecure=true,--api.dashboard=true}" \
@@ -61,12 +63,12 @@ helm upgrade --install traefik traefik/traefik \
   --set "tolerations[0].key=node-role.kubernetes.io/control-plane" \
   --set "tolerations[0].operator=Exists" \
   --set "tolerations[0].effect=NoSchedule" \
-  --set hostNetwork=false \
-  --set service.type=LoadBalancer \
+  --set hostNetwork=true \
+  --set service.type=ClusterIP \
   --set "ingressRoute.dashboard.enabled=false" \
   --timeout 10m
 
-# Manually expose Traefik API port 9000 -> 8080
+# No need to patch SVC for dashboard if on HostNetwork, but keeping for internal access if needed
 kubectl patch svc traefik -n kube-system -p '{"spec":{"ports":[{"name":"traefik","port":9000,"targetPort":8080}]}}' || true
 
 # 2.2 Spark Operator
