@@ -55,7 +55,7 @@ spec:
               --conf spark.kubernetes.executor.volumes.hostPath.spark-local-dir.mount.path=/mnt/spark-nvme \
               --conf spark.kubernetes.executor.volumes.hostPath.spark-local-dir.options.path=/mnt/spark-nvme/spark-shuffle \
               --conf spark.local.dir=/mnt/spark-nvme \
-              local:///opt/spark/jars/spark-connect_2.12-4.0.1.jar
+              local:///opt/spark/jars/spark-connect_2.13-4.1.1.jar
           ports:
             - containerPort: 15002
               name: spark-connect

@@ -17,7 +17,7 @@ spec:
       nodeSelector:
         node-role.kubernetes.io/k8s-gp-node: ""
       securityContext:
-        fsGroup: 65533
+        fsGroup: 50000
         fsGroupChangePolicy: "OnRootMismatch"
       containers:
         - name: git-sync
