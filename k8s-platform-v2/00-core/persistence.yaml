@@ -1,20 +1,72 @@
-# =============================================
-# PersistentVolumeClaims (using OpenEBS Hostpath)
-# =============================================
+# =============================================================================
+# WORKLOAD: PostgreSQL
+# DESCRIPTION: Manually binds a local directory to a PV for database persistence.
+# NOTE: Ensure '/var/openebs/local/postgres-data' exists on 'k8s-gp-node'.
+# =============================================================================
 
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-data-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+  local:
+    path: /var/openebs/local/postgres-data
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-role.kubernetes.io/k8s-gp-node
+              operator: Exists
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: postgres-data-pvc
   namespace: default
 spec:
-  storageClassName: openebs-hostpath
   accessModes:
     - ReadWriteOnce
+  storageClassName: openebs-hostpath
   resources:
     requests:
       storage: 10Gi
+  volumeName: postgres-data-pv
 
+
+  ---
+# =============================================================================
+# WORKLOAD: MinIO
+# DESCRIPTION: Large scale NVMe-backed storage for object storage.
+# TARGET: Restricted to 'minio-worker' nodes for I/O performance.
+# =============================================================================
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: minio-data-pv
+spec:
+  capacity:
+    storage: 14500Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+  local:
+    path: /mnt/spark-nvme/minio
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-role.kubernetes.io/minio-worker
+              operator: Exists
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -22,13 +74,41 @@ metadata:
   name: minio-data-pvc
   namespace: default
 spec:
-  storageClassName: openebs-hostpath
   accessModes:
     - ReadWriteOnce
+  storageClassName: openebs-hostpath
   resources:
     requests:
-      storage: 10Gi
+      storage: 14500Gi
+  volumeName: minio-data-pv
 
+
+---
+# =============================================================================
+# WORKLOAD: Airflow
+# DESCRIPTION: Shared volume for DAG storage across scheduler and workers.
+# =============================================================================
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: airflow-dags-shared-pv
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+  local:
+    path: /var/openebs/local/airflow-shared
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-role.kubernetes.io/k8s-gp-node
+              operator: Exists
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -36,9 +116,93 @@ metadata:
   name: airflow-dags-shared-pvc
   namespace: default
 spec:
-  storageClassName: openebs-hostpath
   accessModes:
     - ReadWriteOnce
+  storageClassName: openebs-hostpath
   resources:
     requests:
       storage: 5Gi
+  volumeName: airflow-dags-shared-pv
+
+---
+# =============================================================================
+# WORKLOAD: StarRocks (Frontend - FE)
+# DESCRIPTION: Metadata storage for StarRocks cluster management.
+# =============================================================================
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: starrocks-fe-pv
+spec:
+  capacity:
+    storage: 150Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+  local:
+    path: /mnt/spark-nvme/starrocks-fe
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-role.kubernetes.io/k8s-gp-node
+              operator: Exists
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: starrocks-fe-meta-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: openebs-hostpath
+  resources:
+    requests:
+      storage: 150Gi
+  volumeName: starrocks-fe-pv
+
+---
+
+# =============================================================================
+# WORKLOAD: StarRocks (Backend - BE)
+# DESCRIPTION: High-performance data storage for OLAP queries.
+# =============================================================================
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: starrocks-be-pv
+spec:
+  capacity:
+    storage: 150Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+  local:
+    path: /mnt/spark-nvme/starrocks-be
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-role.kubernetes.io/k8s-gp-node
+              operator: Exists
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: starrocks-be-meta-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: openebs-hostpath
+  resources:
+    requests:
+      storage: 150Gi
+  volumeName: starrocks-be-pv
