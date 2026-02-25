@@ -69,10 +69,12 @@ kind: Ingress
 metadata:
   name: spark-history-ingress
   namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
-  ingressClassName: traefik # <--- This replaces the deprecated annotation
+  ingressClassName: traefik
   rules:
-    - host: spark-history.34.239.93.55.sslip.io
+    - host: spark-history.$(INGRESS_DOMAIN)
       http:
         paths:
           - path: /

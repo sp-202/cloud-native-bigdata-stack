@@ -63,9 +63,18 @@ helm upgrade --install traefik traefik/traefik \
   --set "tolerations[0].key=node-role.kubernetes.io/control-plane" \
   --set "tolerations[0].operator=Exists" \
   --set "tolerations[0].effect=NoSchedule" \
+  --set "tolerations[1].key=node.cilium.io/agent-not-ready" \
+  --set "tolerations[1].operator=Exists" \
+  --set "tolerations[1].effect=NoSchedule" \
   --set hostNetwork=true \
   --set service.type=ClusterIP \
   --set "ingressRoute.dashboard.enabled=false" \
+  --set securityContext.runAsGroup=0 \
+  --set securityContext.runAsNonRoot=false \
+  --set securityContext.runAsUser=0 \
+  --set podSecurityContext.runAsGroup=0 \
+  --set podSecurityContext.runAsNonRoot=false \
+  --set podSecurityContext.runAsUser=0 \
   --timeout 10m
 
 # No need to patch SVC for dashboard if on HostNetwork, but keeping for internal access if needed
@@ -112,15 +121,13 @@ helm template loki-stack grafana/loki-stack \
   > k8s-platform-v2/05-monitoring/charts/gen/loki-stack.yaml
 
 # kubernetes-dashboard
-# kubernetes-dashboard
-# helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/
-# helm repo update kubernetes-dashboard
-# helm template kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard \
-#   --namespace default \
-#   --version 7.5.0 \
-#   -f k8s-platform-v2/05-monitoring/values-dashboard.yaml \
-#   > k8s-platform-v2/05-monitoring/charts/gen/kubernetes-dashboard.yaml
-
+helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/ 2>/dev/null || true
+helm repo update kubernetes-dashboard 2>/dev/null || true
+helm template kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard \
+  --namespace default \
+  --version 7.5.0 \
+  -f k8s-platform-v2/05-monitoring/values-dashboard.yaml \
+  > k8s-platform-v2/05-monitoring/charts/gen/kubernetes-dashboard.yaml 2>/dev/null || echo "Warning: kubernetes-dashboard chart generation failed, using cached version if available"
 
 
 # ---------------------------------------------------
@@ -179,6 +186,21 @@ echo "Pre-cleaning immutable RBAC..."
 kubectl delete clusterrolebinding jupyterhub-spark --ignore-not-found=true
 kubectl delete clusterrole jupyterhub-spark --ignore-not-found=true
 
+
+# Pre-install Prometheus CRDs (they must exist before resources that reference them)
+echo "Installing Prometheus Operator CRDs..."
+kubectl apply --server-side -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.71.2/example/prometheus-operator-crd/monitoring.coreos.com_alertmanagerconfigs.yaml 2>/dev/null || true
+kubectl apply --server-side -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.71.2/example/prometheus-operator-crd/monitoring.coreos.com_alertmanagers.yaml 2>/dev/null || true
+kubectl apply --server-side -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.71.2/example/prometheus-operator-crd/monitoring.coreos.com_podmonitors.yaml 2>/dev/null || true
+kubectl apply --server-side -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.71.2/example/prometheus-operator-crd/monitoring.coreos.com_probes.yaml 2>/dev/null || true
+kubectl apply --server-side -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.71.2/example/prometheus-operator-crd/monitoring.coreos.com_prometheusagents.yaml 2>/dev/null || true
+kubectl apply --server-side -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.71.2/example/prometheus-operator-crd/monitoring.coreos.com_prometheuses.yaml 2>/dev/null || true
+kubectl apply --server-side -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.71.2/example/prometheus-operator-crd/monitoring.coreos.com_prometheusrules.yaml 2>/dev/null || true
+kubectl apply --server-side -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.71.2/example/prometheus-operator-crd/monitoring.coreos.com_scrapeconfigs.yaml 2>/dev/null || true
+kubectl apply --server-side -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.71.2/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml 2>/dev/null || true
+kubectl apply --server-side -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.71.2/example/prometheus-operator-crd/monitoring.coreos.com_thanosrulers.yaml 2>/dev/null || true
+echo "CRDs installed. Waiting for API registration..."
+sleep 5
 
 kubectl apply --server-side --force-conflicts -f generated-manifests.yaml
 

@@ -5,11 +5,11 @@ metadata:
   namespace: default
 spec:
   ports:
-  - name: spark-ui
-    port: 4040
-    protocol: TCP
-    targetPort: 4040
+    - name: spark-ui
+      port: 4040
+      protocol: TCP
+      targetPort: 4040
   selector:
     app: spark-connect-server
     spark-role: driver
-  type: NodePort
+  type: ClusterIP

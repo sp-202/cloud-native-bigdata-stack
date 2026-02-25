@@ -39,8 +39,7 @@ spec:
       storage: 10Gi
   volumeName: postgres-data-pv
 
-
-  ---
+---
 # =============================================================================
 # WORKLOAD: MinIO
 # DESCRIPTION: Large scale NVMe-backed storage for object storage.
@@ -81,7 +80,6 @@ spec:
     requests:
       storage: 14500Gi
   volumeName: minio-data-pv
-
 
 ---
 # =============================================================================
@@ -166,7 +164,6 @@ spec:
   volumeName: starrocks-fe-pv
 
 ---
-
 # =============================================================================
 # WORKLOAD: StarRocks (Backend - BE)
 # DESCRIPTION: High-performance data storage for OLAP queries.
