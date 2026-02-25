@@ -116,15 +116,10 @@ spec:
             limits:
               cpu: 2000m
               memory: 4Gi
-  volumeClaimTemplates:
-    - metadata:
-        name: fe-meta
-      spec:
-        storageClassName: openebs-hostpath
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: 10Gi
+      volumes:
+        - name: fe-meta
+          persistentVolumeClaim:
+            claimName: starrocks-fe-meta-pvc
 ---
 apiVersion: v1
 kind: Service
