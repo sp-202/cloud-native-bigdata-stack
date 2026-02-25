@@ -44781,7 +44781,7 @@ data:
     provisioning = /etc/grafana/provisioning
     [server]
     domain = ''
-    root_url = http://grafana.3.239.198.34.sslip.io
+    root_url = http://grafana.100.54.30.247.sslip.io
     serve_from_sub_path = true
 kind: ConfigMap
 metadata:
@@ -47472,11 +47472,11 @@ apiVersion: v1
 data:
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
-  INGRESS_DOMAIN: 3.239.198.34.sslip.io
+  INGRESS_DOMAIN: 100.54.30.247.sslip.io
   MINIO_ENDPOINT: http://minio.default.svc.cluster.local:9000
 kind: ConfigMap
 metadata:
-  name: global-config-k8c2tkk27h
+  name: global-config-cgh84bf2h8
 ---
 apiVersion: v1
 data:
@@ -48980,7 +48980,7 @@ type: kubernetes.io/service-account-token
 ---
 apiVersion: v1
 data:
-  private.key: VmJDYTRkQml5dy9HeUtOQ05zY2JkVDl2ZjJkSlM2bjRuckNvY0V2bEhvR1RmN21USm5tenU4dmlzbE5YbmEwbVFob1UveWZ0blQxZnFLT2dBKzJzalpiY2Q4WU9oY0Z4dmtSMDN5UndpWHErSnpDUTF3TzgvVHk5VGRJTHhBRzN3TTlHVjFqclR2OExEYTRURGk3SU8yZEJIWlludDdBVmJmcmRwVTZpeGlRQzZPUGt2Z2JNbTJYM0x2VFE3THNRL0YvK0dDcysyZUpKbStSdHVDeEdYWkh0M0RFeFUrNU50Mi9VNHBqRHZMQ1VrK0dIOHNqWVM0cGk5YnR5cnJCZklESmc1MGowWXlra2VIY0JpK2R6Yzdua0hNa2swVHI4OTR6RnVUWlMxQnRQTHd3TDZMUG1WRFM1MEw5M2VFVmVDejF3bDhKK3RSR2JvcWNPTjZLQjFnPT0=
+  private.key: cFg1Nm83amM5R2t6b3RYYjhuSkRhTkNBRHNsa081Q0gyS3F0Yk4yRTBHYTNkczlpM1AzbzlzQXBNdTRPWXNOTmEvWlNUMTd3VHd5VjUzNlM3V3BwTlV1M0ZMbUhBVXd5L0lFc3hyWUo4eXV3SGJMN29IdkRiUGcvdHFYWnJRazBjOUhTYXV2WDJlQ3kzUHlzWWJhOEI1Q3pWQU5PcXIzNWQyU1VwaldIMHJSOXBoVm80c3FtWjJsc3FyQm9CMnZWMHJYU1M1UHZkOENTZHhuaWV4ME1NVEZKVHVYRGVqRi9IQVovejlGVlR1d3JiV1gwUmU4elgxZlY3VzZEMjd0WHJxRUJGRDQ1N1pjbmN0Nk1Dc2NYanU3cFJPMXlKQ3oyRTBYdEN1dXRZbm53UHE2dmRtSW02bDhTWkFRV0NIaTc1WHRVWEhoRkNOQU5OUE5Mck1aRzFnPT0=
 kind: Secret
 metadata:
   labels:
@@ -49391,7 +49391,7 @@ spec:
   selector:
     app: spark-connect-server
     spark-role: driver
-  type: NodePort
+  type: ClusterIP
 ---
 apiVersion: v1
 kind: Service
@@ -49743,6 +49743,111 @@ spec:
     app.kubernetes.io/name: spark-operator
 ---
 apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: airflow-dags-shared-pv
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 5Gi
+  local:
+    path: /var/openebs/local/airflow-shared
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: node-role.kubernetes.io/k8s-gp-node
+          operator: Exists
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: minio-data-pv
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 14500Gi
+  local:
+    path: /mnt/spark-nvme/minio
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: node-role.kubernetes.io/minio-worker
+          operator: Exists
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-data-pv
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 10Gi
+  local:
+    path: /var/openebs/local/postgres-data
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: node-role.kubernetes.io/k8s-gp-node
+          operator: Exists
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: starrocks-be-pv
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 150Gi
+  local:
+    path: /mnt/spark-nvme/starrocks-be
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: node-role.kubernetes.io/k8s-gp-node
+          operator: Exists
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: starrocks-fe-pv
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 150Gi
+  local:
+    path: /mnt/spark-nvme/starrocks-fe
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: node-role.kubernetes.io/k8s-gp-node
+          operator: Exists
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+---
+apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: airflow-dags-shared-pvc
@@ -49754,6 +49859,7 @@ spec:
     requests:
       storage: 5Gi
   storageClassName: openebs-hostpath
+  volumeName: airflow-dags-shared-pv
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -49765,8 +49871,9 @@ spec:
   - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 14500Gi
   storageClassName: openebs-hostpath
+  volumeName: minio-data-pv
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -49780,6 +49887,35 @@ spec:
     requests:
       storage: 10Gi
   storageClassName: openebs-hostpath
+  volumeName: postgres-data-pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: starrocks-be-meta-pvc
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 150Gi
+  storageClassName: openebs-hostpath
+  volumeName: starrocks-be-pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: starrocks-fe-meta-pvc
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 150Gi
+  storageClassName: openebs-hostpath
+  volumeName: starrocks-fe-pv
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -50081,22 +50217,22 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: AWS_ACCESS_KEY_ID
-              name: global-config-k8c2tkk27h
+              name: global-config-cgh84bf2h8
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             configMapKeyRef:
               key: AWS_SECRET_ACCESS_KEY
-              name: global-config-k8c2tkk27h
+              name: global-config-cgh84bf2h8
         - name: JUPYTER_S3_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-k8c2tkk27h
+              name: global-config-cgh84bf2h8
         - name: MINIO_ENDPOINT
           valueFrom:
             configMapKeyRef:
               key: MINIO_ENDPOINT
-              name: global-config-k8c2tkk27h
+              name: global-config-cgh84bf2h8
         - name: JUPYTER_ENABLE_LAB
           value: "yes"
         - name: JUPYTER_TOKEN
@@ -50959,7 +51095,7 @@ spec:
               fieldPath: metadata.name
         envFrom:
         - configMapRef:
-            name: global-config-k8c2tkk27h
+            name: global-config-cgh84bf2h8
         image: subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3
         imagePullPolicy: Always
         name: spark-connect-server
@@ -51243,7 +51379,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 14c2b4430a0521215e3fef3706c7deac4938df327812b41d9b0d5e9447a7b2ff
+        checksum/config: 11f4d99fb7f00e60969eaa6248d825c6a6ccdb7e458065c85ec50bcb4a80dfc2
       labels:
         app.kubernetes.io/component: api
         app.kubernetes.io/instance: kubernetes-dashboard
@@ -51329,7 +51465,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: a7c7e02a45632158340cc08c8d17b38959b4c9e9c48a2c69b572ace074adfad3
+        checksum/config: 87b86b31c5c23e2acac9aaf9de899642a9f29653096a906303877353c8201736
       labels:
         app.kubernetes.io/component: auth
         app.kubernetes.io/instance: kubernetes-dashboard
@@ -51872,16 +52008,10 @@ spec:
           name: fe-meta
       nodeSelector:
         node-role.kubernetes.io/k8s-gp-node: ""
-  volumeClaimTemplates:
-  - metadata:
-      name: fe-meta
-    spec:
-      accessModes:
-      - ReadWriteOnce
-      resources:
-        requests:
-          storage: 10Gi
-      storageClassName: openebs-hostpath
+      volumes:
+      - name: fe-meta
+        persistentVolumeClaim:
+          claimName: starrocks-fe-meta-pvc
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -56517,7 +56647,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: airflow.3.239.198.34.sslip.io
+  - host: airflow.100.54.30.247.sslip.io
     http:
       paths:
       - backend:
@@ -56527,7 +56657,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: minio.3.239.198.34.sslip.io
+  - host: minio.100.54.30.247.sslip.io
     http:
       paths:
       - backend:
@@ -56537,7 +56667,7 @@ spec:
               name: console
         path: /
         pathType: Prefix
-  - host: s3.3.239.198.34.sslip.io
+  - host: s3.100.54.30.247.sslip.io
     http:
       paths:
       - backend:
@@ -56547,7 +56677,7 @@ spec:
               name: api
         path: /
         pathType: Prefix
-  - host: superset.3.239.198.34.sslip.io
+  - host: superset.100.54.30.247.sslip.io
     http:
       paths:
       - backend:
@@ -56557,7 +56687,7 @@ spec:
               name: http
         path: /
         pathType: Prefix
-  - host: jupyterhub.3.239.198.34.sslip.io
+  - host: jupyterhub.100.54.30.247.sslip.io
     http:
       paths:
       - backend:
@@ -56567,7 +56697,7 @@ spec:
               name: web
         path: /
         pathType: Prefix
-  - host: spark.3.239.198.34.sslip.io
+  - host: spark.100.54.30.247.sslip.io
     http:
       paths:
       - backend:
@@ -56588,7 +56718,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: grafana.3.239.198.34.sslip.io
+  - host: grafana.100.54.30.247.sslip.io
     http:
       paths:
       - backend:
@@ -56610,7 +56740,7 @@ metadata:
   namespace: default
 spec:
   rules:
-  - host: dashboard.3.239.198.34.sslip.io
+  - host: dashboard.100.54.30.247.sslip.io
     http:
       paths:
       - backend:
@@ -56624,12 +56754,14 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
   name: spark-history-ingress
   namespace: default
 spec:
   ingressClassName: traefik
   rules:
-  - host: spark-history.3.239.198.34.sslip.io
+  - host: spark-history.100.54.30.247.sslip.io
     http:
       paths:
       - backend:
@@ -56648,7 +56780,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: starrocks.3.239.198.34.sslip.io
+  - host: starrocks.100.54.30.247.sslip.io
     http:
       paths:
       - backend:
@@ -56669,7 +56801,7 @@ spec:
   - web
   routes:
   - kind: Rule
-    match: Host(`hubble.3.239.198.34.sslip.io`)
+    match: Host(`hubble.100.54.30.247.sslip.io`)
     services:
     - name: hubble-ui
       namespace: kube-system
@@ -56685,7 +56817,7 @@ spec:
   - web
   routes:
   - kind: Rule
-    match: Host(`traefik.3.239.198.34.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    match: Host(`traefik.100.54.30.247.sslip.io`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
     services:
     - kind: TraefikService
       name: api@internal
