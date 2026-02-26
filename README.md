@@ -45,7 +45,7 @@ This repository contains a **Data Platform as Code (DPaC)** implementation, desi
 The platform is divided into three logical domains:
 
 ### 1️⃣ Ingress & Networking (Orange Domain)
-*   **MetalLB**: Provides a network load-balancer implementation for standard Kubernetes clusters. It handles the assignment of the static IP `100.54.30.247`.
+*   **MetalLB**: Provides a network load-balancer implementation for standard Kubernetes clusters. It handles the assignment of the static IP `3.239.107.222`.
 *   **Traefik Proxy (v2/v3)**: The unified ingress controller. It handles all external traffic on ports `80` (HTTP) and `443` (HTTPS) and routes it to internal services. Now running in a secure, non-host-network mode using the MetalLB LoadBalancer.
 *   **SSLP/NIP.IO**: Automatic DNS resolution for LoadBalancer IPs to simplify development.
 
