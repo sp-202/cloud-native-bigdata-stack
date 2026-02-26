@@ -52,29 +52,7 @@ if helm list -n kube-system | grep -q traefik; then
 fi
 helm upgrade --install traefik traefik/traefik \
   --namespace kube-system \
-  --set ports.web.port=80 \
-  --set ports.websecure.port=443 \
-  --set ports.traefik.port=9000 \
-  --set ports.metrics.port=9101 \
-  --set global.checkNewVersion=false \
-  --set global.sendAnonymousUsage=false \
-  --set "additionalArguments={--api.insecure=true,--api.dashboard=true}" \
-  --set "nodeSelector.node-role\.kubernetes\.io/control-plane=" \
-  --set "tolerations[0].key=node-role.kubernetes.io/control-plane" \
-  --set "tolerations[0].operator=Exists" \
-  --set "tolerations[0].effect=NoSchedule" \
-  --set "tolerations[1].key=node.cilium.io/agent-not-ready" \
-  --set "tolerations[1].operator=Exists" \
-  --set "tolerations[1].effect=NoSchedule" \
-  --set hostNetwork=true \
-  --set service.type=ClusterIP \
-  --set "ingressRoute.dashboard.enabled=false" \
-  --set securityContext.runAsGroup=0 \
-  --set securityContext.runAsNonRoot=false \
-  --set securityContext.runAsUser=0 \
-  --set podSecurityContext.runAsGroup=0 \
-  --set podSecurityContext.runAsNonRoot=false \
-  --set podSecurityContext.runAsUser=0 \
+  -f k8s-platform-v2/01-networking/values-traefik.yaml \
   --timeout 10m
 
 # No need to patch SVC for dashboard if on HostNetwork, but keeping for internal access if needed
