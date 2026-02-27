@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-full-backup
+  namespace: default
+spec:
+  schedule: "0 1 * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup-worker
+            # Use the official image we know your cluster can pull
+            image: postgres:13-alpine 
+            env:
+            - name: PGPASSWORD
+              value: "password"
+            - name: MINIO_ACCESS_KEY
+              value: "minioadmin"
+            - name: MINIO_SECRET_KEY
+              value: "minioadmin"
+            - name: MINIO_BUCKET
+              value: "backup"
+            - name: MINIO_URL
+              value: "http://minio:9000"
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              # 1. Install s3cmd (Alpine-based images make this fast and easy)
+              apk add --no-cache s3cmd
+              
+              # 2. Configure s3cmd for MinIO
+              cat <<EOF > ~/.s3cfg
+              access_key = ${MINIO_ACCESS_KEY}
+              secret_key = ${MINIO_SECRET_KEY}
+              host_base = minio:9000
+              host_bucket = minio:9000
+              use_https = False
+              signature_v2 = False
+              EOF
+
+              FILENAME="backup-$(date +%Y-%m-%d-%H%M).sql.gz"
+              
+              echo "Starting backup: $FILENAME"
+              # 3. Dump and compress on the fly
+              pg_dumpall -h postgres -U postgres | gzip > /tmp/$FILENAME
+              
+              echo "Uploading to MinIO bucket: ${MINIO_BUCKET}"
+              # 4. Upload using s3cmd
+              s3cmd put /tmp/$FILENAME s3://${MINIO_BUCKET}/$FILENAME
+              
+              echo "Backup complete!"
+          restartPolicy: OnFailure
