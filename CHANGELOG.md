@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.0] - 2026-03-07
+### 🚀 Added
+- **AWS Infrastructure**: Full migration from GKE to self-managed Kubernetes on AWS EC2 (kubeadm).
+- **Cilium CNI (AWS ENI IPAM)**: Replaced default CNI with Cilium in AWS ENI mode for native VPC pod networking.
+- **ARM64 Support**: All custom Docker images rebuilt for `linux/arm64` to run on AWS Graviton instances.
+- **Spark Connect Server**: Introduced Spark Connect as a shared Spark gateway for JupyterHub and other clients.
+- **Airflow Git-Sync**: DAGs are synchronized from a Git repository automatically.
+- **Spark History Server**: Added for reviewing completed Spark job logs.
+- **Hubble UI**: Cilium Hubble observability UI exposed via IngressRoute.
+
+### 🔄 Changed
+- **Traefik Refactor**: Removed `hostNetwork: true` binding; Traefik runs as `type: LoadBalancer` via MetalLB with dedicated Elastic IP.
+- **Deploy Script**: Renamed `deploy-gke.sh` → `deploy-v2.sh` with K8s/kubeadm native support.
+- **Ingress IP Updated**: Platform ingress IP changed to `18.233.93.199`.
+- **Monitoring Charts Refreshed**: Regenerated kube-prometheus-stack Helm manifests.
+
+### 🗑 Removed
+- **Kubernetes Dashboard Chart**: Removed generated dashboard chart (using kubectl proxy instead).
+- **Legacy Root Files**: Moved unused scripts and configs to `archive/`.
+
+---
+
 ## [v0.2.0] - 2026-02-24
 ### 🚀 Added
 - **MetalLB Integration**: Enabled Layer 2 LoadBalancing for bare-metal/raw K8s clusters.

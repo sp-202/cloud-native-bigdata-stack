@@ -21,3 +21,9 @@ This image provides a ready-to-use JupyterLab environment optimized for Spark on
 The container uses `setup-kernels.sh` at startup to:
 1. Dynamically generate `spark-defaults.conf` based on the Pod's IP.
 2. Configure S3 persistence via environment variables.
+
+## 🛠️ How to Customize
+Need extra Python libraries (e.g., specific ML packages like `scikit-learn` or `tensorflow`)?
+1. Open the `Dockerfile` in this directory.
+2. Locate or add a `RUN pip3 install <your-package>` or `RUN pip install <your-package>` command.
+3. Run `./build.sh` to build and tag the new image.

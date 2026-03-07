@@ -1,45 +1,48 @@
 # 🧠 03-Apps: The Application Layer
 
-This directory contains the actual Big Data logic. Every application here connects to the **02-Database** layer for state and **01-Networking** for access.
+This directory contains the Big Data application manifests. Every application here connects to the **02-Database** layer for state and **01-Networking** for external access.
 
-## 📂 Sub-Directorires
+## 📄 Components
 
-### `airflow/`
+### Airflow (`airflow.yaml`, `airflow-git-sync.yaml`)
 *   **Role**: Workflow Orchestrator.
-*   **Key File**: `airflow-deployment.yaml`. Defines the Scheduler and Webserver.
-*   **Config**: Uses `env` vars to connect to Postgres and MinIO (for DAG sync).
+*   **Scheduler & Webserver** are defined in `airflow.yaml`.
+*   **Git-Sync**: `airflow-git-sync.yaml` deploys a sidecar that automatically pulls DAGs from a Git repository.
+*   **RBAC**: `airflow-rbac.yaml` and `airflow-spark-rbac.yaml` provide Kubernetes permissions for Airflow to launch Spark pods.
 
-```
-kubectl delete deployment airflow-webserver airflow-scheduler --now
-kubectl delete pods -l app=airflow-webserver --force --grace-period=0
-kubectl delete pods -l app=airflow-scheduler --force --grace-period=0
+### Spark Connect Server (`spark-connect-server.yaml`)
+*   **Role**: A shared, long-running Spark gateway.
+*   **Function**: Clients (JupyterHub, Marimo) connect via Spark Connect protocol instead of each spawning their own Spark driver.
+*   **Benefits**: Reduced resource usage, shared Spark sessions, and centralized Spark configuration.
 
-kubectl exec -it <airflow-scheduler-pod-name> -c airflow-scheduler -- airflow dags reserialize
-```
+### Spark History Server (`spark-history-server.yaml`)
+*   **Role**: Web UI for reviewing completed Spark job logs.
+*   **Function**: Reads Spark event logs from MinIO (S3) and presents them via a web interface.
 
+### JupyterHub (`jupyterhub.yaml`)
+*   **Role**: Primary interactive notebook IDE.
+*   **Features**: Apache Toree (Scala kernel), SQL Magics, `z.show()` formatting, and Spark Connect integration.
 
-### `spark-operator/`
-*   **Role**: Kubernetes Operator for Spark.
-*   **Function**: Watches for `SparkApplication` YAMLs and creates Pods.
-*   **Key**: Includes `service-account.yaml` which grants Spark permission to create pods.
-
-### `notebooks/`
-*   **JupyterHub**: The primary IDE. Features Apache Toree (Scala), SQL Magics, and `z.show()` formatting.
-*   **Marimo**: Reactive Python platform. Ideal for data dashboards and interactive widgets.
-*   **Polynote**: IDE-like experience with first-class Scala/Python interoperability.
-
-### `superset/`
+### Superset (`superset-values.yaml`)
 *   **Role**: BI & Analytics.
-*   **Init Job**: Includes a `k8s-init` job that runs `superset fab create-admin` and `superset init` automatically on deploy.
+*   **Init Job**: Helm chart includes an init job that runs `superset fab create-admin` and `superset init` on deploy.
 
-### `hive-metastore/`
-*   **Role**: The Bridge between Spark and Data.
-*   **Function**: Translates "Table X" to "s3a://bucket/path/to/x".
-*   **Backend**: Connects to `postgres` (metastore db) and `minio` (warehouse directory).
+### Hive Metastore (`hive.yaml`, `hms.yaml`)
+*   **Role**: The bridge between Spark and Data.
+*   **Function**: Translates "Table X" to `s3a://bucket/path/to/x`.
+*   **Backend**: Connects to PostgreSQL (metastore db) and MinIO (warehouse directory).
+
+### StarRocks (`starrocks.yaml`)
+*   **Role**: High-performance OLAP database.
+*   **Function**: Reads directly from MinIO via Delta Native Catalog for sub-second analytical queries.
+
+### Spark Operator (Helm Chart)
+*   **Role**: Kubernetes Operator for Spark.
+*   **Function**: Watches for `SparkApplication` CRDs and manages Spark Driver/Executor pods.
 
 ## 🔗 How they connect
-*   **Airflow** triggers **Spark**.
-*   **Spark** talks to **Hive** to find data.
-*   **Hive** points Spark to **MinIO**.
-*   **Superset** reads from **Hive/Spark** to visualize.
-*   **Notebooks** (Jupyter/Marimo/Polynote) provide the UI to write and run Spark code.
+*   **Airflow** triggers **Spark** jobs via the Spark Operator.
+*   **Spark** (and Spark Connect) talks to **Hive Metastore** to find table locations.
+*   **Hive** points Spark to **MinIO** for the actual data files.
+*   **Superset** reads from **Hive/StarRocks** to visualize data.
+*   **JupyterHub** connects to **Spark Connect Server** for interactive development.

@@ -1,13 +1,13 @@
 # 🚀 Cloud-Native Big Data Platform on Kubernetes (Raw K8s / AWS)
 
-[![Version](https://img.shields.io/badge/version-0.1.0--beta-blue)](RELEASES.md)
-[![Status](https://img.shields.io/badge/status-initial--beta-success)](README.md#🚦-project-status)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md)
+[![Status](https://img.shields.io/badge/status-production--beta-success)](README.md#🚦-project-status)
 
-> An enterprise-grade, cloud-native orchestration framework for distributed big data workloads. Built on Google Kubernetes Engine (GKE), this platform provides a decoupled, elastic environment for **Apache Spark**, **Delta Lake**, and **Airflow**, featuring a unified suite of modern interactive notebook environments.
+> An enterprise-grade, cloud-native orchestration framework for distributed big data workloads. Built on self-managed Kubernetes (kubeadm) on AWS EC2 with **Cilium CNI**, this platform provides a decoupled, elastic environment for **Apache Spark**, **Delta Lake**, and **Airflow**, featuring a unified suite of modern interactive notebook environments.
 
 ---
 
-👉 **[View the v0.1.0 Release Notes](RELEASES.md)**
+👉 **[View the v0.3.0 Changelog](CHANGELOG.md)** | **[Release Notes](RELEASES.md)**
 
 ![Architecture Diagram](k8s_diagram.drawio.svg)
 
@@ -26,17 +26,17 @@ This repository contains a **Data Platform as Code (DPaC)** implementation, desi
 | Feature               | Status       | Notes                                           |
 | :-------------------- | :----------- | :---------------------------------------------- |
 | **JupyterHub / Spark** | ✅ Stable    | Core interactive environment                   |
-| **Marimo Notebooks**   | ✅ Stable    | Reactive Python UI integration                 |
+| **Spark Connect**      | ✅ Stable    | Shared Spark gateway for all clients           |
 | **Delta Lake**         | ✅ Stable    | ACID transactions and Time Travel on S3        |
 | **Hive Metastore**     | ✅ Stable    | Centralized metadata management (Thrift)       |
-| **StarRocks**          | 🏗 Beta      | Verified with Native Delta Catalog (OLAP)      |
-| **Airflow Scheduling** | 🏗 Beta      | Functional, standard DAG patterns only          |
-| **Monitoring Stack**   | 🏗 Beta      | Metrics & Logging: Spark and K8s logs captured |
-| **Polynote**           | 🧪 Exp       | High resource usage; testing stability         |
-| **Unity Catalog (UC)** | ⏸ Paused     | Replaced by HMS for stability                  |
+| **Cilium CNI**         | ✅ Stable    | AWS ENI IPAM mode for native VPC networking    |
+| **StarRocks**          | ✅ Stable      | Verified with Native Delta Catalog (OLAP)      |
+| **Airflow + Git-Sync** | ✅ Stable      | DAGs auto-synced from Git repository           |
+| **Monitoring Stack**   | 🏗 Beta      | Prometheus, Grafana, Loki, Hubble UI           |
+| **Marimo Notebooks**   | 🧪 Exp       | Reactive Python UI integration                 |
 
 > [!IMPORTANT]
-> Features marked as **Experimental (🧪 Exp)** are currently in the development phase. They may have incomplete functionality or require additional configuration.
+> Features marked as **Experimental (🧪 Exp)** are in the development phase. They may have incomplete functionality or require additional configuration.
 
 ---
 
@@ -44,10 +44,12 @@ This repository contains a **Data Platform as Code (DPaC)** implementation, desi
 
 The platform is divided into three logical domains:
 
-### 1️⃣ Ingress & Networking (Orange Domain)
-*   **MetalLB**: Provides a network load-balancer implementation for standard Kubernetes clusters. It handles the assignment of the static IP `18.233.93.199`.
-*   **Traefik Proxy (v2/v3)**: The unified ingress controller. It handles all external traffic on ports `80` (HTTP) and `443` (HTTPS) and routes it to internal services. Now running in a secure, non-host-network mode using the MetalLB LoadBalancer.
-*   **SSLP/NIP.IO**: Automatic DNS resolution for LoadBalancer IPs to simplify development.
+### 1️⃣ Ingress & Networking
+*   **Cilium CNI**: Pod networking with AWS ENI IPAM mode. Pods receive real VPC IPs for full AWS compatibility.
+*   **MetalLB**: Provides a network load-balancer implementation, assigning a dedicated Elastic IP (`18.233.93.199`).
+*   **Traefik Proxy**: The unified ingress controller. Handles external traffic on ports `80`/`443` and routes it to internal services. Runs as a `LoadBalancer` service (no `hostNetwork`).
+*   **Hubble UI**: Cilium's observability dashboard for real-time network flow visibility.
+*   **SSLIP.IO**: Automatic DNS resolution for LoadBalancer IPs.
 
 ### 2️⃣ Application Layer (Blue Domain)
 *   **Apache Airflow (2.x)**: The workflow orchestrator. It schedules DAGs that trigger Spark jobs, move data, and manage dependencies. configured with the **KubernetesExecutor** for scaling tasks.
@@ -74,7 +76,7 @@ The platform is divided into three logical domains:
 | Component | Version | Role | Usage |
 | :--- | :--- | :--- | :--- |
 | **Apache Airflow** | `2.10.x` | Orchestrator | Scheduling ETL pipelines |
-| **Spark / Delta** | `4.0.1 / 4.0.0` | Compute / Format | Distributed processing & ACID tables |
+| **Spark / Delta** | `4.0.1 / 4.0.1` | Compute / Format | Distributed processing & ACID tables |
 | **Hadoop / AWS SDK** | `3.3.4 / 2.20.160` | Storage Access | S3A FileSystem optimizations |
 | **JupyterHub** | `4.0.7` | Notebooks | Standard Data Engineering workflow |
 | **Marimo / Polynote** | `latest` | Notebooks | Reactive & Multi-language environments |
@@ -91,9 +93,9 @@ The platform is divided into three logical domains:
 ## ⚡ Deployment Guide
 
 ### Prerequisites
-1.  **GKE Cluster**: A standard or Autopilot GKE cluster (Recommended: 3+ nodes, e2-standard-4).
-2.  **Tools**: `kubectl`, `helm`, `gcloud` installed locally.
-3.  **Permissions**: Admin access to the cluster.
+1.  **AWS EC2 Cluster**: Self-managed Kubernetes via `kubeadm` on EC2 instances (ARM64 Graviton recommended).
+2.  **Tools**: `kubectl`, `helm` installed locally.
+3.  **Permissions**: Admin access to the cluster (`KUBECONFIG` configured).
 
 ### Step 1: Clone & Configure
 ```bash
@@ -102,7 +104,7 @@ cd k8s-big-data-platform
 ```
 
 ### Step 2: Build Custom Images (Crucial)
-The platform uses optimized images for notebooks and executors. Build and push them to your registry:
+The platform uses optimized images for notebooks and executors. Build and push them to your registry. If you want to customize these images (e.g. adding specific spark dependencies or Python libraries), explore and modify the Dockerfiles within the `docker/` folder before running these scripts:
 ```bash
 # Spark Executor & Driver Base
 docker/spark/build.sh
@@ -115,23 +117,25 @@ docker/marimo/build.sh
 ### Step 3: Deploy Platform
 Run the main deployment script. This automation handles namespace creation, CRD installation, and Helm chart deployments.
 ```bash
-chmod +x deploy-gke.sh
-./deploy-gke.sh
+chmod +x deploy-v2.sh
+./deploy-v2.sh
 ```
 *Wait for the script to complete. It may take 5-10 minutes for the LoadBalancer IP to provision.*
 
 ### Step 3: Access Services
-The script will output the dynamic URLs for your services. They will look like this (where `X.X.X.X` is your LB IP):
+The script will output the dynamic URLs for your services. The base domain `$INGRESS_DOMAIN` is constructed automatically using the LoadBalancer IP (e.g., `18.233.93.199.sslip.io`).
 
-| Service      | URL Pattern                                  | Default Credentials       |
-| :----------- | :------------------------------------------- | :------------------------ |
-| **Airflow**    | `http://airflow.X.X.X.X.sslip.io`            | `admin` / `admin`         |
-| **JupyterHub** | `http://jupyterhub.X.X.X.X.sslip.io`         | No token (Dev Mode)       |
-| **Marimo**     | `http://marimo.X.X.X.X.sslip.io`             | No token (Dev Mode)       |
-| **Polynote**   | `http://polynote.X.X.X.X.sslip.io`           | N/A                       |
-| **Superset**   | `http://superset.X.X.X.X.sslip.io`           | `admin` / `admin`         |
-| **Grafana**    | `http://grafana.X.X.X.X.sslip.io`            | `admin` / `prom-operator` |
-| **K8s Dashboard** | `https://dashboard.X.X.X.X.sslip.io`      | See token below           |
+| Service | URL Pattern | Default Credentials |
+| :--- | :--- | :--- |
+| **Airflow** | `http://airflow.<INGRESS_DOMAIN>` | `admin` / `admin` |
+| **JupyterHub** | `http://jupyterhub.<INGRESS_DOMAIN>` | No token (Dev Mode) |
+| **Superset** | `http://superset.<INGRESS_DOMAIN>` | `admin` / `admin` |
+| **Minio** | `http://minio.<INGRESS_DOMAIN>` | `minioadmin` / `minioadmin` |
+| **Grafana** | `http://grafana.<INGRESS_DOMAIN>` | `admin` / `prom-operator` |
+| **Spark UI** | `http://spark.<INGRESS_DOMAIN>` | - |
+| **Spark History** | `http://spark-history.<INGRESS_DOMAIN>` | - |
+| **Hubble UI** | `http://hubble.<INGRESS_DOMAIN>` | - |
+| **K8s Dashboard** | `https://dashboard.<INGRESS_DOMAIN>` | See token below |
 
 ### Kubernetes Dashboard Token
 
@@ -192,30 +196,50 @@ Superset is pre-connected to the internal Postgres and Hive Metastore.
 
 ---
 
-## � Repository Structure
+## 📂 Repository Structure
 ```bash
-├── docker/                   # Custom image source code
+├── docker/                   # Custom image source code and Dockerfiles (Customize here!)
 │   ├── jupyterhub/           # Notebook environment with Spark & Scala
 │   ├── marimo/               # Reactive Python notebook
-│   └── spark/                # Golden Spark image (v5)
-├── deploy-gke.sh             # Main automation script
+│   └── spark/                # Golden Spark image
+├── deploy-v2.sh              # Main automation script
 ├── k8s_diagram.drawio.svg    # Architecture Diagram
 ├── k8s-platform-v2/          # V2 Source of Truth (Kustomize)
-│   ├── 00-core/              # Namespaces, StorageClasses, PVCs
-│   ├── 01-networking/        # Traefik, IngressRoutes, Domains
+│   ├── 00-core/              # Namespaces, OpenEBS StorageClasses, PVCs
+│   ├── 01-networking/        # Cilium, MetalLB, Traefik, Hubble UI
 │   ├── 02-database/          # Postgres, MinIO (S3), Redis
-│   ├── 03-apps/              # Airflow, Notebooks, Superset, Spark
+│   ├── 03-apps/              # Airflow, Spark Connect, JupyterHub, Superset
+│   ├── 04-configs/           # Global configs, Spark defaults, Ingress domain
 │   └── 05-monitoring/        # Prometheus, Grafana, Loki
 ├── docs/                     # Detailed technical guides
-│   ├── notebooks.md          # Guide: JupyterHub, Marimo, Polynote
+│   ├── notebooks.md          # Guide: JupyterHub, Marimo
 │   ├── delta_lake.md         # Guide: ACID tables on S3
 │   ├── spark_on_k8s.md       # Deep Dive: Spark Client vs Cluster mode
 │   └── airflow.md            # Workflow orchestration
+├── airflow-dags/             # Airflow DAG definitions
+├── scripts/                  # Utility scripts
+├── CHANGELOG.md              # Version history with detailed changes
+├── ISSUES.md                 # Known issues and resolutions
 ├── MONITORING_GUIDE.md       # Observability instructions
-├── README.md                 # Entry point
+├── README.md                 # Entry point (this file)
 └── SUPERSET_CONNECTION_GUIDE.md # BI connectivity instructions
+```
 
 ---
+
+## 📚 Documentation & References
+
+| Document | Description |
+| :--- | :--- |
+| **[Changelog](CHANGELOG.md)** | Version history with detailed changes per release |
+| **[Issues & Resolutions](ISSUES.md)** | Troubleshooting log of known bugs and fixes |
+| **[Deployment Guide](DEPLOYMENT.md)** | Step-by-step installation instructions |
+| **[JupyterHub Guide](JUPYTERHUB_GUIDE.md)** | PySpark jobs and executor configuration |
+| **[Monitoring Guide](MONITORING_GUIDE.md)** | Prometheus, Grafana, and Loki setup |
+| **[Superset Connection](SUPERSET_CONNECTION_GUIDE.md)** | BI tool data source connections |
+| **[Lakehouse Architecture](LAKEHOUSE_README.md)** | HMS + StarRocks + Spark architecture |
+| **[Docker Images](docker/README.md)** | Build, customize, and version Docker images |
+| **[Platform Docs](docs/README.md)** | Full documentation index |
 
 ## 🔧 Manual DAG Deployment (Bypass Git-Sync)
 

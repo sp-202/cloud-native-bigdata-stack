@@ -26,3 +26,29 @@ A lightweight, reactive notebook environment optimised for Python.
 
 ## 🏷️ Versioning
 Images are tagged based on the `SPARK_IMAGE_VERSION` defined in the root `.env` file.
+
+## 🛠️ How to Customize Images
+
+If you need to add custom libraries, jar files, or system packages, you should modify the `Dockerfile` in the respective component directory.
+
+### Example: Adding Python Packages to JupyterHub
+To add custom Python packages (e.g., specific machine learning libraries) to JupyterHub:
+1. Open `docker/jupyterhub/Dockerfile`.
+2. Locate the existing `pip install` command, or add a new one, for instance:
+   ```dockerfile
+   RUN pip3 install --no-cache-dir my-custom-package==1.0.0
+   ```
+3. Rebuild the image:
+   ```bash
+   ./docker/jupyterhub/build.sh
+   ```
+4. Restart your pods or redeploy the platform so the new image is pulled.
+
+### Example: Adding Spark Dependencies
+If you need extra `.jar` files for Spark connections (e.g., Snowflake, Oracle):
+1. Open `docker/spark/Dockerfile`.
+2. Locate the section where JARs are downloaded and add your `wget` or `curl` command.
+3. Rebuild the Spark image:
+   ```bash
+   ./docker/spark/build.sh
+   ```

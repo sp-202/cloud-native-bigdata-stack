@@ -17,3 +17,9 @@ This image provides a reactive Python notebook environment optimized for Spark d
 The container uses `init-marimo.sh` at startup to:
 1. Dynamically template `config.yml` and `spark-defaults.conf`.
 2. Map the Pod IP for executor connectivity.
+
+## 🛠️ How to Customize
+Need extra Python libraries?
+1. Open the `Dockerfile` in this directory.
+2. Locate or add a `RUN pip install <your-package>` or `RUN uv pip install <your-package>` command.
+3. Run `./build.sh` to build and tag the new image.

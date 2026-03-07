@@ -19,3 +19,10 @@ Run the provided build script to build for `linux/amd64` and push to DockerHub:
 The image is designed to be **decoupled**. It does not bake in credentials. Instead, it expects:
 - `spark-defaults.conf`: Mounted at `/opt/spark/conf/spark-defaults.conf`.
 - Environment Variables: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `MINIO_ENDPOINT`.
+
+## 🛠️ How to Customize
+Need extra `.jar` files (e.g., Snowflake connector, Oracle JDBC, PostgreSQL drivers)?
+1. Open the `Dockerfile` in this directory.
+2. Find the section where jars are downloaded (`wget` or `curl` commands).
+3. Add your custom jar download command.
+4. Run `./build.sh` to build and tag the new image.

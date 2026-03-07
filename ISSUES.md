@@ -92,7 +92,7 @@ PROPERTIES (
 
 ---
 
-## 5. Manual Storage Burden & HostNetwork Security Risks
+## 5. Manual Storage Burden & HostNetwork Security Risks ✅ Resolved
 
 **Issue:**
 The platform relied on manually defined `PersistentVolumes` bound to specific node paths and `hostNetwork: true` for Traefik, creating several problems:
@@ -110,4 +110,23 @@ Migrated to a modern, dynamic infrastructure stack:
 *   **Zero-Touch Storage**: No more manual YAML for individual disks.
 *   **Network Isolation**: Traefik runs in its own network namespace.
 *   **Cloud-Like UX**: Bare-metal cluster now behaves like a cloud provider with automated LB/Storage.
-kubectl exec -it airflow-scheduler-665fbc584c-gcz57 -c airflow-scheduler -- ls -l /opt/airflow/dags/dags-v5/repo/
+
+---
+
+## 6. Cilium CNI — AWS IPAM Mode ✅ Resolved
+
+**Issue:**
+The default Cilium CNI configuration used its own internal IPAM, which caused IP address conflicts and routing issues when running on AWS EC2 instances. Pods were assigned IPs outside the VPC CIDR range, breaking connectivity to AWS services and cross-node pod communication.
+
+**Resolution:**
+Enabled **Cilium AWS ENI IPAM mode** (`ipam.mode=eni`), which delegates IP address management to AWS. Each pod now receives a real VPC IP from the node's Elastic Network Interface (ENI), ensuring full compatibility with AWS networking (Security Groups, VPC routing, NLB target groups).
+
+---
+
+## 7. Traefik Binding to Host Ports 80/443 ✅ Resolved
+
+**Issue:**
+Traefik was configured with `hostNetwork: true` to bind directly to ports 80 and 443 on the master node. This created security risks (full host network access), port conflicts with other services, and made the ingress controller non-portable across nodes.
+
+**Resolution:**
+Refactored Traefik to run as a standard `type: LoadBalancer` service. MetalLB assigns a dedicated Elastic IP to the Traefik service, and Traefik listens on ports 80/443 within its own isolated network namespace. This eliminates host-level port binding entirely while preserving external accessibility via the MetalLB-managed IP.

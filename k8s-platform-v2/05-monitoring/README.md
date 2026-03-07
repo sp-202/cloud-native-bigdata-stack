@@ -1,26 +1,35 @@
 # 🩺 05-Monitoring: Observability Stack
 
-This folder contains the manifest logic to deploy the Monitoring & Logging stack.
+This folder contains the manifests to deploy the Monitoring & Logging stack.
 
 ## 🛠 Deployment Strategy (Kustomize + Helm)
 
-Unlike other folders which contain raw YAMLs, this folder relies heavily on `helmCharts` defined in `kustomization.yaml`.
-Kustomize dynamically downloads the specified Helm Charts (Prometheus, Loki, Dashboard) during the build process and renders them into YAML.
+Unlike other folders which contain raw YAMLs, this folder relies heavily on `helmCharts` defined in `kustomization.yaml`. Kustomize dynamically downloads the specified Helm Charts (Prometheus, Loki) during the build process and renders them into YAML. Pre-rendered manifests are cached in `charts/gen/` for offline deployments.
 
 ## 📄 Components
 
 ### 1. `kube-prometheus-stack` (Helm)
 *   **Role**: Metrics & Visualization.
 *   **Contains**: Prometheus Operator, Grafana, AlertManager, NodeExporter.
-*   **Customization**: We inject `valuesInline` in `kustomization.yaml` to configure persistence (10Gi PVC) and default passwords.
+*   **Customization**: Values are defined in `values-prometheus.yaml` to configure persistence, scrape intervals, and Grafana default passwords.
 
 ### 2. `loki-stack` (Helm)
 *   **Role**: Log Aggregation.
 *   **Components**:
-    *   **Promtail**: Deployed as a DaemonSet (on every node). Reads `var/log/containers`.
+    *   **Promtail**: Deployed as a DaemonSet (on every node). Reads `/var/log/containers`.
     *   **Loki**: The central server storing the logs.
     *   **Integration**: Automatically connected to Grafana as a Data Source.
+*   **Customization**: Values are defined in `values-loki.yaml`.
 
-### 3. `dashboards/` (Subfolder)
+### 3. Dashboards (Subfolder)
 *   **Content**: JSON files (e.g., `spark-dashboard.json`).
-*   **Mechanism**: We use a `ConfigMapGenerator` in Kustomize to turn these JSON files into ConfigMaps. A "Sidecar" in the Grafana pod watches these ConfigMaps and auto-imports the dashboards.
+*   **Mechanism**: `ConfigMapGenerator` in Kustomize turns these JSON files into ConfigMaps. A sidecar in the Grafana pod watches these ConfigMaps and auto-imports the dashboards.
+
+### 4. Cilium Hubble (External)
+*   **Note**: Cilium and Hubble are installed separately (via Helm during cluster bootstrap), not through this folder. The Hubble UI IngressRoute is defined in `01-networking/`.
+
+## 📊 Access
+| Service | URL |
+| :--- | :--- |
+| **Grafana** | `http://grafana.<INGRESS_DOMAIN>` |
+| **Hubble UI** | `http://hubble.<INGRESS_DOMAIN>` |

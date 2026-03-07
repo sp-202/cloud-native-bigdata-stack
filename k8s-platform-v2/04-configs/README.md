@@ -1,23 +1,23 @@
 # ⚙️ 04-Configs: Shared Configurations
 
-This directory centralizes configuration files that are used by **multiple** applications. Instead of copying `core-site.xml` into Spark, Hive, and Zeppelin folders separately, we define it here once and use Kustomize to inject it.
+This directory centralizes configuration files that are used by **multiple** applications. Instead of duplicating configs across Spark, Hive, and notebook folders, we define them here once and use Kustomize to inject them.
 
 ## 📄 Key Files
 
-### 1. `core-site.xml` (Hadoop Config)
-*   **Purpose**: Defines how to talk to S3/MinIO.
-*   **Used By**: Spark, Hive, Zeppelin.
-*   **Critical Settings**:
-    *   `fs.s3a.endpoint`: The MinIO URL.
-    *   `fs.s3a.access.key`: Credentials.
-    *   `fs.s3a.path.style.access`: "True" (Required for MinIO).
+### 1. `global-config.env`
+*   **Purpose**: The single source of truth for platform-wide variables.
+*   **Key Variables**:
+    *   `INGRESS_DOMAIN`: The base domain for all IngressRoutes (e.g., `18.233.93.199.sslip.io`).
+    *   `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`: MinIO credentials.
+    *   `MINIO_ENDPOINT`: The internal MinIO service URL.
 
-### 2. `hive-site.xml` (Metastore Config)
-*   **Purpose**: Defines where the Metastore is.
-*   **Used By**: Spark (to find Hive), Hive Server (to start up).
-*   **Critical Settings**:
-    *   `hive.metastore.uris`: `thrift://hive-metastore:9083`.
+### 2. `ingress.yaml`
+*   **Purpose**: A ConfigMap holding the global `INGRESS_DOMAIN` variable.
+*   **Usage**: The deployment script updates this with the dynamic LoadBalancer IP. All Ingress routes reference this ConfigMap to build their URLs.
 
-### 3. `ingress-domain.yaml`
-*   **Purpose**: A ConfigMap holding the global variable `INGRESS_DOMAIN`.
-*   **Usage**: The deployment script updates this file with the dynamic LoadBalancer IP. All Ingress routes reference this ConfigMap to build their URLs.
+### 3. `spark-defaults.yaml` / Spark Configs
+*   **Purpose**: Spark configuration shared across JupyterHub, Spark Connect Server, and Spark Operator jobs.
+*   **Key Settings**:
+    *   S3A connection parameters (endpoint, path-style access, credentials).
+    *   Delta Lake catalog configuration.
+    *   Timeout values (integers only, to avoid `NumberFormatException`).
