@@ -52,7 +52,7 @@ metadata:
   name: minio-data-pv
 spec:
   capacity:
-    storage: 14500Gi
+    storage: 10Gi
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
@@ -78,7 +78,7 @@ spec:
   storageClassName: openebs-hostpath
   resources:
     requests:
-      storage: 14500Gi
+      storage: 10Gi
   volumeName: minio-data-pv
 
 ---
@@ -134,7 +134,7 @@ metadata:
   name: starrocks-fe-pv
 spec:
   capacity:
-    storage: 150Gi
+    storage: 10Gi
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
@@ -160,7 +160,7 @@ spec:
   storageClassName: openebs-hostpath
   resources:
     requests:
-      storage: 150Gi
+      storage: 10Gi
   volumeName: starrocks-fe-pv
 
 ---
@@ -175,7 +175,7 @@ metadata:
   name: starrocks-be-pv
 spec:
   capacity:
-    storage: 150Gi
+    storage: 10Gi
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
@@ -201,5 +201,5 @@ spec:
   storageClassName: openebs-hostpath
   resources:
     requests:
-      storage: 150Gi
+      storage: 10Gi
   volumeName: starrocks-be-pv

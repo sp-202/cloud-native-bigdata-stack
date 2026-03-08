@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.1] - 2026-03-09
+### 🚀 Added
+- **Headlamp UI**: Integrated the modern Headlamp dashboard to replace the deprecated Kubernetes Dashboard.
+
+### 🔄 Changed
+- **ARM64 Compatibility**: Migrated Superset and Spark Operator init/cleanup containers to multi-arch images (`busybox` and `kubeflow/spark-operator`).
+- **Startup Resilience**: Injected intelligent wait loops for Airflow DB initialization and tuned StarRocks liveness probes to handle slower ARM bootstrap times.
+- **Hubble UI Routing**: Fixed a Traefik cross-namespace routing drop by moving the `IngressRoute` to `kube-system`.
+
+### 🐛 Fixed
+- **API Server Deadlock**: Hardcoded the local loopback routing for the master node IP to bypass Cilium's ENI policy drops, instantly restoring Kubernetes control-plane stability.
+- **Helm GitHub Pages Outage**: Modified the deployment script to circumvent global 404 errors from `.github.io` Helm repositories by pulling Headlamp raw manifests directly.
+
+---
+
 ## [v0.3.0] - 2026-03-07
 ### 🚀 Added
 - **AWS Infrastructure**: Full migration from GKE to self-managed Kubernetes on AWS EC2 (kubeadm).
@@ -15,7 +30,7 @@ All notable changes to this project will be documented in this file.
 ### 🔄 Changed
 - **Traefik Refactor**: Removed `hostNetwork: true` binding; Traefik runs as `type: LoadBalancer` via MetalLB with dedicated Elastic IP.
 - **Deploy Script**: Renamed `deploy-gke.sh` → `deploy-v2.sh` with K8s/kubeadm native support.
-- **Ingress IP Updated**: Platform ingress IP changed to `18.233.93.199`.
+- **Ingress IP Updated**: Platform ingress IP changed to `3.237.175.173`.
 - **Monitoring Charts Refreshed**: Regenerated kube-prometheus-stack Helm manifests.
 
 ### 🗑 Removed

@@ -1,0 +1,10 @@
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+  hosts:
+    - host: headlamp.$(INGRESS_DOMAIN)
+      paths:
+        - path: /
+          type: ImplementationSpecific

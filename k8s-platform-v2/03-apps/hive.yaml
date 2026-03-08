@@ -18,10 +18,17 @@ spec:
         node-role.kubernetes.io/k8s-gp-node: ""
       initContainers:
         - name: init-permissions
-          image: subhodeep2022/spark-bigdata:hive-3.1.3-custom
+          image: subhodeep2022/spark-bigdata:hive-3.1.3-custom-prod
           command: ["/bin/bash", "-c"]
           args:
             - "mkdir -p /tmp/hive && chmod 777 /tmp/hive"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
           securityContext:
             runAsUser: 0
           volumeMounts:
@@ -29,7 +36,7 @@ spec:
               mountPath: /tmp/hive
       containers:
         - name: hive-metastore
-          image: subhodeep2022/spark-bigdata:hive-3.1.3-custom
+          image: subhodeep2022/spark-bigdata:hive-3.1.3-custom-prod
           imagePullPolicy: Always
           command: ["/bin/bash", "-c"]
           # Schema Init + Start Metastore
@@ -40,6 +47,13 @@ spec:
           env:
             - name: HADOOP_OPTS
               value: "-Dhive.log.level=INFO"
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
           ports:
             - containerPort: 9083
           volumeMounts:
@@ -50,7 +64,7 @@ spec:
               mountPath: /tmp/hive
         # Sidecar: HiveServer2 for JDBC Queries (Superset)
         - name: hive-server
-          image: subhodeep2022/spark-bigdata:hive-3.1.3-custom
+          image: subhodeep2022/spark-bigdata:hive-3.1.3-custom-prod
           imagePullPolicy: Always
           command: ["/bin/bash", "-c"]
           args:

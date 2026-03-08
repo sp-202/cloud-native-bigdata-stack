@@ -9,7 +9,7 @@ Traefik's Custom Resource: **`IngressRoute`**. These are more powerful than stan
 
 **Example Logic:**
 ```yaml
-match: Host(`airflow.18.233.93.199.sslip.io`)
+match: Host(`airflow.3.237.175.173.sslip.io`)
 services:
   - name: airflow-web
     port: 8080

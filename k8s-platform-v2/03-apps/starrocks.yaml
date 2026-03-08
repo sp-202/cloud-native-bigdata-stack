@@ -194,13 +194,17 @@ spec:
           livenessProbe:
             tcpSocket:
               port: 9050
-            initialDelaySeconds: 30
-            periodSeconds: 20
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            failureThreshold: 10
+            timeoutSeconds: 5
           readinessProbe:
             tcpSocket:
               port: 9050
-            initialDelaySeconds: 15
-            periodSeconds: 10
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 10
+            timeoutSeconds: 5
   volumeClaimTemplates:
     - metadata:
         name: be-storage

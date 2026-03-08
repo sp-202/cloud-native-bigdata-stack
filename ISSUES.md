@@ -104,7 +104,7 @@ The platform relied on manually defined `PersistentVolumes` bound to specific no
 Migrated to a modern, dynamic infrastructure stack:
 1.  **OpenEBS Integration**: Replaced static PVs with the `openebs-hostpath` storage class. This enables **dynamic provisioning**, where Kubernetes automatically handles the lifecycle of local storage on nodes.
 2.  **MetalLB Integration**: Installed MetalLB to handle `type: LoadBalancer` services on raw K8s. This provides a clean abstraction for external access.
-3.  **Traefik Refactor**: Switched Traefik to `type: LoadBalancer` and disabled `hostNetwork`. It now receives a dedicated static IP (`18.233.93.199`) from MetalLB, improving isolation and scalability.
+3.  **Traefik Refactor**: Switched Traefik to `type: LoadBalancer` and disabled `hostNetwork`. It now receives a dedicated static IP (`3.237.175.173`) from MetalLB, improving isolation and scalability.
 
 **Benefits:**
 *   **Zero-Touch Storage**: No more manual YAML for individual disks.
@@ -130,3 +130,90 @@ Traefik was configured with `hostNetwork: true` to bind directly to ports 80 and
 
 **Resolution:**
 Refactored Traefik to run as a standard `type: LoadBalancer` service. MetalLB assigns a dedicated Elastic IP to the Traefik service, and Traefik listens on ports 80/443 within its own isolated network namespace. This eliminates host-level port binding entirely while preserving external accessibility via the MetalLB-managed IP.
+
+---
+
+## 8. Kubernetes Control Plane Deadlock (API Server / Etcd Crashloop)
+
+**Issue:**
+The Kubernetes API server and `etcd` were completely unresponsive, blocking all `kubectl` commands and crashing internal pod networking. Logs showed `etcd` failing with `transport: Error while dialing: dial tcp 10.0.1.188:2379: i/o timeout`. The master node could not even `ping` its own physical internal IP.
+
+**Root Cause:**
+A severe routing conflict caused by **Cilium in AWS ENI IPAM mode**. Cilium attaches secondary pod IPs to the primary network interface (`ens5`). The Linux kernel arbitrarily selected a secondary pod IP (e.g., `10.0.1.109`) as the source IP for local traffic targeting the master node's primary IP (`10.0.1.188`). Because this traffic originated from a "pod IP", it collided with Cilium's strict policy routing tables, causing all traffic from `localhost` to the `apiserver/etcd` endpoints to drop into a black hole.
+
+**Resolution:**
+Forced the kernel to unequivocally use the master node's primary IP as the source for all local traffic avoiding Cilium's routing policy traps:
+```bash
+ip route replace local 10.0.1.188 dev ens5 table local proto kernel scope host src 10.0.1.188
+```
+This instantly restored internal ping, broke the deadlock, and brought the K8s API server back online.
+
+---
+
+## 9. ARM64 Image Incompatibility (`exec format error`)
+
+**Issue:**
+Several core infrastructure pods failed to initialize on the AWS Graviton (ARM64) instances, crashing immediately with exit codes indicating `exec format error`.
+
+**Root Cause & Resolutions:**
+1. **Superset Init DB:** The `jwilder/dockerize:0.6.1` image is AMD64 only.
+   * *Fix:* Replaced all 3 occurrences in `superset.yaml` with the multi-arch `busybox:1.36` and implemented a custom `nc -z` wait loop for PostgreSQL and Redis.
+2. **Spark Operator:** The legacy `ghcr.io/googlecloudplatform/spark-operator:v1beta2-1.3.8-3.1.1` image lacked ARM64 manifests.
+   * *Fix:* Upgraded to the officially maintained multi-arch image `ghcr.io/kubeflow/spark-operator/spark-operator:2.1.0`.
+3. **Hive Metastore:** The custom image `subhodeep2022/spark-bigdata:hive-3.1.3-custom` triggered an `ImagePullBackOff`.
+   * *Fix:* Requires the Docker image to be rebuilt in the CI pipeline using `docker buildx` with `--platform linux/arm64`.
+
+---
+
+## 10. Pod Initialization Timing Issues
+
+**Issue:**
+Pods like `airflow-db-init` and `starrocks-be` were continuously moving into `CrashLoopBackOff` or failing health probes during cluster startup.
+
+**Root Cause & Resolutions:**
+1. **Airflow DB Init:** The database migration rushed to start before the `postgres` service DNS was available or the DB was accepting connections.
+   * *Fix:* Injected a `busybox` init container in `db-init-airflow.yaml` to block execution until `nc -z postgres 5432` succeeds.
+2. **StarRocks Backend (BE):** ARM64 Graviton IO limits and initial JVM bootstrapping took longer than the default 30-second Kubernetes liveness probe allowed, causing the kubelet to prematurely kill the pod.
+   * *Fix:* Tuned `starrocks.yaml` probes, increasing `initialDelaySeconds` to 120s and `failureThreshold` to 10.
+
+---
+
+## 11. Dangling Deployments on Dead Nodes (`TLS Handshake Timeout`)
+
+**Issue:**
+Standard `kubectl delete` commands were triggering `TLS handshake timeouts` and hanging the API server.
+
+**Root Cause:**
+A worker node (`spark-worker`) crashed and moved to `NotReady/SchedulingDisabled` state. When deleting jobs, K8s places the associated pods in a `Terminating` state and waits endlessly for the dead node's kubelet to confirm the deletion. This blocked API server threads and exhausted resources.
+
+**Resolution:**
+To clean up cluster state when EC2 nodes die ungracefully:
+2. Or, delete the ghost node directly to trigger immediate K8s garbage collection: `kubectl delete node <node-name>`
+
+---
+
+## 12. Kubernetes Dashboard & GitHub Pages Outage (`404 Not Found`)
+
+**Issue:**
+The `deploy-v2.sh` script failed silently while generating `kubernetes-dashboard.yaml` and returned a `404 page not found` when trying to access the UI.
+
+**Root Cause:**
+1. The **Kubernetes Dashboard** has been officially archived and deprecated by the CNCF, with `Headlamp` cited as its successor.
+2. A systemic networking anomaly on the AWS EC2 instance currently causes all `*.github.io` subdomains (including `kubernetes.github.io` and `headlamp-k8s.github.io`) to return HTTP 404 for Helm repositories. This caused the script to generate flat, zero-byte configuration files.
+
+**Resolution:**
+1. **Migration to Headlamp**: Ripped out the deprecated `kubernetes-dashboard` completely.
+2. **Helm 404 Bypass**: Since the `helm template` command was swallowing the 404 error from `headlamp-k8s.github.io`, the `deploy-v2.sh` script was patched to fetch the raw `kubernetes-headlamp.yaml` manifest directly through `raw.githubusercontent.com` and automatically inject the Traefik `ingress` resource.
+
+---
+
+## 13. Hubble UI Ingress Failure (`404 Not Found`)
+
+**Issue:**
+The Hubble Observability UI `hubble.<domain>` returned a 404 error despite the backend pods running smoothly in `kube-system`.
+
+**Root Cause:**
+The Traefik `IngressRoute` for Hubble UI (`k8s-platform-v2/01-networking/hubble-ui-ingressroute.yaml`) was mistakenly created in the `default` namespace, while the service it pointed to was in `kube-system`. Traefik blocks cross-namespace routing by default for security reasons.
+
+**Resolution:**
+Updated the `IngressRoute` manifest namespace to `kube-system`, immediately allowing Traefik to securely expose the UI.

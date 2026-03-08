@@ -46,7 +46,7 @@ The platform is divided into three logical domains:
 
 ### 1️⃣ Ingress & Networking
 *   **Cilium CNI**: Pod networking with AWS ENI IPAM mode. Pods receive real VPC IPs for full AWS compatibility.
-*   **MetalLB**: Provides a network load-balancer implementation, assigning a dedicated Elastic IP (`18.233.93.199`).
+*   **MetalLB**: Provides a network load-balancer implementation, assigning a dedicated Elastic IP (`3.237.175.173`).
 *   **Traefik Proxy**: The unified ingress controller. Handles external traffic on ports `80`/`443` and routes it to internal services. Runs as a `LoadBalancer` service (no `hostNetwork`).
 *   **Hubble UI**: Cilium's observability dashboard for real-time network flow visibility.
 *   **SSLIP.IO**: Automatic DNS resolution for LoadBalancer IPs.
@@ -123,7 +123,7 @@ chmod +x deploy-v2.sh
 *Wait for the script to complete. It may take 5-10 minutes for the LoadBalancer IP to provision.*
 
 ### Step 3: Access Services
-The script will output the dynamic URLs for your services. The base domain `$INGRESS_DOMAIN` is constructed automatically using the LoadBalancer IP (e.g., `18.233.93.199.sslip.io`).
+The script will output the dynamic URLs for your services. The base domain `$INGRESS_DOMAIN` is constructed automatically using the LoadBalancer IP (e.g., `3.237.175.173.sslip.io`).
 
 | Service | URL Pattern | Default Credentials |
 | :--- | :--- | :--- |
@@ -135,11 +135,11 @@ The script will output the dynamic URLs for your services. The base domain `$ING
 | **Spark UI** | `http://spark.<INGRESS_DOMAIN>` | - |
 | **Spark History** | `http://spark-history.<INGRESS_DOMAIN>` | - |
 | **Hubble UI** | `http://hubble.<INGRESS_DOMAIN>` | - |
-| **K8s Dashboard** | `https://dashboard.<INGRESS_DOMAIN>` | See token below |
+| **Headlamp UI** | `http://headlamp.<INGRESS_DOMAIN>` | See token below |
 
-### Kubernetes Dashboard Token
+### Headlamp Cluster Admin Token
 
-Generate a token for K8s Dashboard access:
+Generate a token for Headlamp UI access:
 
 ```bash
 # One-time setup: Create admin-user service account
@@ -168,7 +168,7 @@ EOF
 kubectl create token admin-user -n default --duration=48h
 ```
 
-Copy the output token and paste it into the Dashboard login page.
+Copy the output token and paste it into the Headlamp login page.
 
 ---
 

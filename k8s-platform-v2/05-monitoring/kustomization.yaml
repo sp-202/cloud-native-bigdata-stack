@@ -2,17 +2,15 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - dashboard-ingress.yaml
   - grafana-ingress.yaml
   - admin-user.yaml
   - kong-manual-config.yaml
-  - dashboard-transport.yaml
   - spark-ui-service.yaml
   - spark-service-monitor.yaml
   # Generated Helm Charts
   - charts/gen/kube-prometheus-stack.yaml
   - charts/gen/loki-stack.yaml
-  - charts/gen/kubernetes-dashboard.yaml
+  - charts/gen/headlamp.yaml
 
 configMapGenerator:
   - name: spark-grafana-dashboard

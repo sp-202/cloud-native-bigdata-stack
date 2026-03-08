@@ -9,6 +9,15 @@ spec:
       # --- Pinning to GP Node ---
       nodeSelector:
         node-role.kubernetes.io/k8s-gp-node: ""
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Waiting for postgres..."
+              until nc -z postgres.default.svc.cluster.local 5432; do sleep 2; done
+              echo "Postgres ready!"
       containers:
         - name: airflow-init
           image: apache/airflow:2.7.1

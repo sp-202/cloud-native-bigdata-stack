@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "Starting K8s Platform v2 Deployment (K3s Production)..."
+echo "Starting K8s Platform v2 Deployment..."
 
 # K3s Configuration Setup
 if [ -f "/etc/rancher/k3s/k3s.yaml" ]; then
@@ -30,7 +30,8 @@ kubectl delete deployment zeppelin marimo polynote -n default 2>/dev/null || tru
 kubectl delete svc zeppelin zeppelin-server marimo polynote -n default 2>/dev/null || true
 kubectl delete pvc zeppelin-notebook-pvc -n default 2>/dev/null || true
 
-# Clean up potential stuck dashboards
+# Clean up deprecated kubernetes-dashboard and potential stuck dashboards
+kubectl delete namespace kubernetes-dashboard 2>/dev/null || true
 kubectl delete svc kubernetes-dashboard-web kubernetes-dashboard-api -n default 2>/dev/null || true
 
 # ---------------------------------------------------
@@ -98,15 +99,33 @@ helm template loki-stack grafana/loki-stack \
   -f k8s-platform-v2/05-monitoring/values-loki.yaml \
   > k8s-platform-v2/05-monitoring/charts/gen/loki-stack.yaml
 
-# kubernetes-dashboard
-helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/ 2>/dev/null || true
-helm repo update kubernetes-dashboard 2>/dev/null || true
-helm template kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard \
-  --namespace default \
-  --version 7.5.0 \
-  -f k8s-platform-v2/05-monitoring/values-dashboard.yaml \
-  > k8s-platform-v2/05-monitoring/charts/gen/kubernetes-dashboard.yaml 2>/dev/null || echo "Warning: kubernetes-dashboard chart generation failed, using cached version if available"
+# headlamp (Replacing deprecated kubernetes-dashboard)
+echo "Generating headlamp manifests directly (Helm repo 404 bypass)..."
+curl -sL https://raw.githubusercontent.com/headlamp-k8s/headlamp/main/kubernetes-headlamp.yaml > k8s-platform-v2/05-monitoring/charts/gen/headlamp.yaml
+cat <<EOF >> k8s-platform-v2/05-monitoring/charts/gen/headlamp.yaml
 
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: headlamp
+  namespace: kube-system
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: headlamp.\$(INGRESS_DOMAIN)
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: headlamp
+                port:
+                  number: 80
+EOF
 
 # ---------------------------------------------------
 # 3. Environment Setup & Deployment
@@ -188,7 +207,7 @@ kubectl wait --for=condition=available --timeout=300s deployment/postgres -n def
 
 echo "Deployment Complete!"
 echo "Superset: http://superset.$INGRESS_DOMAIN"
-echo "k8s-Dashboard: https://dashboard.$INGRESS_DOMAIN"
+echo "Headlamp UI: http://headlamp.$INGRESS_DOMAIN"
 echo "JupyterHub: http://jupyterhub.$INGRESS_DOMAIN"
 echo "Minio: http://minio.$INGRESS_DOMAIN"
 echo "Grafana: http://grafana.$INGRESS_DOMAIN"
