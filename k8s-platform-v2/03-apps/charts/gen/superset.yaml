@@ -416,7 +416,8 @@ spec:
         envFrom:
         - secretRef:
             name: 'superset-env'
-        image: 'jwilder/dockerize:0.6.1'
+        image: 'jwilder/dockerize:0.6.1'   
+        # this is actually doing the check of the pgsql and redis-db is it actually up or not
         imagePullPolicy: 'IfNotPresent'
         name: wait-for-postgres-redis
       containers:
