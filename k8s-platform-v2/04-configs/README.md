@@ -7,7 +7,7 @@ This directory centralizes configuration files that are used by **multiple** app
 ### 1. `global-config.env`
 *   **Purpose**: The single source of truth for platform-wide variables.
 *   **Key Variables**:
-    *   `INGRESS_DOMAIN`: The base domain for all IngressRoutes (e.g., `3.237.175.173.sslip.io`).
+    *   `INGRESS_DOMAIN`: The base domain for all IngressRoutes (e.g., `3.228.1.250.sslip.io`).
     *   `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`: MinIO credentials.
     *   `MINIO_ENDPOINT`: The internal MinIO service URL.
 

@@ -104,7 +104,7 @@ The platform relied on manually defined `PersistentVolumes` bound to specific no
 Migrated to a modern, dynamic infrastructure stack:
 1.  **OpenEBS Integration**: Replaced static PVs with the `openebs-hostpath` storage class. This enables **dynamic provisioning**, where Kubernetes automatically handles the lifecycle of local storage on nodes.
 2.  **MetalLB Integration**: Installed MetalLB to handle `type: LoadBalancer` services on raw K8s. This provides a clean abstraction for external access.
-3.  **Traefik Refactor**: Switched Traefik to `type: LoadBalancer` and disabled `hostNetwork`. It now receives a dedicated static IP (`3.237.175.173`) from MetalLB, improving isolation and scalability.
+3.  **Traefik Refactor**: Switched Traefik to `type: LoadBalancer` and disabled `hostNetwork`. It now receives a dedicated static IP (`3.228.1.250`) from MetalLB, improving isolation and scalability.
 
 **Benefits:**
 *   **Zero-Touch Storage**: No more manual YAML for individual disks.

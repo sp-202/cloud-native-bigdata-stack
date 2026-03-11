@@ -1,0 +1,33 @@
+# ============================================================
+# Spark Operator 2.4.0 Values
+# ============================================================
+
+# -- Pin Spark Operator controller to the generic workload node
+nodeSelector:
+  node-role.kubernetes.io/k8s-gp-node: ""
+
+webhook:
+  # Webhook is enabled by default in 2.4.0
+  enable: true
+
+  # -- Pin Webhook pods to the generic workload node
+  nodeSelector:
+    node-role.kubernetes.io/k8s-gp-node: ""
+
+prometheus:
+  metrics:
+    enable: true
+
+  # -- Enable Service/PodMonitor so the kube-prometheus-stack scrapes Operator metrics
+  podMonitor:
+    create: true
+    labels:
+      release: kube-prometheus-stack # usually needed to be picked up by Prometheus Operator
+
+spark:
+  # -- Ensure it watches the default namespace (which is default behavior)
+  jobNamespaces:
+    - default
+  serviceAccount:
+    create: true
+    name: "spark-operator-spark" # Explicitly match the name your tests wait for

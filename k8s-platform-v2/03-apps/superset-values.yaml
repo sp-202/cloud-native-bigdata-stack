@@ -335,13 +335,12 @@ supersetNode:
 
   podSecurityContext:
     runAsNonRoot: true
-    runAsUser: 1000
+
     fsGroup: 1000
   containerSecurityContext:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: false
     runAsNonRoot: true
-    runAsUser: 1000
 
   strategy:
     type: RollingUpdate
@@ -417,12 +416,11 @@ supersetWorker:
 
   podSecurityContext:
     runAsNonRoot: true
-    runAsUser: 1000
+
     fsGroup: 1000
   containerSecurityContext:
     allowPrivilegeEscalation: false
     runAsNonRoot: true
-    runAsUser: 1000
 
   strategy:
     type: RollingUpdate
@@ -491,11 +489,11 @@ supersetCeleryBeat:
       cpu: "500m"
   podSecurityContext:
     runAsNonRoot: true
-    runAsUser: 1000
+
   containerSecurityContext:
     allowPrivilegeEscalation: false
     runAsNonRoot: true
-    runAsUser: 1000
+
   priorityClassName: ~
 
 # ============================================================
@@ -731,11 +729,11 @@ init:
   podLabels: {}
   podSecurityContext:
     runAsNonRoot: true
-    runAsUser: 1000
+
   containerSecurityContext:
     allowPrivilegeEscalation: false
     runAsNonRoot: true
-    runAsUser: 1000
+
   tolerations: []
   affinity: {}
   topologySpreadConstraints: []

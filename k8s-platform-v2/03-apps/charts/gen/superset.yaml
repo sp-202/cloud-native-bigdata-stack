@@ -32,6 +32,7 @@ stringData:
     DB_USER: "superset"
     DB_PASS: "superset"
     DB_NAME: "superset"
+    SUPERSET_SECRET_KEY: "knrxKHRf6N4ZbrlzMDurcQzM9raFVkULu94C6y+7Kf3RkrMEaAjrpGzi"
 ---
 # Source: superset/templates/secret-superset-config.yaml
 apiVersion: v1
@@ -83,25 +84,88 @@ stringData:
     
     
     # Overrides
-    # enable_hive
-    SECRET_KEY = "superset_secret_key_change_me_in_prod_12345"
+    # prod_config
+    import os
     from flask_appbuilder.security.manager import AUTH_DB
+    
+    # ---- Security ----
+    # SECRET_KEY is loaded from SUPERSET_SECRET_KEY env var automatically.
+    # Do NOT hardcode the secret key here.
+    SECRET_KEY = os.environ.get("SUPERSET_SECRET_KEY", "")
+    
     AUTH_TYPE = AUTH_DB
+    
+    # ---- File Upload ----
     CSV_EXTENSIONS = {"csv", "tsv", "txt"}
+    
+    # ---- Feature Flags ----
     FEATURE_FLAGS = {
         "ENABLE_TEMPLATE_PROCESSING": True,
         "DASHBOARD_CROSS_FILTERS": True,
         "DASHBOARD_NATIVE_FILTERS": True,
+        "ALERT_REPORTS": True,
     }
+    
+    # ---- Cache (Redis) ----
+    # redis_host resolves to the headless redis service created by this chart
+    _REDIS_HOST = os.environ.get("REDIS_HOST", "superset-redis-headless")
+    _REDIS_PORT = os.environ.get("REDIS_PORT", "6379")
+    
     CACHE_CONFIG = {
         "CACHE_TYPE": "RedisCache",
         "CACHE_DEFAULT_TIMEOUT": 300,
         "CACHE_KEY_PREFIX": "superset_",
-        "CACHE_REDIS_HOST": "superset-redis-master",
-        "CACHE_REDIS_PORT": 6379,
+        "CACHE_REDIS_HOST": _REDIS_HOST,
+        "CACHE_REDIS_PORT": int(_REDIS_PORT),
         "CACHE_REDIS_DB": 1,
-        "CACHE_REDIS_URL": "redis://superset-redis-master:6379/1"
+        "CACHE_REDIS_URL": f"redis://{_REDIS_HOST}:{_REDIS_PORT}/1",
     }
+    
+    DATA_CACHE_CONFIG = {
+        "CACHE_TYPE": "RedisCache",
+        "CACHE_DEFAULT_TIMEOUT": 600,
+        "CACHE_KEY_PREFIX": "superset_data_",
+        "CACHE_REDIS_HOST": _REDIS_HOST,
+        "CACHE_REDIS_PORT": int(_REDIS_PORT),
+        "CACHE_REDIS_DB": 2,
+        "CACHE_REDIS_URL": f"redis://{_REDIS_HOST}:{_REDIS_PORT}/2",
+    }
+    
+    # ---- Celery (async queries & reports) ----
+    from celery.schedules import crontab
+    
+    class CeleryConfig:
+        broker_url = f"redis://{_REDIS_HOST}:{_REDIS_PORT}/0"
+        result_backend = f"redis://{_REDIS_HOST}:{_REDIS_PORT}/0"
+        worker_log_level = "DEBUG"
+        worker_prefetch_multiplier = 10
+        task_acks_late = True
+        task_annotations = {
+            "sql_lab.get_sql_results": {"rate_limit": "100/s"},
+        }
+        beat_schedule = {
+            "reports.scheduler": {
+                "task": "reports.scheduler",
+                "schedule": crontab(minute="*", hour="*"),
+            },
+            "reports.prune_log": {
+                "task": "reports.prune_log",
+                "schedule": crontab(minute=10, hour=0),
+            },
+        }
+    
+    CELERY_CONFIG = CeleryConfig
+    
+    # ---- SQL Lab / Query timeouts ----
+    SUPERSET_WEBSERVER_TIMEOUT = 300
+    SQLLAB_TIMEOUT = 300
+    SQLLAB_ASYNC_TIME_LIMIT_SEC = 600
+    
+    # ---- Security hardening ----
+    WTF_CSRF_ENABLED = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SECURE = False  # stack uses HTTP (Traefik without TLS); set True when HTTPS is enabled
+    SESSION_COOKIE_SAMESITE = "Lax"
     
     
     
@@ -119,19 +183,26 @@ stringData:
                     --firstname Superset \
                     --lastname Admin \
                     --email admin@superset.com \
-                    --password admin \
+                    --password CHANGE_ME_STRONG_PASSWORD \
                     || true
     
-    echo "Loading examples..."
-    superset load_examples
     if [ -f "/app/configs/import_datasources.yaml" ]; then
-      echo "Importing database connections.... "
+      echo "Importing database connections..."
       superset import_datasources -p /app/configs/import_datasources.yaml
     fi
   superset_bootstrap.sh: |
-    pip install --no-cache-dir --no-deps starrocks==1.0.6 pymysql
-    if [ ! -f /app/pythonpath/superset_config.py ]; then
-      echo "Creating default config..."
+    #!/bin/bash
+    set -e
+    pip install --no-cache-dir \
+      starrocks==1.0.6 \
+      pymysql \
+      psycopg2-binary \
+      pyhive \
+      thrift \
+      sasl \
+      thrift-sasl
+    if [ ! -f ~/bootstrap ]; then
+      echo "Running Superset with uid 1000" > ~/bootstrap
     fi
 ---
 # Source: superset/charts/redis/templates/configmap.yaml
@@ -299,7 +370,7 @@ data:
     ARGS+=("--protected-mode" "no")
     ARGS+=("--include" "/opt/bitnami/redis/etc/redis.conf")
     ARGS+=("--include" "/opt/bitnami/redis/etc/master.conf")
-    exec [redis-server] "${ARGS[@]}"
+    exec redis-server "${ARGS[@]}"
 ---
 # Source: superset/charts/redis/templates/headless-svc.yaml
 apiVersion: v1
@@ -373,6 +444,100 @@ spec:
     app: superset
     release: superset
 ---
+# Source: superset/templates/deployment-beat.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset-celerybeat
+  namespace: default
+  labels:
+    app: superset-celerybeat
+    chart: superset-0.12.0
+    release: superset
+    heritage: Helm
+spec:
+  # This must be a singleton
+  replicas: 1
+  selector:
+    matchLabels:
+      app: superset-celerybeat
+      release: superset
+  template:
+    metadata:
+      annotations:
+        checksum/superset_config.py: 5f861bbf6b1098ffd645cc8a86f4afcbac1c0475b2450930ee76969c5e0cf71d
+        checksum/superset_bootstrap.sh: 42bd4119ac4966b639bf5e16ecc12c4066e4d7962dc6db06eebfa9618a8dc4cb
+        checksum/connections: b46837d289d1978e7bb57dc1cd7e8149ecb89391ca0b9fa5b2412d9528d41f0c
+        checksum/extraConfigs: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+        checksum/extraSecrets: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+        checksum/extraSecretEnv: 09b29adc437cb1b61ddee0cf998c85826f0d8191ea8ebb64d3b2400b065e39d0
+        checksum/configOverrides: a848e7eb997367d07d5ee9da4315b7563384e2b89f5b84c5250df1ab890dd579
+        checksum/configOverridesFiles: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+      labels:
+        app: "superset-celerybeat"
+        release: superset
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+      initContainers:
+      - command:
+        - /bin/sh
+        - -c
+        - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -wait "tcp://$REDIS_HOST:$REDIS_PORT"
+          -timeout 120s
+        envFrom:
+        - secretRef:
+            name: 'superset-env'
+        image: 'apache/superset:dockerize'
+        imagePullPolicy: 'IfNotPresent'
+        name: wait-for-postgres-redis
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 250m
+            memory: 128Mi
+      containers:
+        - name: "superset-celerybeat"
+          image: "apachesuperset.docker.scarf.sh/apache/superset:3.1.0"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+          command: ["/bin/sh","-c",". /app/pythonpath/superset_bootstrap.sh; celery --app=superset.tasks.celery_app:app beat --pidfile /tmp/celerybeat.pid --schedule /tmp/celerybeat-schedule"]
+          env:
+            - name: "SUPERSET_PORT"
+              value: "8088"
+            - name: "GUNICORN_KEEPALIVE"
+              value: "2"
+            - name: "GUNICORN_TIMEOUT"
+              value: "300"
+            - name: "SERVER_THREADS_AMOUNT"
+              value: "20"
+            - name: "SERVER_WORKER_AMOUNT"
+              value: "4"
+          envFrom:
+            - secretRef:
+                name: "superset-env"
+          volumeMounts:
+            - name: superset-config
+              mountPath: "/app/pythonpath"
+              readOnly: true
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 250m
+              memory: 256Mi
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
+      volumes:
+        - name: superset-config
+          secret:
+            secretName: superset-config
+---
 # Source: superset/templates/deployment-worker.yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -385,50 +550,71 @@ metadata:
     release: superset
     heritage: Helm
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: superset-worker
       release: superset
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
   template:
     metadata:
       annotations:
-        checksum/superset_config.py: cc96ac6f6bdb97926febf7a591f797ef51ec4b4520394c170b6576253726b98b
-        checksum/superset_bootstrap.sh: 1bcc4d5361706aff63b693642682183b34a8b6071750616ab926a4f5f8952c17
-        checksum/connections: e7f30467cae4a759489d5401c10d9353b502ede8f01ac87d3eec37d257175218
+        checksum/superset_config.py: 5f861bbf6b1098ffd645cc8a86f4afcbac1c0475b2450930ee76969c5e0cf71d
+        checksum/superset_bootstrap.sh: 42bd4119ac4966b639bf5e16ecc12c4066e4d7962dc6db06eebfa9618a8dc4cb
+        checksum/connections: b46837d289d1978e7bb57dc1cd7e8149ecb89391ca0b9fa5b2412d9528d41f0c
         checksum/extraConfigs: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/extraSecrets: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
-        checksum/extraSecretEnv: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
-        checksum/configOverrides: 32e71106a8cc657354ac950fef44f98649ace8273ce06856d506f760b656fe9d
+        checksum/extraSecretEnv: 09b29adc437cb1b61ddee0cf998c85826f0d8191ea8ebb64d3b2400b065e39d0
+        checksum/configOverrides: a848e7eb997367d07d5ee9da4315b7563384e2b89f5b84c5250df1ab890dd579
         checksum/configOverridesFiles: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
       labels:
         app: superset-worker
         release: superset
     spec:
       securityContext:
-        runAsUser: 0
+        runAsUser: 1000
+        fsGroup: 1000
+        runAsNonRoot: true
       initContainers:
       - command:
         - /bin/sh
         - -c
-        - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -wait "tcp://$REDIS_HOST:$REDIS_PORT" 
-          # this is doing by the dockerize command
+        - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -wait "tcp://$REDIS_HOST:$REDIS_PORT"
           -timeout 120s
         envFrom:
         - secretRef:
             name: 'superset-env'
-        image: 'jwilder/dockerize:0.6.1'   
-        # this is actually doing the check of the pgsql and redis-db is it actually up or not
+        image: 'apache/superset:dockerize'
         imagePullPolicy: 'IfNotPresent'
         name: wait-for-postgres-redis
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 250m
+            memory: 128Mi
       containers:
         - name: superset
-          image: "apache/superset:3.1.0"
+          image: "apachesuperset.docker.scarf.sh/apache/superset:3.1.0"
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
           command: ["/bin/sh","-c",". /app/pythonpath/superset_bootstrap.sh; celery --app=superset.tasks.celery_app:app worker"]
           env:
             - name: "SUPERSET_PORT"
               value: "8088"
+            - name: "GUNICORN_KEEPALIVE"
+              value: "2"
+            - name: "GUNICORN_TIMEOUT"
+              value: "300"
+            - name: "SERVER_THREADS_AMOUNT"
+              value: "20"
+            - name: "SERVER_WORKER_AMOUNT"
+              value: "4"
           envFrom:
             - secretRef:
                 name: "superset-env"
@@ -448,9 +634,23 @@ spec:
             successThreshold: 1
             timeoutSeconds: 60
           resources:
-            {}
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+            requests:
+              cpu: 1000m
+              memory: 2Gi
       nodeSelector:
         node-role.kubernetes.io/k8s-gp-node: ""
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: superset-worker
+              topologyKey: kubernetes.io/hostname
+            weight: 100
       volumes:
         - name: superset-config
           secret:
@@ -468,7 +668,11 @@ metadata:
     release: superset
     heritage: Helm
 spec:
-  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
   selector:
     matchLabels:
       app: superset
@@ -477,21 +681,23 @@ spec:
     metadata:
       annotations:
         # Force reload on config changes
-        checksum/superset_config.py: cc96ac6f6bdb97926febf7a591f797ef51ec4b4520394c170b6576253726b98b
-        checksum/superset_init.sh: 8f292dbc07bf626a68a4c98ab8d90ed7cdddd486aa6418760384880cfeedfac1
-        checksum/superset_bootstrap.sh: 1bcc4d5361706aff63b693642682183b34a8b6071750616ab926a4f5f8952c17
-        checksum/connections: e7f30467cae4a759489d5401c10d9353b502ede8f01ac87d3eec37d257175218
+        checksum/superset_config.py: 5f861bbf6b1098ffd645cc8a86f4afcbac1c0475b2450930ee76969c5e0cf71d
+        checksum/superset_init.sh: 6e595da5c3f32d788603f7673d3c62ef593bf81e3c0f999939e4ab969aea2c2b
+        checksum/superset_bootstrap.sh: 42bd4119ac4966b639bf5e16ecc12c4066e4d7962dc6db06eebfa9618a8dc4cb
+        checksum/connections: b46837d289d1978e7bb57dc1cd7e8149ecb89391ca0b9fa5b2412d9528d41f0c
         checksum/extraConfigs: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/extraSecrets: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
-        checksum/extraSecretEnv: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
-        checksum/configOverrides: 32e71106a8cc657354ac950fef44f98649ace8273ce06856d506f760b656fe9d
+        checksum/extraSecretEnv: 09b29adc437cb1b61ddee0cf998c85826f0d8191ea8ebb64d3b2400b065e39d0
+        checksum/configOverrides: a848e7eb997367d07d5ee9da4315b7563384e2b89f5b84c5250df1ab890dd579
         checksum/configOverridesFiles: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
       labels:
         app: superset
         release: superset
     spec:
       securityContext:
-        runAsUser: 0
+        runAsUser: 1000
+        fsGroup: 1000
+        runAsNonRoot: true
       initContainers:
       - command:
         - /bin/sh
@@ -500,17 +706,35 @@ spec:
         envFrom:
         - secretRef:
             name: 'superset-env'
-        image: 'jwilder/dockerize:0.6.1'
+        image: 'apache/superset:dockerize'
         imagePullPolicy: 'IfNotPresent'
         name: wait-for-postgres
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 250m
+            memory: 128Mi
       containers:
         - name: superset
-          image: "apache/superset:3.1.0"
+          image: "apachesuperset.docker.scarf.sh/apache/superset:3.1.0"
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
           command: ["/bin/sh","-c",". /app/pythonpath/superset_bootstrap.sh; /usr/bin/run-server.sh"]
           env:
             - name: "SUPERSET_PORT"
               value: "8088"
+            - name: "GUNICORN_KEEPALIVE"
+              value: "2"
+            - name: "GUNICORN_TIMEOUT"
+              value: "300"
+            - name: "SERVER_THREADS_AMOUNT"
+              value: "20"
+            - name: "SERVER_WORKER_AMOUNT"
+              value: "4"
           envFrom:
             - secretRef:
                 name: "superset-env"
@@ -530,7 +754,7 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 5
             successThreshold: 1
-            timeoutSeconds: 1
+            timeoutSeconds: 5
           readinessProbe:
             failureThreshold: 3
             httpGet:
@@ -539,7 +763,7 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 15
             successThreshold: 1
-            timeoutSeconds: 1
+            timeoutSeconds: 5
           livenessProbe:
             failureThreshold: 3
             httpGet:
@@ -548,20 +772,79 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 15
             successThreshold: 1
-            timeoutSeconds: 1
+            timeoutSeconds: 5
           resources:
             limits:
-              cpu: 4000m
-              memory: 6Gi
-            requests:
               cpu: 2000m
               memory: 4Gi
+            requests:
+              cpu: 1000m
+              memory: 2Gi
       nodeSelector:
         node-role.kubernetes.io/k8s-gp-node: ""
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: superset
+              topologyKey: kubernetes.io/hostname
+            weight: 100
       volumes:
         - name: superset-config
           secret:
             secretName: superset-config
+---
+# Source: superset/templates/hpa-node.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: superset-hpa
+  labels:
+    app: superset
+    chart: superset-0.12.0
+    release: superset
+    heritage: Helm
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: superset
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+# Source: superset/templates/hpa-worker.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: superset-hpa-worker
+  labels:
+    app: superset
+    chart: superset-0.12.0
+    release: superset
+    heritage: Helm
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: superset-worker
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
 ---
 # Source: superset/charts/redis/templates/master/application.yaml
 apiVersion: apps/v1
@@ -596,7 +879,7 @@ spec:
       annotations:
         checksum/configmap: 64f39ac249d0c7b1302bb993299537f2776b54020b64f9b98c9f481759adacad
         checksum/health: c67d1f0e1314a2ed864f62819e17233bfb7c2c75333dd3326983379b2721364e
-        checksum/scripts: 42c226b98a82e44cb3cb9fd8c02d36583f5a6efd18625015593bab8399e7d1c6
+        checksum/scripts: 6936b22cd688a85c6caef650dc9769225739954ff1320fe595beb7dcf91d2777
         checksum/secret: 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
     spec:
       
@@ -621,15 +904,15 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: redis
-          image: docker.io/library/redis:7.2
+          image: docker.io/bitnami/redis:7.0.10-debian-11-r4
           imagePullPolicy: "IfNotPresent"
           securityContext:
             runAsUser: 1001
           command:
-            - redis-server
+            - /bin/bash
           args:
-            - --protected-mode
-            - "no"
+            - -c
+            - /opt/bitnami/scripts/start-scripts/start-master.sh
           env:
             - name: BITNAMI_DEBUG
               value: "false"
@@ -668,8 +951,12 @@ spec:
                 - -c
                 - /health/ping_readiness_local.sh 1
           resources:
-            limits: {}
-            requests: {}
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 256Mi
           volumeMounts:
             - name: start-scripts
               mountPath: /opt/bitnami/scripts/start-scripts
@@ -699,8 +986,20 @@ spec:
           emptyDir: {}
         - name: tmp
           emptyDir: {}
-        - name: redis-data
-          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+        labels:
+          app.kubernetes.io/name: redis
+          app.kubernetes.io/instance: superset
+          app.kubernetes.io/component: master
+      spec:
+        accessModes:
+          - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: "8Gi"
+        storageClassName: openebs-hostpath
 ---
 # Source: superset/templates/init-job.yaml
 apiVersion: batch/v1
@@ -717,7 +1016,8 @@ spec:
       name: superset-init-db
     spec:
       securityContext:
-        runAsUser: 0
+        runAsUser: 1000
+        runAsNonRoot: true
       initContainers:
       - command:
         - /bin/sh
@@ -726,23 +1026,46 @@ spec:
         envFrom:
         - secretRef:
             name: 'superset-env'
-        image: 'jwilder/dockerize:0.6.1'
+        image: 'apache/superset:dockerize'
         imagePullPolicy: 'IfNotPresent'
         name: wait-for-postgres
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 250m
+            memory: 128Mi
       containers:
       - name: superset-init-db
-        image: "apache/superset:3.1.0"
+        image: "apachesuperset.docker.scarf.sh/apache/superset:3.1.0"
+        env:
+          - name: "GUNICORN_KEEPALIVE"
+            value: "2"
+          - name: "GUNICORN_TIMEOUT"
+            value: "300"
+          - name: "SERVER_THREADS_AMOUNT"
+            value: "20"
+          - name: "SERVER_WORKER_AMOUNT"
+            value: "4"
         envFrom:
           - secretRef:
               name: superset-env
         imagePullPolicy: IfNotPresent
+        securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
         volumeMounts:
           - name: superset-config
             mountPath: "/app/pythonpath"
             readOnly: true
         command: ["/bin/sh","-c",". /app/pythonpath/superset_bootstrap.sh; . /app/pythonpath/superset_init.sh"]
         resources:
-          {}
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
       nodeSelector:
         node-role.kubernetes.io/k8s-gp-node: ""
       volumes:

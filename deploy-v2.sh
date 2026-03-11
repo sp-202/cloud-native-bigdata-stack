@@ -64,8 +64,11 @@ helm repo add spark-operator https://kubeflow.github.io/spark-operator
 helm repo update spark-operator
 helm template spark-operator spark-operator/spark-operator \
   --namespace default \
-  --version 1.1.27 \
+  --version 2.4.0 \
+  --include-crds \
+  --api-versions="monitoring.coreos.com/v1/PodMonitor" \
   --set webhook.enable=true \
+  -f k8s-platform-v2/03-apps/spark-operator-values.yaml \
   > k8s-platform-v2/03-apps/charts/gen/spark-operator.yaml
 
 # 2.2 Superset
