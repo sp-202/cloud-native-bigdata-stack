@@ -1,92 +1,791 @@
-image:
-  repository: apache/superset
-  tag: 3.1.0
-  pullPolicy: IfNotPresent
-initImage:
-  repository: jwilder/dockerize
-  tag: 0.6.1
-  pullPolicy: IfNotPresent
-postgresql:
-  enabled: false
-supersetNode:
-  connections:
-    db_host: postgres.default.svc.cluster.local
-    db_port: "5432"
-    db_user: superset
-    db_pass: superset
-    db_name: superset
-  secret_key: "superset_secret_key_change_me_in_prod"
-  resources:
-    requests:
-      memory: "4Gi"
-      cpu: "2000m"
-    limits:
-      memory: "6Gi"
-      cpu: "4000m"
-nodeSelector:
-  node-role.kubernetes.io/k8s-gp-node: ""
+# ============================================================
+# Apache Superset - Production Helm Values
+# Fixed from Gemini-generated version | StarRocks enabled
+# ============================================================
 
+# -- Provide a name to override the name of the chart
+nameOverride: ~
+# -- Provide a name to override the full names of resources
+fullnameOverride: ~
+
+# -- Labels to be added to all resources
+extraLabels: {}
+
+# -- Running as non-root is recommended for production
+runAsUser: 1000
+
+# -- Secret management: set create: false if using Sealed Secrets / External Secrets Operator
+secretEnv:
+  create: true
+
+serviceAccountName: ~
+serviceAccount:
+  create: false
+  annotations: {}
+
+# ============================================================
+# Bootstrap Script
+# Installs StarRocks driver + any other Python deps at startup.
+# For production it is strongly recommended to bake this into
+# a custom Docker image instead of installing at runtime.
+# ============================================================
 bootstrapScript: |
-  pip install --no-cache-dir --no-deps starrocks==1.0.6 pymysql
-  if [ ! -f /app/pythonpath/superset_config.py ]; then
-    echo "Creating default config..."
+  #!/bin/bash
+  set -e
+  pip install --no-cache-dir \
+    starrocks==1.0.6 \
+    pymysql \
+    psycopg2-binary \
+    pyhive \
+    thrift \
+    sasl \
+    thrift-sasl
+  if [ ! -f ~/bootstrap ]; then
+    echo "Running Superset with uid {{ .Values.runAsUser }}" > ~/bootstrap
   fi
-extraPyPIPackages:
-  - pyhive
-  - thrift
-  - sasl
-  - thrift_sasl
-  - psycopg2-binary
-  - starrocks
-redis:
-  enabled: true
-  image:
-    registry: docker.io
-    repository: library/redis
-    tag: 7.2
-  master:
-    command: ["redis-server"]
-    args: ["--protected-mode", "no"]
-    livenessProbe:
-      enabled: true
-      exec:
-        command: ["redis-cli", "ping"]
-    readinessProbe:
-      enabled: true
-      exec:
-        command: ["redis-cli", "ping"]
+
+# -- Secret that contains superset_config.py
+configFromSecret: '{{ template "superset.fullname" . }}-config'
+
+# -- Secret used to populate env vars in pods
+envFromSecret: '{{ template "superset.fullname" . }}-env'
+envFromSecrets: []
+
+# ============================================================
+# Extra Environment Variables
+# ============================================================
+extraEnv:
+  GUNICORN_TIMEOUT: "300"
+  SERVER_WORKER_AMOUNT: "4"
+  SERVER_THREADS_AMOUNT: "20"
+  GUNICORN_KEEPALIVE: "2"
+
+extraEnvRaw: []
+
+# ============================================================
+# Secret Environment Variables
+# IMPORTANT: Replace ALL placeholder values before deploying!
+# Recommended: use Sealed Secrets or External Secrets Operator
+# ============================================================
+extraSecretEnv:
+  SUPERSET_SECRET_KEY: "__SUPERSET_SECRET_KEY__"
+  # MAPBOX_API_KEY: ""
+
+extraConfigs: {}
+extraSecrets: {}
+extraVolumes: []
+extraVolumeMounts: []
+
+# ============================================================
+# Config Overrides (superset_config.py additions)
+# ============================================================
+configOverrides:
+  prod_config: |
+    import os
+    from flask_appbuilder.security.manager import AUTH_DB
+
+    # ---- Security ----
+    # SECRET_KEY is loaded from SUPERSET_SECRET_KEY env var automatically.
+    # Do NOT hardcode the secret key here.
+    SECRET_KEY = os.environ.get("SUPERSET_SECRET_KEY", "")
+
+    AUTH_TYPE = AUTH_DB
+
+    # ---- File Upload ----
+    CSV_EXTENSIONS = {"csv", "tsv", "txt"}
+
+    # ---- Feature Flags ----
+    FEATURE_FLAGS = {
+        "ENABLE_TEMPLATE_PROCESSING": True,
+        "DASHBOARD_CROSS_FILTERS": True,
+        "DASHBOARD_NATIVE_FILTERS": True,
+        "ALERT_REPORTS": True,
+    }
+
+    # ---- Cache (Redis) ----
+    # redis_host resolves to the headless redis service created by this chart
+    _REDIS_HOST = os.environ.get("REDIS_HOST", "{{ .Release.Name }}-redis-headless")
+    _REDIS_PORT = os.environ.get("REDIS_PORT", "6379")
+
+    CACHE_CONFIG = {
+        "CACHE_TYPE": "RedisCache",
+        "CACHE_DEFAULT_TIMEOUT": 300,
+        "CACHE_KEY_PREFIX": "superset_",
+        "CACHE_REDIS_HOST": _REDIS_HOST,
+        "CACHE_REDIS_PORT": int(_REDIS_PORT),
+        "CACHE_REDIS_DB": 1,
+        "CACHE_REDIS_URL": f"redis://{_REDIS_HOST}:{_REDIS_PORT}/1",
+    }
+
+    DATA_CACHE_CONFIG = {
+        "CACHE_TYPE": "RedisCache",
+        "CACHE_DEFAULT_TIMEOUT": 600,
+        "CACHE_KEY_PREFIX": "superset_data_",
+        "CACHE_REDIS_HOST": _REDIS_HOST,
+        "CACHE_REDIS_PORT": int(_REDIS_PORT),
+        "CACHE_REDIS_DB": 2,
+        "CACHE_REDIS_URL": f"redis://{_REDIS_HOST}:{_REDIS_PORT}/2",
+    }
+
+    # ---- Celery (async queries & reports) ----
+    from celery.schedules import crontab
+
+    class CeleryConfig:
+        broker_url = f"redis://{_REDIS_HOST}:{_REDIS_PORT}/0"
+        result_backend = f"redis://{_REDIS_HOST}:{_REDIS_PORT}/0"
+        worker_log_level = "DEBUG"
+        worker_prefetch_multiplier = 10
+        task_acks_late = True
+        task_annotations = {
+            "sql_lab.get_sql_results": {"rate_limit": "100/s"},
+        }
+        beat_schedule = {
+            "reports.scheduler": {
+                "task": "reports.scheduler",
+                "schedule": crontab(minute="*", hour="*"),
+            },
+            "reports.prune_log": {
+                "task": "reports.prune_log",
+                "schedule": crontab(minute=10, hour=0),
+            },
+        }
+
+    CELERY_CONFIG = CeleryConfig
+
+    # ---- SQL Lab / Query timeouts ----
+    SUPERSET_WEBSERVER_TIMEOUT = 300
+    SQLLAB_TIMEOUT = 300
+    SQLLAB_ASYNC_TIME_LIMIT_SEC = 600
+
+    # ---- Security hardening ----
+    WTF_CSRF_ENABLED = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SECURE = False  # stack uses HTTP (Traefik without TLS); set True when HTTPS is enabled
+    SESSION_COOKIE_SAMESITE = "Lax"
+
+configOverridesFiles: {}
+
+configMountPath: "/app/pythonpath"
+extraConfigMountPath: "/app/configs"
+
+# ============================================================
+# Superset Image
+# Pin to a specific digest in production for reproducibility
+# ============================================================
+image:
+  repository: apachesuperset.docker.scarf.sh/apache/superset
+  tag: "3.1.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# FIX: Gemini used wrong initImage. Official chart uses apache/superset:dockerize
+initImage:
+  repository: apache/superset
+  tag: dockerize
+  pullPolicy: IfNotPresent
+
+# ============================================================
+# Service
+# ============================================================
 service:
   type: ClusterIP
   port: 8088
+  annotations: {}
+  loadBalancerIP: ~
+  nodePort:
+    http: nil
+
+# ============================================================
+# Ingress
+# Uncomment and configure for production external access
+# ============================================================
 ingress:
+  enabled: false # Superset routing handled by centralized ingress in 04-configs/ingress.yaml
+  ingressClassName: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+  path: /
+  pathType: Prefix
+  hosts:
+    - superset.$(INGRESS_DOMAIN)
+  tls: []
+  extraHostsRaw: []
+
+# ============================================================
+# Global resource defaults (overridden per-component below)
+# ============================================================
+resources: {}
+
+hostAliases: []
+
+# ============================================================
+# Superset Node (web server)
+# ============================================================
+supersetNode:
+  replicas:
+    enabled: true
+    replicaCount: 2 # >=2 replicas for production HA
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  command:
+    - "/bin/sh"
+    - "-c"
+    - ". {{ .Values.configMountPath }}/superset_bootstrap.sh; /usr/bin/run-server.sh"
+
+  connections:
+    # Redis
+    redis_host: "{{ .Release.Name }}-redis-headless"
+    redis_port: "6379"
+    redis_user: ""
+    redis_cache_db: "1"
+    redis_celery_db: "0"
+    redis_ssl:
+      enabled: false
+      ssl_cert_reqs: CERT_NONE
+
+    # PostgreSQL (external — postgresql.enabled: false)
+    db_type: "postgresql"
+    db_host: "postgres.default.svc.cluster.local" # CHANGE ME if different namespace/host
+    db_port: "5432"
+    db_user: superset
+    db_pass: superset # CHANGE ME — use a secret in production
+    db_name: superset
+
+  env: {}
+  forceReload: false
+
+  initContainers:
+    - name: wait-for-postgres
+      image: "{{ .Values.initImage.repository }}:{{ .Values.initImage.tag }}"
+      imagePullPolicy: "{{ .Values.initImage.pullPolicy }}"
+      envFrom:
+        - secretRef:
+            name: "{{ tpl .Values.envFromSecret . }}"
+      command:
+        - /bin/sh
+        - -c
+        - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -timeout 120s
+      resources:
+        limits:
+          memory: "256Mi"
+        requests:
+          cpu: "250m"
+          memory: "128Mi"
+
+  extraContainers: []
+  deploymentAnnotations: {}
+  deploymentLabels: {}
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app: superset
+            topologyKey: kubernetes.io/hostname
+  topologySpreadConstraints: []
+  podAnnotations: {}
+  podLabels: {}
+
+  startupProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 60
+    periodSeconds: 5
+    successThreshold: 1
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+    periodSeconds: 15
+    successThreshold: 1
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+    periodSeconds: 15
+    successThreshold: 1
+
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    runAsNonRoot: true
+    runAsUser: 1000
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+# ============================================================
+# Superset Celery Worker
+# ============================================================
+supersetWorker:
+  replicas:
+    enabled: true
+    replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  command:
+    - "/bin/sh"
+    - "-c"
+    - ". {{ .Values.configMountPath }}/superset_bootstrap.sh; celery --app=superset.tasks.celery_app:app worker"
+
+  forceReload: false
+
+  initContainers:
+    - name: wait-for-postgres-redis
+      image: "{{ .Values.initImage.repository }}:{{ .Values.initImage.tag }}"
+      imagePullPolicy: "{{ .Values.initImage.pullPolicy }}"
+      envFrom:
+        - secretRef:
+            name: "{{ tpl .Values.envFromSecret . }}"
+      command:
+        - /bin/sh
+        - -c
+        - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -wait "tcp://$REDIS_HOST:$REDIS_PORT" -timeout 120s
+      resources:
+        limits:
+          memory: "256Mi"
+        requests:
+          cpu: "250m"
+          memory: "128Mi"
+
+  extraContainers: []
+  deploymentAnnotations: {}
+  deploymentLabels: {}
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app: superset-worker
+            topologyKey: kubernetes.io/hostname
+  topologySpreadConstraints: []
+  podAnnotations: {}
+  podLabels: {}
+
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 1000
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  livenessProbe:
+    exec:
+      command:
+        - sh
+        - -c
+        - celery -A superset.tasks.celery_app:app inspect ping -d celery@$HOSTNAME
+    initialDelaySeconds: 120
+    timeoutSeconds: 60
+    failureThreshold: 3
+    periodSeconds: 60
+    successThreshold: 1
+  startupProbe: {}
+  readinessProbe: {}
+  priorityClassName: ~
+
+# ============================================================
+# Celery Beat (required for Alerts & Reports)
+# ============================================================
+supersetCeleryBeat:
+  enabled: true # enable for scheduled reports/alerts
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+    maxUnavailable: 1
+  command:
+    - "/bin/sh"
+    - "-c"
+    - ". {{ .Values.configMountPath }}/superset_bootstrap.sh; celery --app=superset.tasks.celery_app:app beat --pidfile /tmp/celerybeat.pid --schedule /tmp/celerybeat-schedule"
+  forceReload: false
+  initContainers:
+    - name: wait-for-postgres-redis
+      image: "{{ .Values.initImage.repository }}:{{ .Values.initImage.tag }}"
+      imagePullPolicy: "{{ .Values.initImage.pullPolicy }}"
+      envFrom:
+        - secretRef:
+            name: "{{ tpl .Values.envFromSecret . }}"
+      command:
+        - /bin/sh
+        - -c
+        - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -wait "tcp://$REDIS_HOST:$REDIS_PORT" -timeout 120s
+      resources:
+        limits:
+          memory: "256Mi"
+        requests:
+          cpu: "250m"
+          memory: "128Mi"
+  extraContainers: []
+  deploymentAnnotations: {}
+  affinity: {}
+  topologySpreadConstraints: []
+  podAnnotations: {}
+  podLabels: {}
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 1000
+  priorityClassName: ~
+
+# ============================================================
+# Celery Flower (optional worker monitoring UI)
+# ============================================================
+supersetCeleryFlower:
   enabled: false
+  replicaCount: 1
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+    maxUnavailable: 1
+  command:
+    - "/bin/sh"
+    - "-c"
+    - "celery --app=superset.tasks.celery_app:app flower"
+  service:
+    type: ClusterIP
+    annotations: {}
+    loadBalancerIP: ~
+    port: 5555
+    nodePort:
+      http: nil
+  startupProbe:
+    httpGet:
+      path: /api/workers
+      port: flower
+    initialDelaySeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 60
+    periodSeconds: 5
+    successThreshold: 1
+  livenessProbe:
+    httpGet:
+      path: /api/workers
+      port: flower
+    initialDelaySeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 3
+    periodSeconds: 5
+    successThreshold: 1
+  readinessProbe:
+    httpGet:
+      path: /api/workers
+      port: flower
+    initialDelaySeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 3
+    periodSeconds: 5
+    successThreshold: 1
+  initContainers:
+    - name: wait-for-postgres-redis
+      image: "{{ .Values.initImage.repository }}:{{ .Values.initImage.tag }}"
+      imagePullPolicy: "{{ .Values.initImage.pullPolicy }}"
+      envFrom:
+        - secretRef:
+            name: "{{ tpl .Values.envFromSecret . }}"
+      command:
+        - /bin/sh
+        - -c
+        - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -wait "tcp://$REDIS_HOST:$REDIS_PORT" -timeout 120s
+      resources:
+        limits:
+          memory: "256Mi"
+        requests:
+          cpu: "250m"
+          memory: "128Mi"
+  extraContainers: []
+  deploymentAnnotations: {}
+  affinity: {}
+  topologySpreadConstraints: []
+  podAnnotations: {}
+  podLabels: {}
+  resources: {}
+  podSecurityContext: {}
+  containerSecurityContext: {}
+  priorityClassName: ~
+
+# ============================================================
+# WebSockets (only needed for GLOBAL_ASYNC_QUERIES ws mode)
+# ============================================================
+supersetWebsockets:
+  enabled: false
+  replicaCount: 1
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+    maxUnavailable: 1
+  ingress:
+    path: /ws
+    pathType: Prefix
+  image:
+    repository: oneacrefund/superset-websocket
+    tag: latest
+    pullPolicy: IfNotPresent
+  config:
+    {
+      "port": 8080,
+      "logLevel": "debug",
+      "logToFile": false,
+      "logFilename": "app.log",
+      "statsd": { "host": "127.0.0.1", "port": 8125, "globalTags": [] },
+      "redis":
+        {
+          "port": 6379,
+          "host": "127.0.0.1",
+          "password": "",
+          "db": 0,
+          "ssl": false,
+        },
+      "redisStreamPrefix": "async-events-",
+      "jwtSecret": "CHANGE-ME",
+      "jwtCookieName": "async-token",
+    }
+  service:
+    type: ClusterIP
+    annotations: {}
+    loadBalancerIP: ~
+    port: 8080
+    nodePort:
+      http: nil
+  command: []
+  resources: {}
+  extraContainers: []
+  deploymentAnnotations: {}
+  affinity: {}
+  topologySpreadConstraints: []
+  podAnnotations: {}
+  podLabels: {}
+  strategy: {}
+  podSecurityContext: {}
+  containerSecurityContext: {}
+  startupProbe:
+    httpGet:
+      path: /health
+      port: ws
+    initialDelaySeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 60
+    periodSeconds: 5
+    successThreshold: 1
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: ws
+    initialDelaySeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 3
+    periodSeconds: 5
+    successThreshold: 1
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: ws
+    initialDelaySeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 3
+    periodSeconds: 5
+    successThreshold: 1
+  priorityClassName: ~
+
+# ============================================================
+# Init Job (DB migrations + admin user creation)
+# ============================================================
 init:
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+  command:
+    - "/bin/sh"
+    - "-c"
+    - ". {{ .Values.configMountPath }}/superset_bootstrap.sh; . {{ .Values.configMountPath }}/superset_init.sh"
   enabled: true
-  loadExamples: true
+  jobAnnotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": "before-hook-creation"
+  loadExamples: false # set false in production
   createAdmin: true
   adminUser:
     username: admin
     firstname: Superset
     lastname: Admin
-    email: admin@superset.com
-    password: admin
-configOverrides:
-  enable_hive: |
-    SECRET_KEY = "superset_secret_key_change_me_in_prod_12345"
-    from flask_appbuilder.security.manager import AUTH_DB
-    AUTH_TYPE = AUTH_DB
-    CSV_EXTENSIONS = {"csv", "tsv", "txt"}
-    FEATURE_FLAGS = {
-        "ENABLE_TEMPLATE_PROCESSING": True,
-        "DASHBOARD_CROSS_FILTERS": True,
-        "DASHBOARD_NATIVE_FILTERS": True,
-    }
-    CACHE_CONFIG = {
-        "CACHE_TYPE": "RedisCache",
-        "CACHE_DEFAULT_TIMEOUT": 300,
-        "CACHE_KEY_PREFIX": "superset_",
-        "CACHE_REDIS_HOST": "superset-redis-master",
-        "CACHE_REDIS_PORT": 6379,
-        "CACHE_REDIS_DB": 1,
-        "CACHE_REDIS_URL": "redis://superset-redis-master:6379/1"
-    }
+    email: admin@superset.com # CHANGE ME
+    password: "CHANGE_ME_STRONG_PASSWORD" # CHANGE ME
+  initContainers:
+    - name: wait-for-postgres
+      image: "{{ .Values.initImage.repository }}:{{ .Values.initImage.tag }}"
+      imagePullPolicy: "{{ .Values.initImage.pullPolicy }}"
+      envFrom:
+        - secretRef:
+            name: "{{ tpl .Values.envFromSecret . }}"
+      command:
+        - /bin/sh
+        - -c
+        - dockerize -wait "tcp://$DB_HOST:$DB_PORT" -timeout 120s
+      resources:
+        limits:
+          memory: "256Mi"
+        requests:
+          cpu: "250m"
+          memory: "128Mi"
+  initscript: |-
+    #!/bin/sh
+    set -eu
+    echo "Upgrading DB schema..."
+    superset db upgrade
+    echo "Initializing roles..."
+    superset init
+    {{ if .Values.init.createAdmin }}
+    echo "Creating admin user..."
+    superset fab create-admin \
+                    --username {{ .Values.init.adminUser.username }} \
+                    --firstname {{ .Values.init.adminUser.firstname }} \
+                    --lastname {{ .Values.init.adminUser.lastname }} \
+                    --email {{ .Values.init.adminUser.email }} \
+                    --password {{ .Values.init.adminUser.password }} \
+                    || true
+    {{- end }}
+    {{ if .Values.init.loadExamples }}
+    echo "Loading examples..."
+    superset load_examples
+    {{- end }}
+    if [ -f "{{ .Values.extraConfigMountPath }}/import_datasources.yaml" ]; then
+      echo "Importing database connections..."
+      superset import_datasources -p {{ .Values.extraConfigMountPath }}/import_datasources.yaml
+    fi
+  extraContainers: []
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 1000
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  priorityClassName: ~
+
+# ============================================================
+# PostgreSQL — disabled, using external instance
+# ============================================================
+postgresql:
+  enabled: false
+
+# ============================================================
+# Redis — managed by chart
+# FIX: Gemini used wrong image spec (registry/repository split is
+# Bitnami-specific; the chart handles it internally).
+# Also removed invalid top-level command/livenessProbe fields.
+# ============================================================
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+    existingSecret: ""
+    existingSecretKey: ""
+    password: superset
+  master:
+    persistence:
+      enabled: true # enable for production data durability
+      storageClass: "openebs-hostpath"
+      accessModes:
+        - ReadWriteOnce
+      size: 8Gi
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+# ============================================================
+# Node Scheduling
+# ============================================================
+nodeSelector:
+  node-role.kubernetes.io/k8s-gp-node: ""
+
+tolerations: []
+
+affinity: {}
+
+topologySpreadConstraints: []
+
+priorityClassName: ~
