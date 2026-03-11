@@ -217,3 +217,27 @@ The Traefik `IngressRoute` for Hubble UI (`k8s-platform-v2/01-networking/hubble-
 
 **Resolution:**
 Updated the `IngressRoute` manifest namespace to `kube-system`, immediately allowing Traefik to securely expose the UI.
+
+-----------------------------------------------
+new unsolved issues:
+
+kubectl logs -f hubble-ui-ffdc7bfb5-swwwt -n kube-system
+Defaulted container "frontend" out of: frontend, backend
+/docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+/docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+10-listen-on-ipv6-by-default.sh: info: can not modify /etc/nginx/conf.d/default.conf (read-only file system?)
+/docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+/docker-entrypoint.sh: Configuration complete; ready for start up
+2026/03/11 19:53:22 [notice] 1#1: using the "epoll" event method
+2026/03/11 19:53:22 [notice] 1#1: nginx/1.29.0
+2026/03/11 19:53:22 [notice] 1#1: built by gcc 14.2.0 (Alpine 14.2.0) 
+2026/03/11 19:53:22 [notice] 1#1: OS: Linux 6.17.0-1007-aws
+2026/03/11 19:53:22 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1024:524288
+2026/03/11 19:53:22 [notice] 1#1: start worker processes
+2026/03/11 19:53:22 [notice] 1#1: start worker process 21
+2026/03/11 19:53:22 [notice] 1#1: start worker process 22
+2026/03/11 19:53:22 [notice] 1#1: start worker process 23
+2026/03/11 19:53:22 [notice] 1#1: start worker process 24
