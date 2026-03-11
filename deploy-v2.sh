@@ -69,12 +69,16 @@ helm template spark-operator spark-operator/spark-operator \
   > k8s-platform-v2/03-apps/charts/gen/spark-operator.yaml
 
 # 2.2 Superset
+echo "Generating secure SUPERSET_SECRET_KEY..."
+SUPERSET_SECRET_KEY=$(openssl rand -base64 42)
+
 helm repo add superset https://apache.github.io/superset
 helm repo update superset
 helm template superset superset/superset \
   --namespace default \
   --version 0.12.0 \
-  -f k8s-platform-v2/03-apps/superset-values.yaml \
+  -f k8s-platform-v2/03-apps/superset-values.yaml | \
+  sed "s|__SUPERSET_SECRET_KEY__|$SUPERSET_SECRET_KEY|g" \
   > k8s-platform-v2/03-apps/charts/gen/superset.yaml
 
 # 2.3 Monitoring Stack
