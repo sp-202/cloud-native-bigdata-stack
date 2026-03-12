@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: "openebs-hostpath"
+  resources:
+    requests:
+      storage: 8Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: default
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      # --- Pinning to GP Node ---
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
+      containers:
+        - name: redis
+          image: redis:7.2-alpine
+          command: ["redis-server"]
+          args:
+            - "--protected-mode"
+            - "no"
+            - "--save"
+            - "60"
+            - "1"
+            - "--loglevel"
+            - "notice"
+            - "--dir"
+            - "/data"
+          ports:
+            - containerPort: 6379
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "2048Mi"
+              cpu: "1000m"
+            limits:
+              memory: "3072Mi"
+              cpu: "1500m"
+          volumeMounts:
+            - name: storage
+              mountPath: /data
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: redis-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: default
+spec:
+  ports:
+    - port: 6379
+      targetPort: 6379
+  selector:
+    app: redis
+---
+# Headless service — this is what Superset's chart looks for
+apiVersion: v1
+kind: Service
+metadata:
+  name: superset-redis-headless
+  namespace: default
+spec:
+  clusterIP: None
+  ports:
+    - port: 6379
+      targetPort: 6379
+  selector:
+    app: redis

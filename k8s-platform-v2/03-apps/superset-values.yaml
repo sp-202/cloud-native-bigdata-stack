@@ -104,7 +104,7 @@ configOverrides:
 
     # ---- Cache (Redis) ----
     # redis_host resolves to the headless redis service created by this chart
-    _REDIS_HOST = os.environ.get("REDIS_HOST", "{{ .Release.Name }}-redis-headless")
+    _REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
     _REDIS_PORT = os.environ.get("REDIS_PORT", "6379")
 
     CACHE_CONFIG = {
@@ -243,7 +243,7 @@ supersetNode:
 
   connections:
     # Redis
-    redis_host: "{{ .Release.Name }}-redis-headless"
+    redis_host: "redis"
     redis_port: "6379"
     redis_user: ""
     redis_cache_db: "1"
@@ -752,27 +752,7 @@ postgresql:
 # Also removed invalid top-level command/livenessProbe fields.
 # ============================================================
 redis:
-  enabled: true
-  architecture: standalone
-  auth:
-    enabled: false
-    existingSecret: ""
-    existingSecretKey: ""
-    password: superset
-  master:
-    persistence:
-      enabled: true # enable for production data durability
-      storageClass: "openebs-hostpath"
-      accessModes:
-        - ReadWriteOnce
-      size: 8Gi
-    resources:
-      requests:
-        memory: "256Mi"
-        cpu: "100m"
-      limits:
-        memory: "512Mi"
-        cpu: "500m"
+  enabled: false
 
 # ============================================================
 # Node Scheduling
