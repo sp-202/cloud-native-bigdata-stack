@@ -30,7 +30,7 @@ All notable changes to this project will be documented in this file.
 ### 🔄 Changed
 - **Traefik Refactor**: Removed `hostNetwork: true` binding; Traefik runs as `type: LoadBalancer` via MetalLB with dedicated Elastic IP.
 - **Deploy Script**: Renamed `deploy-gke.sh` → `deploy-v2.sh` with K8s/kubeadm native support.
-- **Ingress IP Updated**: Platform ingress IP changed to `3.228.1.250`.
+- **Ingress IP Updated**: Platform ingress IP changed to `44.203.26.241`.
 - **Monitoring Charts Refreshed**: Regenerated kube-prometheus-stack Helm manifests.
 
 ### 🗑 Removed

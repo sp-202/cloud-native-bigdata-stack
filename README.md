@@ -46,7 +46,7 @@ The platform is divided into three logical domains:
 
 ### 1️⃣ Ingress & Networking
 *   **Cilium CNI**: Pod networking with AWS ENI IPAM mode. Pods receive real VPC IPs for full AWS compatibility.
-*   **MetalLB**: Provides a network load-balancer implementation, assigning a dedicated Elastic IP (`3.228.1.250`).
+*   **MetalLB**: Provides a network load-balancer implementation, assigning a dedicated Elastic IP (`44.203.26.241`).
 *   **Traefik Proxy**: The unified ingress controller. Handles external traffic on ports `80`/`443` and routes it to internal services. Runs as a `LoadBalancer` service (no `hostNetwork`).
 *   **Hubble UI**: Cilium's observability dashboard for real-time network flow visibility.
 *   **SSLIP.IO**: Automatic DNS resolution for LoadBalancer IPs.
@@ -123,7 +123,7 @@ chmod +x deploy-v2.sh
 *Wait for the script to complete. It may take 5-10 minutes for the LoadBalancer IP to provision.*
 
 ### Step 3: Access Services
-The script will output the dynamic URLs for your services. The base domain `$INGRESS_DOMAIN` is constructed automatically using the LoadBalancer IP (e.g., `3.228.1.250.sslip.io`).
+The script will output the dynamic URLs for your services. The base domain `$INGRESS_DOMAIN` is constructed automatically using the LoadBalancer IP (e.g., `44.203.26.241.sslip.io`).
 
 | Service | URL Pattern | Default Credentials |
 | :--- | :--- | :--- |

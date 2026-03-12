@@ -1,17 +1,4 @@
 ---
-# Source: superset/charts/redis/templates/serviceaccount.yaml
-apiVersion: v1
-kind: ServiceAccount
-automountServiceAccountToken: true
-metadata:
-  name: superset-redis
-  namespace: "default"
-  labels:
-    app.kubernetes.io/name: redis
-    helm.sh/chart: redis-17.9.4
-    app.kubernetes.io/instance: superset
-    app.kubernetes.io/managed-by: Helm
----
 # Source: superset/templates/secret-env.yaml
 apiVersion: v1
 kind: Secret
@@ -25,14 +12,14 @@ metadata:
     heritage: "Helm"
 type: Opaque
 stringData:
-    REDIS_HOST: "superset-redis-headless"
+    REDIS_HOST: "redis"
     REDIS_PORT: "6379"
     DB_HOST: "postgres.default.svc.cluster.local"
     DB_PORT: "5432"
     DB_USER: "superset"
     DB_PASS: "superset"
     DB_NAME: "superset"
-    SUPERSET_SECRET_KEY: "knrxKHRf6N4ZbrlzMDurcQzM9raFVkULu94C6y+7Kf3RkrMEaAjrpGzi"
+    SUPERSET_SECRET_KEY: "EC1EaBEBOh2fw4QjAFD9C/zROznCaYQ837khQcLvR6lVhhmR27ESWW0m"
 ---
 # Source: superset/templates/secret-superset-config.yaml
 apiVersion: v1
@@ -108,7 +95,7 @@ stringData:
     
     # ---- Cache (Redis) ----
     # redis_host resolves to the headless redis service created by this chart
-    _REDIS_HOST = os.environ.get("REDIS_HOST", "superset-redis-headless")
+    _REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
     _REDIS_PORT = os.environ.get("REDIS_PORT", "6379")
     
     CACHE_CONFIG = {
@@ -205,223 +192,6 @@ stringData:
       echo "Running Superset with uid 1000" > ~/bootstrap
     fi
 ---
-# Source: superset/charts/redis/templates/configmap.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: superset-redis-configuration
-  namespace: "default"
-  labels:
-    app.kubernetes.io/name: redis
-    helm.sh/chart: redis-17.9.4
-    app.kubernetes.io/instance: superset
-    app.kubernetes.io/managed-by: Helm
-data:
-  redis.conf: |-
-    # User-supplied common configuration:
-    # Enable AOF https://redis.io/topics/persistence#append-only-file
-    appendonly yes
-    # Disable RDB persistence, AOF persistence already enabled.
-    save ""
-    # End of common configuration
-  master.conf: |-
-    dir /data
-    # User-supplied master configuration:
-    rename-command FLUSHDB ""
-    rename-command FLUSHALL ""
-    # End of master configuration
-  replica.conf: |-
-    dir /data
-    # User-supplied replica configuration:
-    rename-command FLUSHDB ""
-    rename-command FLUSHALL ""
-    # End of replica configuration
----
-# Source: superset/charts/redis/templates/health-configmap.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: superset-redis-health
-  namespace: "default"
-  labels:
-    app.kubernetes.io/name: redis
-    helm.sh/chart: redis-17.9.4
-    app.kubernetes.io/instance: superset
-    app.kubernetes.io/managed-by: Helm
-data:
-  ping_readiness_local.sh: |-
-    #!/bin/bash
-
-    [[ -f $REDIS_PASSWORD_FILE ]] && export REDIS_PASSWORD="$(< "${REDIS_PASSWORD_FILE}")"
-    [[ -n "$REDIS_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_PASSWORD"
-    response=$(
-      timeout -s 15 $1 \
-      redis-cli \
-        -h localhost \
-        -p $REDIS_PORT \
-        ping
-    )
-    if [ "$?" -eq "124" ]; then
-      echo "Timed out"
-      exit 1
-    fi
-    if [ "$response" != "PONG" ]; then
-      echo "$response"
-      exit 1
-    fi
-  ping_liveness_local.sh: |-
-    #!/bin/bash
-
-    [[ -f $REDIS_PASSWORD_FILE ]] && export REDIS_PASSWORD="$(< "${REDIS_PASSWORD_FILE}")"
-    [[ -n "$REDIS_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_PASSWORD"
-    response=$(
-      timeout -s 15 $1 \
-      redis-cli \
-        -h localhost \
-        -p $REDIS_PORT \
-        ping
-    )
-    if [ "$?" -eq "124" ]; then
-      echo "Timed out"
-      exit 1
-    fi
-    responseFirstWord=$(echo $response | head -n1 | awk '{print $1;}')
-    if [ "$response" != "PONG" ] && [ "$responseFirstWord" != "LOADING" ] && [ "$responseFirstWord" != "MASTERDOWN" ]; then
-      echo "$response"
-      exit 1
-    fi
-  ping_readiness_master.sh: |-
-    #!/bin/bash
-
-    [[ -f $REDIS_MASTER_PASSWORD_FILE ]] && export REDIS_MASTER_PASSWORD="$(< "${REDIS_MASTER_PASSWORD_FILE}")"
-    [[ -n "$REDIS_MASTER_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_MASTER_PASSWORD"
-    response=$(
-      timeout -s 15 $1 \
-      redis-cli \
-        -h $REDIS_MASTER_HOST \
-        -p $REDIS_MASTER_PORT_NUMBER \
-        ping
-    )
-    if [ "$?" -eq "124" ]; then
-      echo "Timed out"
-      exit 1
-    fi
-    if [ "$response" != "PONG" ]; then
-      echo "$response"
-      exit 1
-    fi
-  ping_liveness_master.sh: |-
-    #!/bin/bash
-
-    [[ -f $REDIS_MASTER_PASSWORD_FILE ]] && export REDIS_MASTER_PASSWORD="$(< "${REDIS_MASTER_PASSWORD_FILE}")"
-    [[ -n "$REDIS_MASTER_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_MASTER_PASSWORD"
-    response=$(
-      timeout -s 15 $1 \
-      redis-cli \
-        -h $REDIS_MASTER_HOST \
-        -p $REDIS_MASTER_PORT_NUMBER \
-        ping
-    )
-    if [ "$?" -eq "124" ]; then
-      echo "Timed out"
-      exit 1
-    fi
-    responseFirstWord=$(echo $response | head -n1 | awk '{print $1;}')
-    if [ "$response" != "PONG" ] && [ "$responseFirstWord" != "LOADING" ]; then
-      echo "$response"
-      exit 1
-    fi
-  ping_readiness_local_and_master.sh: |-
-    script_dir="$(dirname "$0")"
-    exit_status=0
-    "$script_dir/ping_readiness_local.sh" $1 || exit_status=$?
-    "$script_dir/ping_readiness_master.sh" $1 || exit_status=$?
-    exit $exit_status
-  ping_liveness_local_and_master.sh: |-
-    script_dir="$(dirname "$0")"
-    exit_status=0
-    "$script_dir/ping_liveness_local.sh" $1 || exit_status=$?
-    "$script_dir/ping_liveness_master.sh" $1 || exit_status=$?
-    exit $exit_status
----
-# Source: superset/charts/redis/templates/scripts-configmap.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: superset-redis-scripts
-  namespace: "default"
-  labels:
-    app.kubernetes.io/name: redis
-    helm.sh/chart: redis-17.9.4
-    app.kubernetes.io/instance: superset
-    app.kubernetes.io/managed-by: Helm
-data:
-  start-master.sh: |
-    #!/bin/bash
-
-    [[ -f $REDIS_PASSWORD_FILE ]] && export REDIS_PASSWORD="$(< "${REDIS_PASSWORD_FILE}")"
-    if [[ -f /opt/bitnami/redis/mounted-etc/master.conf ]];then
-        cp /opt/bitnami/redis/mounted-etc/master.conf /opt/bitnami/redis/etc/master.conf
-    fi
-    if [[ -f /opt/bitnami/redis/mounted-etc/redis.conf ]];then
-        cp /opt/bitnami/redis/mounted-etc/redis.conf /opt/bitnami/redis/etc/redis.conf
-    fi
-    ARGS=("--port" "${REDIS_PORT}")
-    ARGS+=("--protected-mode" "no")
-    ARGS+=("--include" "/opt/bitnami/redis/etc/redis.conf")
-    ARGS+=("--include" "/opt/bitnami/redis/etc/master.conf")
-    exec redis-server "${ARGS[@]}"
----
-# Source: superset/charts/redis/templates/headless-svc.yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: superset-redis-headless
-  namespace: "default"
-  labels:
-    app.kubernetes.io/name: redis
-    helm.sh/chart: redis-17.9.4
-    app.kubernetes.io/instance: superset
-    app.kubernetes.io/managed-by: Helm
-  annotations:
-    
-spec:
-  type: ClusterIP
-  clusterIP: None
-  ports:
-    - name: tcp-redis
-      port: 6379
-      targetPort: redis
-  selector:
-    app.kubernetes.io/name: redis
-    app.kubernetes.io/instance: superset
----
-# Source: superset/charts/redis/templates/master/service.yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: superset-redis-master
-  namespace: "default"
-  labels:
-    app.kubernetes.io/name: redis
-    helm.sh/chart: redis-17.9.4
-    app.kubernetes.io/instance: superset
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/component: master
-spec:
-  type: ClusterIP
-  internalTrafficPolicy: Cluster
-  sessionAffinity: None
-  ports:
-    - name: tcp-redis
-      port: 6379
-      targetPort: redis
-      nodePort: null
-  selector:
-    app.kubernetes.io/name: redis
-    app.kubernetes.io/instance: superset
-    app.kubernetes.io/component: master
----
 # Source: superset/templates/service.yaml
 apiVersion: v1
 kind: Service
@@ -465,13 +235,13 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/superset_config.py: 5f861bbf6b1098ffd645cc8a86f4afcbac1c0475b2450930ee76969c5e0cf71d
+        checksum/superset_config.py: 623f8489d01867599ed9382412a57dd7cb7900a8900a587715f36ac1a25aef40
         checksum/superset_bootstrap.sh: 42bd4119ac4966b639bf5e16ecc12c4066e4d7962dc6db06eebfa9618a8dc4cb
-        checksum/connections: b46837d289d1978e7bb57dc1cd7e8149ecb89391ca0b9fa5b2412d9528d41f0c
+        checksum/connections: 4321e30c4a739b84c6b625f04a9075cc232bc08c70e213cbc08ee704fd4e3462
         checksum/extraConfigs: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/extraSecrets: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/extraSecretEnv: 09b29adc437cb1b61ddee0cf998c85826f0d8191ea8ebb64d3b2400b065e39d0
-        checksum/configOverrides: a848e7eb997367d07d5ee9da4315b7563384e2b89f5b84c5250df1ab890dd579
+        checksum/configOverrides: 06e9387f379e98109b7587be67556a7a67a2a2d0eb1b19a5625e7179d7cf66e2
         checksum/configOverridesFiles: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
       labels:
         app: "superset-celerybeat"
@@ -562,13 +332,13 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/superset_config.py: 5f861bbf6b1098ffd645cc8a86f4afcbac1c0475b2450930ee76969c5e0cf71d
+        checksum/superset_config.py: 623f8489d01867599ed9382412a57dd7cb7900a8900a587715f36ac1a25aef40
         checksum/superset_bootstrap.sh: 42bd4119ac4966b639bf5e16ecc12c4066e4d7962dc6db06eebfa9618a8dc4cb
-        checksum/connections: b46837d289d1978e7bb57dc1cd7e8149ecb89391ca0b9fa5b2412d9528d41f0c
+        checksum/connections: 4321e30c4a739b84c6b625f04a9075cc232bc08c70e213cbc08ee704fd4e3462
         checksum/extraConfigs: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/extraSecrets: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/extraSecretEnv: 09b29adc437cb1b61ddee0cf998c85826f0d8191ea8ebb64d3b2400b065e39d0
-        checksum/configOverrides: a848e7eb997367d07d5ee9da4315b7563384e2b89f5b84c5250df1ab890dd579
+        checksum/configOverrides: 06e9387f379e98109b7587be67556a7a67a2a2d0eb1b19a5625e7179d7cf66e2
         checksum/configOverridesFiles: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
       labels:
         app: superset-worker
@@ -681,14 +451,14 @@ spec:
     metadata:
       annotations:
         # Force reload on config changes
-        checksum/superset_config.py: 5f861bbf6b1098ffd645cc8a86f4afcbac1c0475b2450930ee76969c5e0cf71d
+        checksum/superset_config.py: 623f8489d01867599ed9382412a57dd7cb7900a8900a587715f36ac1a25aef40
         checksum/superset_init.sh: 6e595da5c3f32d788603f7673d3c62ef593bf81e3c0f999939e4ab969aea2c2b
         checksum/superset_bootstrap.sh: 42bd4119ac4966b639bf5e16ecc12c4066e4d7962dc6db06eebfa9618a8dc4cb
-        checksum/connections: b46837d289d1978e7bb57dc1cd7e8149ecb89391ca0b9fa5b2412d9528d41f0c
+        checksum/connections: 4321e30c4a739b84c6b625f04a9075cc232bc08c70e213cbc08ee704fd4e3462
         checksum/extraConfigs: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/extraSecrets: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
         checksum/extraSecretEnv: 09b29adc437cb1b61ddee0cf998c85826f0d8191ea8ebb64d3b2400b065e39d0
-        checksum/configOverrides: a848e7eb997367d07d5ee9da4315b7563384e2b89f5b84c5250df1ab890dd579
+        checksum/configOverrides: 06e9387f379e98109b7587be67556a7a67a2a2d0eb1b19a5625e7179d7cf66e2
         checksum/configOverridesFiles: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
       labels:
         app: superset
@@ -845,161 +615,6 @@ spec:
         target:
           type: Utilization
           averageUtilization: 70
----
-# Source: superset/charts/redis/templates/master/application.yaml
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: superset-redis-master
-  namespace: "default"
-  labels:
-    app.kubernetes.io/name: redis
-    helm.sh/chart: redis-17.9.4
-    app.kubernetes.io/instance: superset
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/component: master
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: redis
-      app.kubernetes.io/instance: superset
-      app.kubernetes.io/component: master
-  serviceName: superset-redis-headless
-  updateStrategy:
-    type: RollingUpdate
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: redis
-        helm.sh/chart: redis-17.9.4
-        app.kubernetes.io/instance: superset
-        app.kubernetes.io/managed-by: Helm
-        app.kubernetes.io/component: master
-      annotations:
-        checksum/configmap: 64f39ac249d0c7b1302bb993299537f2776b54020b64f9b98c9f481759adacad
-        checksum/health: c67d1f0e1314a2ed864f62819e17233bfb7c2c75333dd3326983379b2721364e
-        checksum/scripts: 6936b22cd688a85c6caef650dc9769225739954ff1320fe595beb7dcf91d2777
-        checksum/secret: 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
-    spec:
-      
-      securityContext:
-        fsGroup: 1001
-      serviceAccountName: superset-redis
-      affinity:
-        podAffinity:
-          
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app.kubernetes.io/name: redis
-                    app.kubernetes.io/instance: superset
-                    app.kubernetes.io/component: master
-                topologyKey: kubernetes.io/hostname
-              weight: 1
-        nodeAffinity:
-          
-      terminationGracePeriodSeconds: 30
-      containers:
-        - name: redis
-          image: docker.io/bitnami/redis:7.0.10-debian-11-r4
-          imagePullPolicy: "IfNotPresent"
-          securityContext:
-            runAsUser: 1001
-          command:
-            - /bin/bash
-          args:
-            - -c
-            - /opt/bitnami/scripts/start-scripts/start-master.sh
-          env:
-            - name: BITNAMI_DEBUG
-              value: "false"
-            - name: REDIS_REPLICATION_MODE
-              value: master
-            - name: ALLOW_EMPTY_PASSWORD
-              value: "yes"
-            - name: REDIS_TLS_ENABLED
-              value: "no"
-            - name: REDIS_PORT
-              value: "6379"
-          ports:
-            - name: redis
-              containerPort: 6379
-          livenessProbe:
-            initialDelaySeconds: 20
-            periodSeconds: 5
-            # One second longer than command timeout should prevent generation of zombie processes.
-            timeoutSeconds: 6
-            successThreshold: 1
-            failureThreshold: 5
-            exec:
-              command:
-                - sh
-                - -c
-                - /health/ping_liveness_local.sh 5
-          readinessProbe:
-            initialDelaySeconds: 20
-            periodSeconds: 5
-            timeoutSeconds: 2
-            successThreshold: 1
-            failureThreshold: 5
-            exec:
-              command:
-                - sh
-                - -c
-                - /health/ping_readiness_local.sh 1
-          resources:
-            limits:
-              cpu: 500m
-              memory: 512Mi
-            requests:
-              cpu: 100m
-              memory: 256Mi
-          volumeMounts:
-            - name: start-scripts
-              mountPath: /opt/bitnami/scripts/start-scripts
-            - name: health
-              mountPath: /health
-            - name: redis-data
-              mountPath: /data
-            - name: config
-              mountPath: /opt/bitnami/redis/mounted-etc
-            - name: redis-tmp-conf
-              mountPath: /opt/bitnami/redis/etc/
-            - name: tmp
-              mountPath: /tmp
-      volumes:
-        - name: start-scripts
-          configMap:
-            name: superset-redis-scripts
-            defaultMode: 0755
-        - name: health
-          configMap:
-            name: superset-redis-health
-            defaultMode: 0755
-        - name: config
-          configMap:
-            name: superset-redis-configuration
-        - name: redis-tmp-conf
-          emptyDir: {}
-        - name: tmp
-          emptyDir: {}
-  volumeClaimTemplates:
-    - metadata:
-        name: redis-data
-        labels:
-          app.kubernetes.io/name: redis
-          app.kubernetes.io/instance: superset
-          app.kubernetes.io/component: master
-      spec:
-        accessModes:
-          - "ReadWriteOnce"
-        resources:
-          requests:
-            storage: "8Gi"
-        storageClassName: openebs-hostpath
 ---
 # Source: superset/templates/init-job.yaml
 apiVersion: batch/v1

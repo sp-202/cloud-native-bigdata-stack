@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fix-node-storage-ds
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      name: fix-node-storage
+  template:
+    metadata:
+      labels:
+        name: fix-node-storage
+    spec:
+      containers:
+        - name: fix
+          image: busybox
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              while true; do
+                mkdir -p /host/mnt/spark-nvme/starrocks-fe
+                mkdir -p /host/mnt/spark-nvme/starrocks-be
+                mkdir -p /host/mnt/spark-nvme/minio
+                chmod -R 777 /host/mnt/spark-nvme
+                echo "Storage paths verified/fixed on $(hostname)"
+                sleep 300
+              done
+          volumeMounts:
+            - name: host-root
+              mountPath: /host
+      volumes:
+        - name: host-root
+          hostPath:
+            path: /
+      hostPID: true
+      hostNetwork: true

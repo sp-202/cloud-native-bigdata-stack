@@ -104,7 +104,7 @@ The platform relied on manually defined `PersistentVolumes` bound to specific no
 Migrated to a modern, dynamic infrastructure stack:
 1.  **OpenEBS Integration**: Replaced static PVs with the `openebs-hostpath` storage class. This enables **dynamic provisioning**, where Kubernetes automatically handles the lifecycle of local storage on nodes.
 2.  **MetalLB Integration**: Installed MetalLB to handle `type: LoadBalancer` services on raw K8s. This provides a clean abstraction for external access.
-3.  **Traefik Refactor**: Switched Traefik to `type: LoadBalancer` and disabled `hostNetwork`. It now receives a dedicated static IP (`3.228.1.250`) from MetalLB, improving isolation and scalability.
+3.  **Traefik Refactor**: Switched Traefik to `type: LoadBalancer` and disabled `hostNetwork`. It now receives a dedicated static IP (`44.203.26.241`) from MetalLB, improving isolation and scalability.
 
 **Benefits:**
 *   **Zero-Touch Storage**: No more manual YAML for individual disks.
@@ -219,25 +219,26 @@ The Traefik `IngressRoute` for Hubble UI (`k8s-platform-v2/01-networking/hubble-
 Updated the `IngressRoute` manifest namespace to `kube-system`, immediately allowing Traefik to securely expose the UI.
 
 -----------------------------------------------
-new unsolved issues:
+## 14. Control Plane Deadlock & BPF Verifier Crash (ARM64) ✅ Resolved
+**Issue**: The API server became unresponsive, with etcd connection failures and probe timeouts.
+**Root Cause**: A critical kernel-level BPF verifier crash (`REG INVARIANTS VIOLATION`) occurred on the ARM64 master node when Cilium attempted to load eBPF programs. This corrupted the host's networking stack.
+**Resolution**:
+1.  **Webhook Suspension**: Temporarily removed `spark-operator` and `kube-prometheus-stack` webhooks to unblock API server startup.
+2.  **Node Reboot**: Rebooted the master node to clear the corrupted BPF state and restored stable networking.
 
-kubectl logs -f hubble-ui-ffdc7bfb5-swwwt -n kube-system
-Defaulted container "frontend" out of: frontend, backend
-/docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
-/docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
-/docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
-10-listen-on-ipv6-by-default.sh: info: can not modify /etc/nginx/conf.d/default.conf (read-only file system?)
-/docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
-/docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
-/docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
-/docker-entrypoint.sh: Configuration complete; ready for start up
-2026/03/11 19:53:22 [notice] 1#1: using the "epoll" event method
-2026/03/11 19:53:22 [notice] 1#1: nginx/1.29.0
-2026/03/11 19:53:22 [notice] 1#1: built by gcc 14.2.0 (Alpine 14.2.0) 
-2026/03/11 19:53:22 [notice] 1#1: OS: Linux 6.17.0-1007-aws
-2026/03/11 19:53:22 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1024:524288
-2026/03/11 19:53:22 [notice] 1#1: start worker processes
-2026/03/11 19:53:22 [notice] 1#1: start worker process 21
-2026/03/11 19:53:22 [notice] 1#1: start worker process 22
-2026/03/11 19:53:22 [notice] 1#1: start worker process 23
-2026/03/11 19:53:22 [notice] 1#1: start worker process 24
+## 15. Master Node "ens6" Routing Conflict ✅ Resolved
+**Issue**: Port 6443 was reachable via `127.0.0.1` but timed out on the private IP `10.0.1.61`.
+**Root Cause**: A second interface `ens6` was unexpectedly attached to the master node on the same subnet as `ens5`. The kernel attempted asymmetric routing, and residual Cilium BPF programs on `ens5` blocked traffic.
+**Resolution**:
+1.  **Interface Deactivation**: Manually brought down `ens6` using `ip link set ens6 down`.
+2.  **BPF Cleanup**: Used `bpftool` to detach stale Cilium BPF programs from the primary interface, restoring host reachability.
+
+## 16. Persistent Cilium BPF Compilation Failures (ARM64) ⚠️ Pending
+**Issue**: The Cilium agent consistently fails to compile BPF programs for pods (`Failed to compile bpf_lxc.o`).
+**Root Cause**: Likely a mismatch between the Cilium container's toolchain and the newer AWS ARM64 kernel headers (`6.17.0-1007-aws`). This blocks all pod-to-pod and pod-to-host networking.
+**Status**: Investigating Cilium version adjustments and kernel header injection.
+
+## 17. Stale Ingress Domain Propagation (Kustomize Vars) ⚠️ Pending
+**Issue**: Ingress hosts (e.g., `airflow.44.203.26.241.sslip.io`) are stuck on the old IP despite updates to `global-config.env`.
+**Root Cause**: Kustomize `vars` is deprecated and fails to correctly bridge the hashed ConfigMap name (`global-config-xxxxx`) produced by `configMapGenerator` to the Ingress resource templates.
+**Status**: Plan to refactor `kustomization.yaml` to use the modern `replacements` mechanism.
