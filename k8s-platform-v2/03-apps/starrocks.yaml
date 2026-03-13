@@ -7,7 +7,7 @@ metadata:
     app: starrocks-fe
 spec:
   serviceName: "starrocks-fe"
-  replicas: 1
+  replicas: $(STARROCKS_FE_REPLICAS)
   selector:
     matchLabels:
       app: starrocks-fe
@@ -18,7 +18,7 @@ spec:
     spec:
       # --- Pinning to GP Node ---
       nodeSelector:
-        node-role.kubernetes.io/k8s-gp-node: ""
+        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
       containers:
         - name: starrocks-fe
           image: starrocks/fe-ubuntu:3.3-latest
@@ -111,11 +111,11 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: 500m
-              memory: 2Gi
+              cpu: $(STARROCKS_FE_CPU_REQUEST)
+              memory: $(STARROCKS_FE_MEM_REQUEST)
             limits:
-              cpu: 2000m
-              memory: 4Gi
+              cpu: $(STARROCKS_FE_CPU_LIMIT)
+              memory: $(STARROCKS_FE_MEM_LIMIT)
       volumes:
         - name: fe-meta
           persistentVolumeClaim:
@@ -150,7 +150,7 @@ metadata:
     app: starrocks-be
 spec:
   serviceName: "starrocks-be"
-  replicas: 1
+  replicas: $(STARROCKS_BE_REPLICAS)
   selector:
     matchLabels:
       app: starrocks-be
@@ -161,7 +161,7 @@ spec:
     spec:
       # --- Pinning to GP Node ---
       nodeSelector:
-        node-role.kubernetes.io/k8s-gp-node: ""
+        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
       containers:
         - name: starrocks-be
           image: starrocks/be-ubuntu:3.3-latest
@@ -181,11 +181,11 @@ spec:
               value: "0.0.0.0"
           resources:
             requests:
-              cpu: 500m
-              memory: 2Gi
+              cpu: $(STARROCKS_BE_CPU_REQUEST)
+              memory: $(STARROCKS_BE_MEM_REQUEST)
             limits:
-              cpu: 2000m
-              memory: 4Gi
+              cpu: $(STARROCKS_BE_CPU_LIMIT)
+              memory: $(STARROCKS_BE_MEM_LIMIT)
           volumeMounts:
             - name: be-storage
               mountPath: /data/storage

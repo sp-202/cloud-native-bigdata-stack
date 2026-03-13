@@ -1,9 +1,9 @@
 grafana:
   adminPassword: prom-operator
   nodeSelector:
-    node-role.kubernetes.io/control-plane: ""
+    node-role.kubernetes.io/$(CONTROL_PLANE_NODE_ROLE): ""
   tolerations:
-    - key: "node-role.kubernetes.io/control-plane"
+    - key: "node-role.kubernetes.io/$(CONTROL_PLANE_NODE_ROLE)"
       operator: "Exists"
       effect: "NoSchedule"
   additionalDataSources:
@@ -22,14 +22,14 @@ grafana:
 prometheus:
   prometheusSpec:
     nodeSelector:
-      node-role.kubernetes.io/control-plane: ""
+      node-role.kubernetes.io/$(CONTROL_PLANE_NODE_ROLE): ""
     tolerations:
-      - key: "node-role.kubernetes.io/control-plane"
+      - key: "node-role.kubernetes.io/$(CONTROL_PLANE_NODE_ROLE)"
         operator: "Exists"
         effect: "NoSchedule"
     podMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelectorNilUsesHelmValues: false
-    retention: 168h
+    retention: $(PROMETHEUS_RETENTION)
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -37,4 +37,4 @@ prometheus:
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
-              storage: 10Gi
+              storage: $(PROMETHEUS_STORAGE)

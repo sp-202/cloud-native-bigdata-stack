@@ -3,15 +3,47 @@ set -e
 
 echo "Starting K8s Platform v2 Deployment..."
 
-# K3s Configuration Setup
-if [ -f "/etc/rancher/k3s/k3s.yaml" ]; then
-    echo "Detected K3s config. Exporting KUBECONFIG..."
-    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-    if [ ! -r "/etc/rancher/k3s/k3s.yaml" ]; then
-        echo "Need sudo to read k3s.yaml... Attempting to change permissions."
-        sudo chmod 644 /etc/rancher/k3s/k3s.yaml
-    fi
+# ---------------------------------------------------
+# Load Centralized Resource & Node Configuration
+# ---------------------------------------------------
+if [ -f "global-resource.env" ]; then
+    source global-resource.env
+    echo "Loaded global-resource.env (replicas, resources, node assignments)"
+else
+    echo "WARNING: global-resource.env not found in project root. Using hardcoded values."
 fi
+
+# Helper: resolve all $(VAR) placeholders from global-resource.env in a file.
+# Usage: subst_vars <input_file>  →  outputs resolved content to stdout
+subst_vars() {
+  sed \
+    -e "s|\$(GP_NODE_ROLE)|${GP_NODE_ROLE:-k8s-gp-node}|g" \
+    -e "s|\$(SPARK_NODE_ROLE)|${SPARK_NODE_ROLE:-spark-node}|g" \
+    -e "s|\$(MINIO_NODE_ROLE)|${MINIO_NODE_ROLE:-minio-worker}|g" \
+    -e "s|\$(CONTROL_PLANE_NODE_ROLE)|${CONTROL_PLANE_NODE_ROLE:-control-plane}|g" \
+    -e "s|\$(SUPERSET_NODE_REPLICAS)|${SUPERSET_NODE_REPLICAS:-2}|g" \
+    -e "s|\$(SUPERSET_NODE_CPU_REQUEST)|${SUPERSET_NODE_CPU_REQUEST:-1000m}|g" \
+    -e "s|\$(SUPERSET_NODE_CPU_LIMIT)|${SUPERSET_NODE_CPU_LIMIT:-2000m}|g" \
+    -e "s|\$(SUPERSET_NODE_MEM_REQUEST)|${SUPERSET_NODE_MEM_REQUEST:-2Gi}|g" \
+    -e "s|\$(SUPERSET_NODE_MEM_LIMIT)|${SUPERSET_NODE_MEM_LIMIT:-4Gi}|g" \
+    -e "s|\$(SUPERSET_WORKER_REPLICAS)|${SUPERSET_WORKER_REPLICAS:-2}|g" \
+    -e "s|\$(SUPERSET_WORKER_CPU_REQUEST)|${SUPERSET_WORKER_CPU_REQUEST:-1000m}|g" \
+    -e "s|\$(SUPERSET_WORKER_CPU_LIMIT)|${SUPERSET_WORKER_CPU_LIMIT:-2000m}|g" \
+    -e "s|\$(SUPERSET_WORKER_MEM_REQUEST)|${SUPERSET_WORKER_MEM_REQUEST:-2Gi}|g" \
+    -e "s|\$(SUPERSET_WORKER_MEM_LIMIT)|${SUPERSET_WORKER_MEM_LIMIT:-4Gi}|g" \
+    -e "s|\$(SUPERSET_BEAT_CPU_REQUEST)|${SUPERSET_BEAT_CPU_REQUEST:-250m}|g" \
+    -e "s|\$(SUPERSET_BEAT_CPU_LIMIT)|${SUPERSET_BEAT_CPU_LIMIT:-500m}|g" \
+    -e "s|\$(SUPERSET_BEAT_MEM_REQUEST)|${SUPERSET_BEAT_MEM_REQUEST:-256Mi}|g" \
+    -e "s|\$(SUPERSET_BEAT_MEM_LIMIT)|${SUPERSET_BEAT_MEM_LIMIT:-512Mi}|g" \
+    -e "s|\$(SUPERSET_INIT_CPU_REQUEST)|${SUPERSET_INIT_CPU_REQUEST:-500m}|g" \
+    -e "s|\$(SUPERSET_INIT_CPU_LIMIT)|${SUPERSET_INIT_CPU_LIMIT:-1000m}|g" \
+    -e "s|\$(SUPERSET_INIT_MEM_REQUEST)|${SUPERSET_INIT_MEM_REQUEST:-1Gi}|g" \
+    -e "s|\$(SUPERSET_INIT_MEM_LIMIT)|${SUPERSET_INIT_MEM_LIMIT:-2Gi}|g" \
+    -e "s|\$(PROMETHEUS_STORAGE)|${PROMETHEUS_STORAGE:-10Gi}|g" \
+    -e "s|\$(PROMETHEUS_RETENTION)|${PROMETHEUS_RETENTION:-168h}|g" \
+    "$1"
+}
+export KUBECONFIG=/home/subhodeep/Documents/terraform-aws-k8s-ha/kubeconfig.yaml
 
 # Connectivity Check
 if ! kubectl cluster-info > /dev/null 2>&1; then
@@ -62,14 +94,17 @@ kubectl patch svc traefik -n kube-system -p '{"spec":{"ports":[{"name":"traefik"
 # 2.2 Spark Operator
 helm repo add spark-operator https://kubeflow.github.io/spark-operator
 helm repo update spark-operator
+_TMP_SPARK_OP=$(mktemp)
+subst_vars k8s-platform-v2/03-apps/spark-operator-values.yaml > "$_TMP_SPARK_OP"
 helm template spark-operator spark-operator/spark-operator \
   --namespace default \
   --version 2.4.0 \
   --include-crds \
   --api-versions="monitoring.coreos.com/v1/PodMonitor" \
   --set webhook.enable=true \
-  -f k8s-platform-v2/03-apps/spark-operator-values.yaml \
+  -f "$_TMP_SPARK_OP" \
   > k8s-platform-v2/03-apps/charts/gen/spark-operator.yaml
+rm -f "$_TMP_SPARK_OP"
 
 # 2.2 Superset
 echo "Generating secure SUPERSET_SECRET_KEY..."
@@ -77,12 +112,15 @@ SUPERSET_SECRET_KEY=$(openssl rand -base64 42)
 
 helm repo add superset https://apache.github.io/superset
 helm repo update superset
+_TMP_SUPERSET=$(mktemp)
+subst_vars k8s-platform-v2/03-apps/superset-values.yaml > "$_TMP_SUPERSET"
 helm template superset superset/superset \
   --namespace default \
   --version 0.12.0 \
-  -f k8s-platform-v2/03-apps/superset-values.yaml | \
+  -f "$_TMP_SUPERSET" | \
   sed "s|__SUPERSET_SECRET_KEY__|$SUPERSET_SECRET_KEY|g" \
   > k8s-platform-v2/03-apps/charts/gen/superset.yaml
+rm -f "$_TMP_SUPERSET"
 
 # 2.3 Monitoring Stack
 mkdir -p k8s-platform-v2/05-monitoring/charts/gen
@@ -90,12 +128,15 @@ mkdir -p k8s-platform-v2/05-monitoring/charts/gen
 # kube-prometheus-stack
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update prometheus-community
+_TMP_PROM=$(mktemp)
+subst_vars k8s-platform-v2/05-monitoring/values-prometheus.yaml > "$_TMP_PROM"
 helm template kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   --namespace default \
   --version 56.6.2 \
   --include-crds \
-  -f k8s-platform-v2/05-monitoring/values-prometheus.yaml \
+  -f "$_TMP_PROM" \
   > k8s-platform-v2/05-monitoring/charts/gen/kube-prometheus-stack.yaml
+rm -f "$_TMP_PROM"
 
 # loki-stack
 helm repo add grafana https://grafana.github.io/helm-charts
@@ -172,13 +213,77 @@ echo "Deploying Stack to $INGRESS_DOMAIN..."
 # Apply Manifests
 # Note: piped through sed to replace variables using .env values
 kubectl kustomize --enable-helm ./k8s-platform-v2 | \
-  sed "s/\$(INGRESS_DOMAIN)/$INGRESS_DOMAIN/g" | \
+  sed "s|\$(INGRESS_DOMAIN)|$INGRESS_DOMAIN|g" | \
   sed "s|\$(SPARK_IMAGE)|$SPARK_IMAGE|g" | \
   sed "s|\$(JUPYTERHUB_IMAGE)|$JUPYTERHUB_IMAGE|g" | \
   sed "s|\$(MINIO_ENDPOINT)|$MINIO_ENDPOINT|g" | \
   sed "s|\$(AWS_ACCESS_KEY_ID)|$MINIO_ROOT_USER|g" | \
   sed "s|\$(AWS_SECRET_ACCESS_KEY)|$MINIO_ROOT_PASSWORD|g" | \
-  sed "s/$STATIC_DOMAIN_TO_REPLACE/$INGRESS_DOMAIN/g" > generated-manifests.yaml
+  sed "s|$STATIC_DOMAIN_TO_REPLACE|$INGRESS_DOMAIN|g" | \
+  sed \
+    -e "s|\$(GP_NODE_ROLE)|${GP_NODE_ROLE:-k8s-gp-node}|g" \
+    -e "s|\$(SPARK_NODE_ROLE)|${SPARK_NODE_ROLE:-spark-node}|g" \
+    -e "s|\$(MINIO_NODE_ROLE)|${MINIO_NODE_ROLE:-minio-worker}|g" \
+    -e "s|\$(POSTGRES_REPLICAS)|${POSTGRES_REPLICAS:-1}|g" \
+    -e "s|\$(POSTGRES_CPU_REQUEST)|${POSTGRES_CPU_REQUEST:-500m}|g" \
+    -e "s|\$(POSTGRES_CPU_LIMIT)|${POSTGRES_CPU_LIMIT:-1000m}|g" \
+    -e "s|\$(POSTGRES_MEM_REQUEST)|${POSTGRES_MEM_REQUEST:-1Gi}|g" \
+    -e "s|\$(POSTGRES_MEM_LIMIT)|${POSTGRES_MEM_LIMIT:-2Gi}|g" \
+    -e "s|\$(MINIO_REPLICAS)|${MINIO_REPLICAS:-1}|g" \
+    -e "s|\$(MINIO_CPU_REQUEST)|${MINIO_CPU_REQUEST:-500m}|g" \
+    -e "s|\$(MINIO_CPU_LIMIT)|${MINIO_CPU_LIMIT:-1000m}|g" \
+    -e "s|\$(MINIO_MEM_REQUEST)|${MINIO_MEM_REQUEST:-1Gi}|g" \
+    -e "s|\$(MINIO_MEM_LIMIT)|${MINIO_MEM_LIMIT:-2Gi}|g" \
+    -e "s|\$(REDIS_REPLICAS)|${REDIS_REPLICAS:-1}|g" \
+    -e "s|\$(REDIS_CPU_REQUEST)|${REDIS_CPU_REQUEST:-1000m}|g" \
+    -e "s|\$(REDIS_CPU_LIMIT)|${REDIS_CPU_LIMIT:-1500m}|g" \
+    -e "s|\$(REDIS_MEM_REQUEST)|${REDIS_MEM_REQUEST:-2048Mi}|g" \
+    -e "s|\$(REDIS_MEM_LIMIT)|${REDIS_MEM_LIMIT:-3072Mi}|g" \
+    -e "s|\$(AIRFLOW_WEBSERVER_REPLICAS)|${AIRFLOW_WEBSERVER_REPLICAS:-1}|g" \
+    -e "s|\$(AIRFLOW_WEBSERVER_CPU_REQUEST)|${AIRFLOW_WEBSERVER_CPU_REQUEST:-500m}|g" \
+    -e "s|\$(AIRFLOW_WEBSERVER_CPU_LIMIT)|${AIRFLOW_WEBSERVER_CPU_LIMIT:-1000m}|g" \
+    -e "s|\$(AIRFLOW_WEBSERVER_MEM_REQUEST)|${AIRFLOW_WEBSERVER_MEM_REQUEST:-0.5Gi}|g" \
+    -e "s|\$(AIRFLOW_WEBSERVER_MEM_LIMIT)|${AIRFLOW_WEBSERVER_MEM_LIMIT:-1Gi}|g" \
+    -e "s|\$(AIRFLOW_SCHEDULER_REPLICAS)|${AIRFLOW_SCHEDULER_REPLICAS:-1}|g" \
+    -e "s|\$(AIRFLOW_SCHEDULER_CPU_REQUEST)|${AIRFLOW_SCHEDULER_CPU_REQUEST:-1000m}|g" \
+    -e "s|\$(AIRFLOW_SCHEDULER_CPU_LIMIT)|${AIRFLOW_SCHEDULER_CPU_LIMIT:-2000m}|g" \
+    -e "s|\$(AIRFLOW_SCHEDULER_MEM_REQUEST)|${AIRFLOW_SCHEDULER_MEM_REQUEST:-1Gi}|g" \
+    -e "s|\$(AIRFLOW_SCHEDULER_MEM_LIMIT)|${AIRFLOW_SCHEDULER_MEM_LIMIT:-1.5Gi}|g" \
+    -e "s|\$(SPARK_CONNECT_REPLICAS)|${SPARK_CONNECT_REPLICAS:-1}|g" \
+    -e "s|\$(SPARK_CONNECT_CPU_REQUEST)|${SPARK_CONNECT_CPU_REQUEST:-500m}|g" \
+    -e "s|\$(SPARK_CONNECT_CPU_LIMIT)|${SPARK_CONNECT_CPU_LIMIT:-1000m}|g" \
+    -e "s|\$(SPARK_CONNECT_MEM_REQUEST)|${SPARK_CONNECT_MEM_REQUEST:-1Gi}|g" \
+    -e "s|\$(SPARK_CONNECT_MEM_LIMIT)|${SPARK_CONNECT_MEM_LIMIT:-2Gi}|g" \
+    -e "s|\$(SPARK_HISTORY_REPLICAS)|${SPARK_HISTORY_REPLICAS:-1}|g" \
+    -e "s|\$(SPARK_HISTORY_CPU_REQUEST)|${SPARK_HISTORY_CPU_REQUEST:-1000m}|g" \
+    -e "s|\$(SPARK_HISTORY_CPU_LIMIT)|${SPARK_HISTORY_CPU_LIMIT:-1500m}|g" \
+    -e "s|\$(SPARK_HISTORY_MEM_REQUEST)|${SPARK_HISTORY_MEM_REQUEST:-1Gi}|g" \
+    -e "s|\$(SPARK_HISTORY_MEM_LIMIT)|${SPARK_HISTORY_MEM_LIMIT:-1.5Gi}|g" \
+    -e "s|\$(JUPYTERHUB_REPLICAS)|${JUPYTERHUB_REPLICAS:-1}|g" \
+    -e "s|\$(JUPYTERHUB_CPU_REQUEST)|${JUPYTERHUB_CPU_REQUEST:-500m}|g" \
+    -e "s|\$(JUPYTERHUB_CPU_LIMIT)|${JUPYTERHUB_CPU_LIMIT:-1000m}|g" \
+    -e "s|\$(JUPYTERHUB_MEM_REQUEST)|${JUPYTERHUB_MEM_REQUEST:-1Gi}|g" \
+    -e "s|\$(JUPYTERHUB_MEM_LIMIT)|${JUPYTERHUB_MEM_LIMIT:-2Gi}|g" \
+    -e "s|\$(HIVE_REPLICAS)|${HIVE_REPLICAS:-1}|g" \
+    -e "s|\$(HIVE_METASTORE_CPU_REQUEST)|${HIVE_METASTORE_CPU_REQUEST:-500m}|g" \
+    -e "s|\$(HIVE_METASTORE_CPU_LIMIT)|${HIVE_METASTORE_CPU_LIMIT:-1000m}|g" \
+    -e "s|\$(HIVE_METASTORE_MEM_REQUEST)|${HIVE_METASTORE_MEM_REQUEST:-1Gi}|g" \
+    -e "s|\$(HIVE_METASTORE_MEM_LIMIT)|${HIVE_METASTORE_MEM_LIMIT:-2Gi}|g" \
+    -e "s|\$(HIVE_SERVER_CPU_REQUEST)|${HIVE_SERVER_CPU_REQUEST:-500m}|g" \
+    -e "s|\$(HIVE_SERVER_CPU_LIMIT)|${HIVE_SERVER_CPU_LIMIT:-1000m}|g" \
+    -e "s|\$(HIVE_SERVER_MEM_REQUEST)|${HIVE_SERVER_MEM_REQUEST:-1Gi}|g" \
+    -e "s|\$(HIVE_SERVER_MEM_LIMIT)|${HIVE_SERVER_MEM_LIMIT:-2Gi}|g" \
+    -e "s|\$(STARROCKS_FE_REPLICAS)|${STARROCKS_FE_REPLICAS:-1}|g" \
+    -e "s|\$(STARROCKS_FE_CPU_REQUEST)|${STARROCKS_FE_CPU_REQUEST:-500m}|g" \
+    -e "s|\$(STARROCKS_FE_CPU_LIMIT)|${STARROCKS_FE_CPU_LIMIT:-2000m}|g" \
+    -e "s|\$(STARROCKS_FE_MEM_REQUEST)|${STARROCKS_FE_MEM_REQUEST:-2Gi}|g" \
+    -e "s|\$(STARROCKS_FE_MEM_LIMIT)|${STARROCKS_FE_MEM_LIMIT:-4Gi}|g" \
+    -e "s|\$(STARROCKS_BE_REPLICAS)|${STARROCKS_BE_REPLICAS:-1}|g" \
+    -e "s|\$(STARROCKS_BE_CPU_REQUEST)|${STARROCKS_BE_CPU_REQUEST:-500m}|g" \
+    -e "s|\$(STARROCKS_BE_CPU_LIMIT)|${STARROCKS_BE_CPU_LIMIT:-2000m}|g" \
+    -e "s|\$(STARROCKS_BE_MEM_REQUEST)|${STARROCKS_BE_MEM_REQUEST:-2Gi}|g" \
+    -e "s|\$(STARROCKS_BE_MEM_LIMIT)|${STARROCKS_BE_MEM_LIMIT:-4Gi}|g" \
+  > generated-manifests.yaml
 
 # Pre-cleanup to avoid immutable field errors
 echo "Pre-cleaning immutable resources..."

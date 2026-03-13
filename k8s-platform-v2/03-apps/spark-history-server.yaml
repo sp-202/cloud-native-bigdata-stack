@@ -4,7 +4,7 @@ metadata:
   name: spark-history-server
   namespace: default
 spec:
-  replicas: 1
+  replicas: $(SPARK_HISTORY_REPLICAS)
   selector:
     matchLabels:
       app: spark-history-server
@@ -15,7 +15,7 @@ spec:
     spec:
       # --- Pinning to Spark Node ---
       nodeSelector:
-        node-role.kubernetes.io/spark-node: ""
+        node-role.kubernetes.io/$(SPARK_NODE_ROLE): ""
       containers:
         - name: spark-history-server
           image: $(SPARK_IMAGE)
@@ -26,11 +26,11 @@ spec:
             ]
           resources:
             requests:
-              cpu: "1000m"
-              memory: "1Gi"
+              cpu: "$(SPARK_HISTORY_CPU_REQUEST)"
+              memory: "$(SPARK_HISTORY_MEM_REQUEST)"
             limits:
-              cpu: "1500m"
-              memory: "1.5Gi"
+              cpu: "$(SPARK_HISTORY_CPU_LIMIT)"
+              memory: "$(SPARK_HISTORY_MEM_LIMIT)"
           env:
             - name: SPARK_DAEMON_MEMORY
               value: "1g"

@@ -4,7 +4,7 @@
 
 # -- Pin Spark Operator controller to the generic workload node
 nodeSelector:
-  node-role.kubernetes.io/k8s-gp-node: ""
+  node-role.kubernetes.io/$(GP_NODE_ROLE): ""
 
 webhook:
   # Webhook is enabled by default in 2.4.0
@@ -12,7 +12,7 @@ webhook:
 
   # -- Pin Webhook pods to the generic workload node
   nodeSelector:
-    node-role.kubernetes.io/k8s-gp-node: ""
+    node-role.kubernetes.io/$(GP_NODE_ROLE): ""
 
 prometheus:
   metrics:

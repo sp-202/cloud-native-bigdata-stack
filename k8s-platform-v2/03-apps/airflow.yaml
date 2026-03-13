@@ -4,7 +4,7 @@ metadata:
   name: airflow-webserver
   namespace: default
 spec:
-  replicas: 1
+  replicas: $(AIRFLOW_WEBSERVER_REPLICAS)
   selector:
     matchLabels:
       app: airflow-webserver
@@ -15,7 +15,7 @@ spec:
     spec:
       # --- Pinning to GP Node ---
       nodeSelector:
-        node-role.kubernetes.io/k8s-gp-node: ""
+        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
       securityContext:
         fsGroup: 50000
       initContainers:
@@ -31,11 +31,11 @@ spec:
           args: ["webserver"]
           resources:
             requests:
-              cpu: "500m"
-              memory: "0.5Gi"
+              cpu: "$(AIRFLOW_WEBSERVER_CPU_REQUEST)"
+              memory: "$(AIRFLOW_WEBSERVER_MEM_REQUEST)"
             limits:
-              cpu: "1000m"
-              memory: "1Gi"
+              cpu: "$(AIRFLOW_WEBSERVER_CPU_LIMIT)"
+              memory: "$(AIRFLOW_WEBSERVER_MEM_LIMIT)"
           env:
             - name: AIRFLOW__CORE__EXECUTOR
               value: "LocalExecutor"
@@ -71,7 +71,7 @@ metadata:
   name: airflow-scheduler
   namespace: default
 spec:
-  replicas: 1
+  replicas: $(AIRFLOW_SCHEDULER_REPLICAS)
   selector:
     matchLabels:
       app: airflow-scheduler
@@ -82,7 +82,7 @@ spec:
     spec:
       # --- Pinning to GP Node ---
       nodeSelector:
-        node-role.kubernetes.io/k8s-gp-node: ""
+        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
       securityContext:
         fsGroup: 50000
       containers:
@@ -91,11 +91,11 @@ spec:
           args: ["scheduler"]
           resources:
             requests:
-              cpu: "1000m"
-              memory: "1Gi"
+              cpu: "$(AIRFLOW_SCHEDULER_CPU_REQUEST)"
+              memory: "$(AIRFLOW_SCHEDULER_MEM_REQUEST)"
             limits:
-              cpu: "2000m"
-              memory: "1.5Gi"
+              cpu: "$(AIRFLOW_SCHEDULER_CPU_LIMIT)"
+              memory: "$(AIRFLOW_SCHEDULER_MEM_LIMIT)"
           env:
             - name: AIRFLOW__CORE__EXECUTOR
               value: "LocalExecutor"

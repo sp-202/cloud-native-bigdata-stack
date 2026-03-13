@@ -6,7 +6,7 @@ metadata:
   labels:
     app: jupyterhub
 spec:
-  replicas: 1
+  replicas: $(JUPYTERHUB_REPLICAS)
   selector:
     matchLabels:
       app: jupyterhub
@@ -17,7 +17,7 @@ spec:
     spec:
       # Fix 1: nodeSelector value must be "true" not ""
       nodeSelector:
-        node-role.kubernetes.io/k8s-gp-node: "true"
+        node-role.kubernetes.io/$(GP_NODE_ROLE): "true"
       serviceAccountName: jupyterhub
       
       # Fix 2: wait for MinIO before starting JupyterHub
@@ -76,11 +76,11 @@ spec:
 
           resources:
             requests:
-              memory: "1Gi"
-              cpu: "500m"
+              memory: "$(JUPYTERHUB_MEM_REQUEST)"
+              cpu: "$(JUPYTERHUB_CPU_REQUEST)"
             limits:
-              memory: "2Gi"
-              cpu: "1000m"
+              memory: "$(JUPYTERHUB_MEM_LIMIT)"
+              cpu: "$(JUPYTERHUB_CPU_LIMIT)"
 
           # Fix 3: add probes so k8s waits for jupyter to actually be ready
           readinessProbe:
