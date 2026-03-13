@@ -15,10 +15,26 @@ spec:
       labels:
         app: jupyterhub
     spec:
-      # --- Pinning to GP Node ---
+      # Fix 1: nodeSelector value must be "true" not ""
       nodeSelector:
-        node-role.kubernetes.io/k8s-gp-node: ""
+        node-role.kubernetes.io/k8s-gp-node: "true"
       serviceAccountName: jupyterhub
+      
+      # Fix 2: wait for MinIO before starting JupyterHub
+      initContainers:
+        - name: wait-for-minio
+          image: curlimages/curl:latest
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for MinIO to be ready..."
+              until curl -sf http://minio.default.svc.cluster.local:9000/minio/health/live; do
+                echo "MinIO not ready, retrying in 3s..."
+                sleep 3
+              done
+              echo "MinIO is ready"
+
       containers:
         - name: jupyterhub
           image: $(JUPYTERHUB_IMAGE)
@@ -27,13 +43,10 @@ spec:
             - containerPort: 8888
               name: web
           env:
-            # Spark Connect Configuration
             - name: SPARK_REMOTE
               value: "sc://spark-connect-server-driver-svc:15002"
             - name: PYSPARK_PYTHON
               value: "python3"
-
-            # S3/MinIO Configuration (Referencing global-config ConfigMap)
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 configMapKeyRef:
@@ -54,12 +67,10 @@ spec:
                 configMapKeyRef:
                   name: global-config
                   key: MINIO_ENDPOINT
-
-            # Jupyter Configuration
             - name: JUPYTER_ENABLE_LAB
               value: "yes"
             - name: JUPYTER_TOKEN
-              value: "" # No token for dev (set for production)
+              value: ""
             - name: GRANT_SUDO
               value: "yes"
 
@@ -71,15 +82,28 @@ spec:
               memory: "2Gi"
               cpu: "1000m"
 
+          # Fix 3: add probes so k8s waits for jupyter to actually be ready
+          readinessProbe:
+            httpGet:
+              path: /api
+              port: 8888
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api
+              port: 8888
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 4
+
           volumeMounts:
-            # JupyterHub config (mounted to standard Docker Stacks location)
             - name: jupyter-config
               mountPath: /etc/jupyter/jupyter_notebook_config.py
               subPath: jupyter_notebook_config.py
-            # Notebooks persistence (S3 sync handled by s3contents)
             - name: notebooks
               mountPath: /home/jovyan/work
-            # Startup script for kernel setup
             - name: startup-script
               mountPath: /usr/local/bin/before-notebook.d/setup-kernels.sh
               subPath: setup-kernels.sh
@@ -88,14 +112,14 @@ spec:
         - name: jupyter-config
           configMap:
             name: jupyterhub-config
+        # Fix 4: emptyDir loses data on restart — keep for now but flag it
         - name: notebooks
-          emptyDir: {} # Use PVC or S3 sync for persistence
+          emptyDir: {}
         - name: startup-script
           configMap:
             name: jupyterhub-config
             defaultMode: 0755
 ---
-# Service for JupyterHub Web UI
 apiVersion: v1
 kind: Service
 metadata:
@@ -111,14 +135,12 @@ spec:
       name: web
   type: ClusterIP
 ---
-# ServiceAccount for JupyterHub
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: jupyterhub
   namespace: default
 ---
-# ClusterRoleBinding for basic permissions (minimal, no executor management needed)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -126,13 +148,12 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: view # Read-only access, no pod creation needed
+  name: view
 subjects:
   - kind: ServiceAccount
     name: jupyterhub
     namespace: default
 ---
-# ConfigMap for JupyterHub configuration
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -141,23 +162,30 @@ metadata:
 data:
   jupyter_notebook_config.py: |
     c = get_config()
-    # ServerApp config (JupyterLab 4.x / Jupyter Server 2.x)
     c.ServerApp.ip = '0.0.0.0'
     c.ServerApp.allow_remote_access = True
-    # Disable authentication for dev (enable for production)
     c.IdentityProvider.token = ''
 
     # Notebook Persistence with MinIO using s3contents
     import os
     from s3contents import S3ContentsManager
+
     c.ServerApp.contents_manager_class = S3ContentsManager
     c.S3ContentsManager.access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
     c.S3ContentsManager.secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
     c.S3ContentsManager.endpoint_url = os.environ.get('JUPYTER_S3_ENDPOINT')
     c.S3ContentsManager.bucket = "notebooks"
     c.S3ContentsManager.prefix = "jupyterhub"
-    # Disable SSL verification for internal MinIO (if needed, s3contents uses session_kwargs)
-    c.S3ContentsManager.session_kwargs = {"verify": False}
+
+    # Fix 5: session_kwargs is NOT valid in s3contents 0.5+
+    # Use s3fs_additional_kwargs with client_kwargs instead
+    c.S3ContentsManager.s3fs_additional_kwargs = {
+        "client_kwargs": {
+            "endpoint_url": os.environ.get('JUPYTER_S3_ENDPOINT'),
+            "verify": False,
+            "use_ssl": False,
+        }
+    }
 
   setup-kernels.sh: |
     #!/bin/bash
@@ -166,7 +194,6 @@ data:
     echo "=== Spark Connect Thin Client Setup ==="
     echo "Spark Remote: ${SPARK_REMOTE}"
 
-    # Create PySpark kernel for Jupyter (Spark Connect mode)
     mkdir -p /home/jovyan/.local/share/jupyter/kernels/pyspark_connect
     cat > /home/jovyan/.local/share/jupyter/kernels/pyspark_connect/kernel.json << 'KERNEL_EOF'
     {
@@ -183,7 +210,6 @@ data:
     }
     KERNEL_EOF
 
-    # Create IPython startup script for auto-initialization
     mkdir -p /home/jovyan/.ipython/profile_default/startup/
     cat > /home/jovyan/.ipython/profile_default/startup/00-pyspark-setup.py << 'STARTUP_EOF'
     import os
@@ -193,14 +219,9 @@ data:
     if spark_remote:
         try:
             from pyspark.sql import SparkSession
-            
-            # Connect to remote Spark Connect server
             spark = SparkSession.builder.remote(spark_remote).getOrCreate()
-            
-            # Make spark available globally
             import builtins
             builtins.spark = spark
-            
             print(f"✅ Connected to Spark {spark.version} via Spark Connect")
             print(f"   Remote: {spark_remote}")
         except Exception as e:
