@@ -17,7 +17,7 @@ spec:
     spec:
       # Fix 1: nodeSelector value must be "true" not ""
       nodeSelector:
-        node-role.kubernetes.io/$(GP_NODE_ROLE): "true"
+        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
       serviceAccountName: jupyterhub
       
       # Fix 2: wait for MinIO before starting JupyterHub
