@@ -43,7 +43,7 @@ subst_vars() {
     -e "s|\$(PROMETHEUS_RETENTION)|${PROMETHEUS_RETENTION:-168h}|g" \
     "$1"
 }
-export KUBECONFIG=/home/subhodeep/Documents/terraform-aws-k8s-ha/kubeconfig.yaml
+export KUBECONFIG=/home/coder/terraform-aws-k8s-ha/kubeconfig.yaml
 
 # Connectivity Check
 if ! kubectl cluster-info > /dev/null 2>&1; then
@@ -90,6 +90,15 @@ helm upgrade --install traefik traefik/traefik \
 
 # No need to patch SVC for dashboard if on HostNetwork, but keeping for internal access if needed
 kubectl patch svc traefik -n kube-system -p '{"spec":{"ports":[{"name":"traefik","port":9000,"targetPort":8080}]}}' || true
+
+# 2.0 Metrics Server (required for kubectl top, HPA)
+echo "Installing Metrics Server..."
+helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+helm repo update metrics-server
+helm upgrade --install metrics-server metrics-server/metrics-server \
+  --namespace kube-system \
+  --set args[0]="--kubelet-insecure-tls" \
+  --timeout 5m
 
 # 2.2 Spark Operator
 helm repo add spark-operator https://kubeflow.github.io/spark-operator

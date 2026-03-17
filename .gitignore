@@ -26,3 +26,4 @@ helm
 *.tar.gz
 linux-amd64/
 logs-from-spark*
+generated-manifests.yaml
