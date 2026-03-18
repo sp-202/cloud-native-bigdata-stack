@@ -128,6 +128,34 @@ MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://minio.default.svc.cluster.local:9000}"
 MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
 MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
 
+# headlamp (Replacing deprecated kubernetes-dashboard)
+echo "Generating headlamp manifests directly (Helm repo 404 bypass)..."
+curl -sL https://raw.githubusercontent.com/headlamp-k8s/headlamp/main/kubernetes-headlamp.yaml > k8s-platform-v2/05-monitoring/charts/gen/headlamp.yaml
+cat <<EOF >> k8s-platform-v2/05-monitoring/charts/gen/headlamp.yaml
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: headlamp
+  namespace: kube-system
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: headlamp.\$(INGRESS_DOMAIN)
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: headlamp
+                port:
+                  number: 80
+EOF
+
 echo "Deploying Stack to $INGRESS_DOMAIN..."
 
 # Apply Manifests
@@ -160,7 +188,7 @@ kubectl wait --for=condition=available --timeout=300s deployment/postgres -n def
 
 echo "Deployment Complete!"
 echo "Superset: http://superset.$INGRESS_DOMAIN"
-echo "k8s-Dashboard: https://dashboard.$INGRESS_DOMAIN"
+echo "k8s-Dashboard: http://headlamp.$INGRESS_DOMAIN"
 echo "JupyterHub: http://jupyterhub.$INGRESS_DOMAIN"
 echo "Minio: http://minio.$INGRESS_DOMAIN"
 echo "Grafana: http://grafana.$INGRESS_DOMAIN"

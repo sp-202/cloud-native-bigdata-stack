@@ -48973,6 +48973,15 @@ apiVersion: v1
 kind: Secret
 metadata:
   annotations:
+    kubernetes.io/service-account.name: headlamp-admin
+  name: headlamp-admin
+  namespace: kube-system
+type: kubernetes.io/service-account-token
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  annotations:
     kubernetes.io/service-account.name: admin-user
   name: admin-user-secret
   namespace: kubernetes-dashboard
@@ -49510,6 +49519,18 @@ spec:
     app.kubernetes.io/name: redis
   sessionAffinity: None
   type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: headlamp
+  namespace: kube-system
+spec:
+  ports:
+  - port: 80
+    targetPort: 4466
+  selector:
+    k8s-app: headlamp
 ---
 apiVersion: v1
 kind: Service
@@ -51166,6 +51187,60 @@ spec:
       - name: superset-config
         secret:
           secretName: superset-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: headlamp
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: headlamp
+  template:
+    metadata:
+      labels:
+        k8s-app: headlamp
+    spec:
+      containers:
+      - args:
+        - -in-cluster
+        - -plugins-dir=/headlamp/plugins
+        env:
+        - name: HEADLAMP_CONFIG_TRACING_ENABLED
+          value: "true"
+        - name: HEADLAMP_CONFIG_METRICS_ENABLED
+          value: "true"
+        - name: HEADLAMP_CONFIG_OTLP_ENDPOINT
+          value: otel-collector:4317
+        - name: HEADLAMP_CONFIG_SERVICE_NAME
+          value: headlamp
+        - name: HEADLAMP_CONFIG_SERVICE_VERSION
+          value: latest
+        image: ghcr.io/headlamp-k8s/headlamp:latest
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 4466
+            scheme: HTTP
+          initialDelaySeconds: 30
+          timeoutSeconds: 30
+        name: headlamp
+        ports:
+        - containerPort: 4466
+          name: http
+        - containerPort: 9090
+          name: metrics
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 4466
+            scheme: HTTP
+          initialDelaySeconds: 30
+          timeoutSeconds: 30
+      nodeSelector:
+        kubernetes.io/os: linux
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -56558,6 +56633,27 @@ spec:
               number: 8030
         path: /
         pathType: Prefix
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+  name: headlamp
+  namespace: kube-system
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: headlamp.172.30.1.145.sslip.io
+    http:
+      paths:
+      - backend:
+          service:
+            name: headlamp
+            port:
+              number: 80
+        path: /
+        pathType: ImplementationSpecific
 ---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
