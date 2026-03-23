@@ -6,3 +6,12 @@ resources:
   - traefik-ingressroute.yaml
   - hubble-ui-ingressroute.yaml
   - traefik-transport.yaml
+  # Cloudflare Tunnel (cloudflared)
+  - cloudflared-namespace.yaml
+  - cloudflared-rbac.yaml
+  - cloudflared-config.yaml
+  - cloudflared-deployment.yaml
+  - cloudflared-pdb.yaml
+  - cloudflared-networkpolicy.yaml
+  - cloudflared-service.yaml
+  - cloudflared-servicemonitor.yaml

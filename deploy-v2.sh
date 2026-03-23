@@ -13,6 +13,11 @@ else
     echo "WARNING: global-resource.env not found in project root. Using hardcoded values."
 fi
 
+# Load .env early (needed for CF_* variables before tunnel setup)
+if [ -f .env ]; then
+  source .env
+fi
+
 # Helper: resolve all $(VAR) placeholders from global-resource.env in a file.
 # Usage: subst_vars <input_file>  →  outputs resolved content to stdout
 subst_vars() {
@@ -43,7 +48,7 @@ subst_vars() {
     -e "s|\$(PROMETHEUS_RETENTION)|${PROMETHEUS_RETENTION:-168h}|g" \
     "$1"
 }
-export KUBECONFIG=/home/coder/terraform-aws-k8s-ha/kubeconfig.yaml
+# export KUBECONFIG=/home/coder/terraform-aws-k8s-ha/kubeconfig.yaml
 
 # Connectivity Check
 if ! kubectl cluster-info > /dev/null 2>&1; then
@@ -76,7 +81,7 @@ STATIC_DOMAIN_TO_REPLACE="34.239.93.55.sslip.io"
 echo "Generating Helm manifests..."
 mkdir -p k8s-platform-v2/03-apps/charts/gen
 
-# 2.1 Traefik Ingress Controller (pinned to control-plane, hostNetwork for bare-metal)
+# 2.1 Traefik Ingress Controller (ClusterIP — cloudflared tunnels external traffic)
 echo "Installing Traefik..."
 helm repo add traefik https://traefik.github.io/charts
 helm repo update traefik
@@ -88,8 +93,34 @@ helm upgrade --install traefik traefik/traefik \
   -f k8s-platform-v2/01-networking/values-traefik.yaml \
   --timeout 10m
 
-# No need to patch SVC for dashboard if on HostNetwork, but keeping for internal access if needed
+# Patch Traefik dashboard port for internal access
 kubectl patch svc traefik -n kube-system -p '{"spec":{"ports":[{"name":"traefik","port":9000,"targetPort":8080}]}}' || true
+
+# ---------------------------------------------------
+# 2.1.1 Cloudflare Tunnel (cloudflared)
+# ---------------------------------------------------
+echo "Setting up Cloudflare Tunnel..."
+
+# Validate required Cloudflare variables
+if [ -z "$CF_TUNNEL_ID" ] || [ -z "$CF_TUNNEL_CREDENTIALS" ] || [ -z "$CF_DOMAIN" ]; then
+    echo "ERROR: CF_TUNNEL_ID, CF_TUNNEL_CREDENTIALS, and CF_DOMAIN must be set in .env"
+    echo "  CF_TUNNEL_ID=<uuid>              # from: cloudflared tunnel create"
+    echo "  CF_TUNNEL_CREDENTIALS=<json>      # from: ~/.cloudflared/<tunnel-id>.json (base64 encoded)"
+    echo "  CF_DOMAIN=yourdomain.com"
+    exit 1
+fi
+
+# Create cloudflare namespace (idempotent)
+kubectl create namespace cloudflare 2>/dev/null || true
+
+# Create/update tunnel credentials secret (decode base64 → raw JSON for cloudflared)
+CF_TUNNEL_CREDS_JSON=$(echo "$CF_TUNNEL_CREDENTIALS" | base64 -d)
+kubectl create secret generic cloudflared-credentials \
+  --namespace cloudflare \
+  --from-literal=credentials.json="$CF_TUNNEL_CREDS_JSON" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+echo "Cloudflare Tunnel configured for domain: $CF_DOMAIN"
 
 # 2.0 Metrics Server (required for kubectl top, HPA)
 echo "Installing Metrics Server..."
@@ -188,21 +219,26 @@ EOF
 # 3. Environment Setup & Deployment
 # ---------------------------------------------------
 
-# Determine Ingress Domain (K3s usually uses Node IP or sslip.io)
-# If global-config.env exists, use it, otherwise try to detect or fallback
+# Determine Ingress Domain
+# With Cloudflare Tunnel: uses CF_DOMAIN from .env
+# Fallback: Node IP with sslip.io (legacy / local dev)
 EXTERNAL_IP=""
 if [ -f "k8s-platform-v2/04-configs/global-config.env" ]; then
     source k8s-platform-v2/04-configs/global-config.env
 fi
 
-if [ -z "$INGRESS_DOMAIN" ]; then
-    # Try to detect Node IP for K3s
+# CF_DOMAIN takes precedence (Cloudflare Tunnel mode)
+if [ -n "$CF_DOMAIN" ]; then
+    INGRESS_DOMAIN="$CF_DOMAIN"
+    echo "Using Cloudflare domain: $INGRESS_DOMAIN"
+elif [ -z "$INGRESS_DOMAIN" ]; then
+    # Fallback: detect Node IP (legacy / local dev)
     NODE_IP=$(kubectl get node -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
     if [ -n "$NODE_IP" ]; then
         INGRESS_DOMAIN="${NODE_IP}.sslip.io"
-        echo "Auto-detected K3s Domain: $INGRESS_DOMAIN"
+        echo "Auto-detected domain: $INGRESS_DOMAIN"
     else
-        echo "Could not detect Ingress Domain. Please set INGRESS_DOMAIN in k8s-platform-v2/04-configs/global-config.env"
+        echo "Could not detect Ingress Domain. Set CF_DOMAIN in .env or INGRESS_DOMAIN in global-config.env"
         exit 1
     fi
 fi
@@ -223,6 +259,8 @@ echo "Deploying Stack to $INGRESS_DOMAIN..."
 # Note: piped through sed to replace variables using .env values
 kubectl kustomize --enable-helm ./k8s-platform-v2 | \
   sed "s|\$(INGRESS_DOMAIN)|$INGRESS_DOMAIN|g" | \
+  sed "s|\$(CF_DOMAIN)|${CF_DOMAIN}|g" | \
+  sed "s|\$(CF_TUNNEL_ID)|${CF_TUNNEL_ID}|g" | \
   sed "s|\$(SPARK_IMAGE)|$SPARK_IMAGE|g" | \
   sed "s|\$(JUPYTERHUB_IMAGE)|$JUPYTERHUB_IMAGE|g" | \
   sed "s|\$(MINIO_ENDPOINT)|$MINIO_ENDPOINT|g" | \
@@ -327,14 +365,19 @@ kubectl wait --for=condition=available --timeout=300s deployment/minio -n defaul
 kubectl wait --for=condition=available --timeout=300s deployment/postgres -n default || echo "Postgres wait timed out"
 
 echo "Deployment Complete!"
-echo "Superset: http://superset.$INGRESS_DOMAIN"
-echo "Headlamp UI: http://headlamp.$INGRESS_DOMAIN"
-echo "JupyterHub: http://jupyterhub.$INGRESS_DOMAIN"
-echo "Minio: http://minio.$INGRESS_DOMAIN"
-echo "Grafana: http://grafana.$INGRESS_DOMAIN"
-echo "Spark: http://spark.$INGRESS_DOMAIN"
-echo "Spark-History: http://spark-history.$INGRESS_DOMAIN"
-echo "Hubble UI: http://hubble.$INGRESS_DOMAIN"
+PROTO="http"
+if [ -n "$CF_DOMAIN" ]; then
+    PROTO="https"
+fi
+echo "Superset: $PROTO://superset.$INGRESS_DOMAIN"
+echo "Headlamp UI: $PROTO://headlamp.$INGRESS_DOMAIN"
+echo "JupyterHub: $PROTO://jupyterhub.$INGRESS_DOMAIN"
+echo "Minio: $PROTO://minio.$INGRESS_DOMAIN"
+echo "Grafana: $PROTO://grafana.$INGRESS_DOMAIN"
+echo "Spark: $PROTO://spark.$INGRESS_DOMAIN"
+echo "Spark-History: $PROTO://spark-history.$INGRESS_DOMAIN"
+echo "Hubble UI: $PROTO://hubble.$INGRESS_DOMAIN"
+echo "Airflow: $PROTO://airflow.$INGRESS_DOMAIN"
 
 # ---------------------------------------------------
 # 4. StarRocks Production Fix (Post-Deploy)
