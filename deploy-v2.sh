@@ -220,12 +220,9 @@ EOF
 # ---------------------------------------------------
 
 # Determine Ingress Domain
-# With Cloudflare Tunnel: uses CF_DOMAIN from .env
+# With Cloudflare Tunnel: uses CF_DOMAIN from .env (loaded early)
 # Fallback: Node IP with sslip.io (legacy / local dev)
 EXTERNAL_IP=""
-if [ -f "k8s-platform-v2/04-configs/global-config.env" ]; then
-    source k8s-platform-v2/04-configs/global-config.env
-fi
 
 # CF_DOMAIN takes precedence (Cloudflare Tunnel mode)
 if [ -n "$CF_DOMAIN" ]; then
@@ -241,11 +238,6 @@ elif [ -z "$INGRESS_DOMAIN" ]; then
         echo "Could not detect Ingress Domain. Set CF_DOMAIN in .env or INGRESS_DOMAIN in global-config.env"
         exit 1
     fi
-fi
-
-# Load .env for substitution
-if [ -f .env ]; then
-  source .env
 fi
 
 # Set defaults if not present in .env
