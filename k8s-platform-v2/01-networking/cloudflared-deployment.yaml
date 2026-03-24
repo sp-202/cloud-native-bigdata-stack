@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: cloudflared
     app.kubernetes.io/part-of: cloudflare-tunnel
 spec:
-  replicas: 2
+  replicas: 3
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -69,25 +69,25 @@ spec:
             httpGet:
               path: /ready
               port: metrics
-            initialDelaySeconds: 10
+            initialDelaySeconds: 30
             periodSeconds: 15
             timeoutSeconds: 5
-            failureThreshold: 3
+            failureThreshold: 10
           readinessProbe:
             httpGet:
               path: /ready
               port: metrics
-            initialDelaySeconds: 5
+            initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 2
+            failureThreshold: 3
           resources:
             requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 200m
+              cpu: 100m
               memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
           securityContext:
             runAsUser: 65532
             runAsGroup: 65532
