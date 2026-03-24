@@ -15,3 +15,4 @@ resources:
   - cloudflared-networkpolicy.yaml
   - cloudflared-service.yaml
   - cloudflared-servicemonitor.yaml
+  - cilium-policy/cloudflared-fix.yaml
