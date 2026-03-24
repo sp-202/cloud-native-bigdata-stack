@@ -5,6 +5,7 @@ resources:
   - minio.yaml
   - postgres.yaml
   - db-init-airflow.yaml
+  - redis.yaml
 
 configMapGenerator:
   - name: minio-scripts
