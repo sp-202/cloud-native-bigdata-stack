@@ -4,7 +4,7 @@ FROM apache/hive:4.1.0
 USER root
 
 # Install curl (UBI9-minimal uses microdnf, not apt)
-RUN microdnf install -y curl && microdnf clean all
+# RUN microdnf install -y curl && microdnf clean all
 
 # Download Postgres JDBC driver
 RUN curl -o /opt/hive/lib/postgresql-42.6.0.jar https://jdbc.postgresql.org/download/postgresql-42.6.0.jar
