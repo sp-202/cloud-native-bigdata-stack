@@ -10,6 +10,18 @@ on:
       - "docker/jupyterhub/Dockerfile"
       - "docker/marimo/Dockerfile"
       - "docker/k8s-git-sync/Dockerfile"
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Which image to build"
+        required: true
+        type: choice
+        options:
+          - hive
+          - spark
+          - jupyterhub
+          - marimo
+          - k8s-git-sync
 
 jobs:
   # ────────────────────────────────────────────────
@@ -18,9 +30,9 @@ jobs:
   hive:
     name: Build Hive Image
     runs-on: ubuntu-latest
-    if: |
-      contains(github.event.commits[*].modified[*], 'docker/hive/Dockerfile') ||
-      contains(github.event.commits[*].added[*], 'docker/hive/Dockerfile')
+    if: >
+      github.event_name == 'workflow_dispatch' && github.event.inputs.image == 'hive'
+      || github.event_name == 'push' && contains(toJSON(github.event.commits.*.modified + github.event.commits.*.added), 'docker/hive/Dockerfile')
     steps:
       - uses: actions/checkout@v4
 
@@ -53,9 +65,9 @@ jobs:
   spark:
     name: Build Spark Image
     runs-on: ubuntu-latest
-    if: |
-      contains(github.event.commits[*].modified[*], 'docker/spark/Dockerfile') ||
-      contains(github.event.commits[*].added[*], 'docker/spark/Dockerfile')
+    if: >
+      github.event_name == 'workflow_dispatch' && github.event.inputs.image == 'spark'
+      || github.event_name == 'push' && contains(toJSON(github.event.commits.*.modified + github.event.commits.*.added), 'docker/spark/Dockerfile')
     env:
       SPARK_VERSION: "4.1.1"
       UNITY_CATALOG_VERSION: "0.3.1"
@@ -92,9 +104,9 @@ jobs:
   jupyterhub:
     name: Build JupyterHub Image
     runs-on: ubuntu-latest
-    if: |
-      contains(github.event.commits[*].modified[*], 'docker/jupyterhub/Dockerfile') ||
-      contains(github.event.commits[*].added[*], 'docker/jupyterhub/Dockerfile')
+    if: >
+      github.event_name == 'workflow_dispatch' && github.event.inputs.image == 'jupyterhub'
+      || github.event_name == 'push' && contains(toJSON(github.event.commits.*.modified + github.event.commits.*.added), 'docker/jupyterhub/Dockerfile')
     env:
       JUPYTERHUB_VERSION_TAG: "4.0.7"
       JUPYTERHUB_IMAGE_VERSION_TAG: "prod-v2"
@@ -130,9 +142,9 @@ jobs:
   marimo:
     name: Build Marimo Image
     runs-on: ubuntu-latest
-    if: |
-      contains(github.event.commits[*].modified[*], 'docker/marimo/Dockerfile') ||
-      contains(github.event.commits[*].added[*], 'docker/marimo/Dockerfile')
+    if: >
+      github.event_name == 'workflow_dispatch' && github.event.inputs.image == 'marimo'
+      || github.event_name == 'push' && contains(toJSON(github.event.commits.*.modified + github.event.commits.*.added), 'docker/marimo/Dockerfile')
     steps:
       - uses: actions/checkout@v4
 
@@ -165,9 +177,9 @@ jobs:
   k8s-git-sync:
     name: Build k8s-git-sync Image
     runs-on: ubuntu-latest
-    if: |
-      contains(github.event.commits[*].modified[*], 'docker/k8s-git-sync/Dockerfile') ||
-      contains(github.event.commits[*].added[*], 'docker/k8s-git-sync/Dockerfile')
+    if: >
+      github.event_name == 'workflow_dispatch' && github.event.inputs.image == 'k8s-git-sync'
+      || github.event_name == 'push' && contains(toJSON(github.event.commits.*.modified + github.event.commits.*.added), 'docker/k8s-git-sync/Dockerfile')
     steps:
       - uses: actions/checkout@v4
 
