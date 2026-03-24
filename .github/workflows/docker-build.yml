@@ -1,0 +1,195 @@
+name: Docker Build & Push
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docker/hive/Dockerfile"
+      - "docker/spark/Dockerfile"
+      - "docker/jupyterhub/Dockerfile"
+      - "docker/marimo/Dockerfile"
+      - "docker/k8s-git-sync/Dockerfile"
+
+jobs:
+  # ────────────────────────────────────────────────
+  # Hive
+  # ────────────────────────────────────────────────
+  hive:
+    name: Build Hive Image
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.commits[*].modified[*], 'docker/hive/Dockerfile') ||
+      contains(github.event.commits[*].added[*], 'docker/hive/Dockerfile')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/hive
+          file: docker/hive/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: subhodeep2022/spark-bigdata:hive-4.1.0-custom-prod
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ────────────────────────────────────────────────
+  # Spark
+  # ────────────────────────────────────────────────
+  spark:
+    name: Build Spark Image
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.commits[*].modified[*], 'docker/spark/Dockerfile') ||
+      contains(github.event.commits[*].added[*], 'docker/spark/Dockerfile')
+    env:
+      SPARK_VERSION: "4.1.1"
+      UNITY_CATALOG_VERSION: "0.3.1"
+      SPARK_IMAGE_VERSION: "v8-sedona-h3"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/spark
+          file: docker/spark/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: subhodeep2022/spark-bigdata:spark-${{ env.SPARK_VERSION }}-uc-${{ env.UNITY_CATALOG_VERSION }}-${{ env.SPARK_IMAGE_VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ────────────────────────────────────────────────
+  # JupyterHub
+  # ────────────────────────────────────────────────
+  jupyterhub:
+    name: Build JupyterHub Image
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.commits[*].modified[*], 'docker/jupyterhub/Dockerfile') ||
+      contains(github.event.commits[*].added[*], 'docker/jupyterhub/Dockerfile')
+    env:
+      JUPYTERHUB_VERSION_TAG: "4.0.7"
+      JUPYTERHUB_IMAGE_VERSION_TAG: "prod-v2"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/jupyterhub
+          file: docker/jupyterhub/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: subhodeep2022/spark-bigdata:jupyterhub-${{ env.JUPYTERHUB_VERSION_TAG }}-pyspark-scala-sql-${{ env.JUPYTERHUB_IMAGE_VERSION_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ────────────────────────────────────────────────
+  # Marimo
+  # ────────────────────────────────────────────────
+  marimo:
+    name: Build Marimo Image
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.commits[*].modified[*], 'docker/marimo/Dockerfile') ||
+      contains(github.event.commits[*].added[*], 'docker/marimo/Dockerfile')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/marimo
+          file: docker/marimo/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: subhodeep2022/spark-bigdata:marimo-v1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ────────────────────────────────────────────────
+  # k8s-git-sync
+  # ────────────────────────────────────────────────
+  k8s-git-sync:
+    name: Build k8s-git-sync Image
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.commits[*].modified[*], 'docker/k8s-git-sync/Dockerfile') ||
+      contains(github.event.commits[*].added[*], 'docker/k8s-git-sync/Dockerfile')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/k8s-git-sync
+          file: docker/k8s-git-sync/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: subhodeep2022/k8s-git-sync:v2-prod
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
