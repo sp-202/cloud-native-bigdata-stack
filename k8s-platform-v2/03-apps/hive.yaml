@@ -18,7 +18,7 @@ spec:
         node-role.kubernetes.io/$(GP_NODE_ROLE): ""
       initContainers:
         - name: init-permissions
-          image: subhodeep2022/spark-bigdata:hive-3.1.3-custom-prod
+          image: subhodeep2022/spark-bigdata:hive-4.1.0-custom-prod
           command: ["/bin/bash", "-c"]
           args:
             - "mkdir -p /tmp/hive && chmod 777 /tmp/hive"
@@ -36,7 +36,7 @@ spec:
               mountPath: /tmp/hive
       containers:
         - name: hive-metastore
-          image: subhodeep2022/spark-bigdata:hive-3.1.3-custom-prod
+          image: subhodeep2022/spark-bigdata:hive-4.1.0-custom-prod
           imagePullPolicy: Always
           command: ["/bin/bash", "-c"]
           # Schema Init + Start Metastore
@@ -64,7 +64,7 @@ spec:
               mountPath: /tmp/hive
         # Sidecar: HiveServer2 for JDBC Queries (Superset)
         - name: hive-server
-          image: subhodeep2022/spark-bigdata:hive-3.1.3-custom-prod
+          image: subhodeep2022/spark-bigdata:hive-4.1.0-custom-prod
           imagePullPolicy: Always
           command: ["/bin/bash", "-c"]
           args:

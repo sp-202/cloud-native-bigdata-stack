@@ -20,14 +20,14 @@ spec:
         args:
           - |
             curl -o /mnt/driver/postgresql-42.6.0.jar https://jdbc.postgresql.org/download/postgresql-42.6.0.jar
-            curl -o /mnt/driver/hadoop-aws-3.3.6.jar https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.6/hadoop-aws-3.3.6.jar
+            curl -o /mnt/driver/hadoop-aws-3.4.1.jar https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.4.1/hadoop-aws-3.4.1.jar
             curl -o /mnt/driver/aws-java-sdk-bundle-1.12.367.jar https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.367/aws-java-sdk-bundle-1.12.367.jar
         volumeMounts:
         - name: hive-lib
           mountPath: /mnt/driver
       containers:
       - name: hive-metastore
-        image: apache/hive:4.0.0
+        image: apache/hive:4.1.0
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args:
@@ -47,8 +47,8 @@ spec:
           mountPath: /opt/hive/lib/postgresql-42.6.0.jar
           subPath: postgresql-42.6.0.jar
         - name: hive-lib
-          mountPath: /opt/hive/lib/hadoop-aws-3.3.6.jar
-          subPath: hadoop-aws-3.3.6.jar
+          mountPath: /opt/hive/lib/hadoop-aws-3.4.1.jar
+          subPath: hadoop-aws-3.4.1.jar
         - name: hive-lib
           mountPath: /opt/hive/lib/aws-java-sdk-bundle-1.12.367.jar
           subPath: aws-java-sdk-bundle-1.12.367.jar

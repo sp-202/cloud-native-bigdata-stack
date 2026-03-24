@@ -15,7 +15,7 @@ else
     echo "⚠️  Warning: $ENV_FILE not found, using default values"
 fi
 
-IMAGE_NAME="subhodeep2022/spark-bigdata:hive-3.1.3-custom-prod"
+IMAGE_NAME="subhodeep2022/spark-bigdata:hive-4.1.0-custom-prod"
 DOCKERFILE_PATH="Dockerfile"
 
 echo "=============================================="
