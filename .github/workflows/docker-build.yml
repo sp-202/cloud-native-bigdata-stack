@@ -25,17 +25,50 @@ on:
 
 jobs:
   # ────────────────────────────────────────────────
+  # Detect which Dockerfiles changed (push only)
+  # ────────────────────────────────────────────────
+  detect-changes:
+    name: Detect Changed Dockerfiles
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    outputs:
+      hive: ${{ steps.filter.outputs.hive }}
+      spark: ${{ steps.filter.outputs.spark }}
+      jupyterhub: ${{ steps.filter.outputs.jupyterhub }}
+      marimo: ${{ steps.filter.outputs.marimo }}
+      k8s-git-sync: ${{ steps.filter.outputs.k8s-git-sync }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        run: |
+          BEFORE=${{ github.event.before }}
+          AFTER=${{ github.event.after }}
+          # For new branches, compare against the default branch
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE=$(git rev-parse origin/main)
+          fi
+          CHANGED=$(git diff --name-only "$BEFORE" "$AFTER")
+          echo "hive=$(echo "$CHANGED" | grep -qx 'docker/hive/Dockerfile' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "spark=$(echo "$CHANGED" | grep -qx 'docker/spark/Dockerfile' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "jupyterhub=$(echo "$CHANGED" | grep -qx 'docker/jupyterhub/Dockerfile' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "marimo=$(echo "$CHANGED" | grep -qx 'docker/marimo/Dockerfile' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "k8s-git-sync=$(echo "$CHANGED" | grep -qx 'docker/k8s-git-sync/Dockerfile' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "Changed files:"
+          echo "$CHANGED"
+
+  # ────────────────────────────────────────────────
   # Hive
   # ────────────────────────────────────────────────
   hive:
     name: Build Hive Image
     runs-on: ubuntu-latest
+    needs: [detect-changes]
     if: >-
+      always() &&
       (github.event_name == 'workflow_dispatch' && github.event.inputs.image == 'hive') ||
-      (github.event_name == 'push' && (
-        contains(toJSON(github.event.commits.*.modified), 'docker/hive/Dockerfile') ||
-        contains(toJSON(github.event.commits.*.added), 'docker/hive/Dockerfile')
-      ))
+      (needs.detect-changes.result == 'success' && needs.detect-changes.outputs.hive == 'true')
     steps:
       - uses: actions/checkout@v4
 
@@ -68,12 +101,11 @@ jobs:
   spark:
     name: Build Spark Image
     runs-on: ubuntu-latest
+    needs: [detect-changes]
     if: >-
+      always() &&
       (github.event_name == 'workflow_dispatch' && github.event.inputs.image == 'spark') ||
-      (github.event_name == 'push' && (
-        contains(toJSON(github.event.commits.*.modified), 'docker/spark/Dockerfile') ||
-        contains(toJSON(github.event.commits.*.added), 'docker/spark/Dockerfile')
-      ))
+      (needs.detect-changes.result == 'success' && needs.detect-changes.outputs.spark == 'true')
     env:
       SPARK_VERSION: "4.1.1"
       UNITY_CATALOG_VERSION: "0.3.1"
@@ -110,12 +142,11 @@ jobs:
   jupyterhub:
     name: Build JupyterHub Image
     runs-on: ubuntu-latest
+    needs: [detect-changes]
     if: >-
+      always() &&
       (github.event_name == 'workflow_dispatch' && github.event.inputs.image == 'jupyterhub') ||
-      (github.event_name == 'push' && (
-        contains(toJSON(github.event.commits.*.modified), 'docker/jupyterhub/Dockerfile') ||
-        contains(toJSON(github.event.commits.*.added), 'docker/jupyterhub/Dockerfile')
-      ))
+      (needs.detect-changes.result == 'success' && needs.detect-changes.outputs.jupyterhub == 'true')
     env:
       JUPYTERHUB_VERSION_TAG: "4.0.7"
       JUPYTERHUB_IMAGE_VERSION_TAG: "prod-v2"
@@ -151,12 +182,11 @@ jobs:
   marimo:
     name: Build Marimo Image
     runs-on: ubuntu-latest
+    needs: [detect-changes]
     if: >-
+      always() &&
       (github.event_name == 'workflow_dispatch' && github.event.inputs.image == 'marimo') ||
-      (github.event_name == 'push' && (
-        contains(toJSON(github.event.commits.*.modified), 'docker/marimo/Dockerfile') ||
-        contains(toJSON(github.event.commits.*.added), 'docker/marimo/Dockerfile')
-      ))
+      (needs.detect-changes.result == 'success' && needs.detect-changes.outputs.marimo == 'true')
     steps:
       - uses: actions/checkout@v4
 
@@ -189,12 +219,11 @@ jobs:
   k8s-git-sync:
     name: Build k8s-git-sync Image
     runs-on: ubuntu-latest
+    needs: [detect-changes]
     if: >-
+      always() &&
       (github.event_name == 'workflow_dispatch' && github.event.inputs.image == 'k8s-git-sync') ||
-      (github.event_name == 'push' && (
-        contains(toJSON(github.event.commits.*.modified), 'docker/k8s-git-sync/Dockerfile') ||
-        contains(toJSON(github.event.commits.*.added), 'docker/k8s-git-sync/Dockerfile')
-      ))
+      (needs.detect-changes.result == 'success' && needs.detect-changes.outputs.k8s-git-sync == 'true')
     steps:
       - uses: actions/checkout@v4
 
