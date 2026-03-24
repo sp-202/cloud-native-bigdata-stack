@@ -19,3 +19,4 @@ RUN mkdir -p /home/hive/.beeline && \
     chown -R hive:hive /opt/hive
 
 USER hive
+
