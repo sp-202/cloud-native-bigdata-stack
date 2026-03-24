@@ -1,11 +1,7 @@
 grafana:
   adminPassword: prom-operator
   nodeSelector:
-    node-role.kubernetes.io/$(CONTROL_PLANE_NODE_ROLE): ""
-  tolerations:
-    - key: "node-role.kubernetes.io/$(CONTROL_PLANE_NODE_ROLE)"
-      operator: "Exists"
-      effect: "NoSchedule"
+    node-role.kubernetes.io/$(GP_NODE_ROLE): ""
   additionalDataSources:
     - name: Loki
       type: loki
@@ -22,11 +18,7 @@ grafana:
 prometheus:
   prometheusSpec:
     nodeSelector:
-      node-role.kubernetes.io/$(CONTROL_PLANE_NODE_ROLE): ""
-    tolerations:
-      - key: "node-role.kubernetes.io/$(CONTROL_PLANE_NODE_ROLE)"
-        operator: "Exists"
-        effect: "NoSchedule"
+      node-role.kubernetes.io/$(GP_NODE_ROLE): ""
     podMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelectorNilUsesHelmValues: false
     retention: $(PROMETHEUS_RETENTION)

@@ -250,6 +250,7 @@ echo "Deploying Stack to $INGRESS_DOMAIN..."
 # Apply Manifests
 # Note: piped through sed to replace variables using .env values
 kubectl kustomize --enable-helm ./k8s-platform-v2 | \
+  sed "s|__INGRESS_DOMAIN__|$INGRESS_DOMAIN|g" | \
   sed "s|\$(INGRESS_DOMAIN)|$INGRESS_DOMAIN|g" | \
   sed "s|\$(CF_DOMAIN)|${CF_DOMAIN}|g" | \
   sed "s|\$(CF_TUNNEL_ID)|${CF_TUNNEL_ID}|g" | \
