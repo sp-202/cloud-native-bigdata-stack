@@ -17,6 +17,10 @@ fi
 if [ -f .env ]; then
   source .env
 fi
+# Override with local secrets (not tracked in git)
+if [ -f .env.local ]; then
+  source .env.local
+fi
 
 # Helper: resolve all $(VAR) placeholders from global-resource.env in a file.
 # Usage: subst_vars <input_file>  →  outputs resolved content to stdout
@@ -244,6 +248,15 @@ fi
 MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://minio.default.svc.cluster.local:9000}"
 MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
 MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
+
+# Auto-generate global-config.env for Kustomize ConfigMap (single source of truth: .env)
+cat > k8s-platform-v2/04-configs/global-config.env <<GCEOF
+INGRESS_DOMAIN=${INGRESS_DOMAIN}
+AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
+AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
+MINIO_ENDPOINT=${MINIO_ENDPOINT}
+GCEOF
+echo "Generated k8s-platform-v2/04-configs/global-config.env from .env values"
 
 echo "Deploying Stack to $INGRESS_DOMAIN..."
 
