@@ -1,5 +1,4 @@
-# Secrets / environment files (use *.example templates)
-.env
+# Secrets / environment files
 k8s-platform-v2/04-configs/global-config.env
 
 # Data directories (should not be in git)
