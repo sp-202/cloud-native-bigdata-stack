@@ -1,3 +1,7 @@
+# Secrets / environment files (use *.example templates)
+.env
+k8s-platform-v2/04-configs/global-config.env
+
 # Data directories (should not be in git)
 data/
 superset_bak/
