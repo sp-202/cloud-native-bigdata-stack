@@ -22,12 +22,20 @@ spec:
         securityContext:
           runAsUser: 0
           runAsGroup: 0
-          allowPrivilegeEscalation: false
         env:
           - name: MINIO_ACCESS_KEY
             value: "minioadmin"
           - name: MINIO_SECRET_KEY
             value: "minioadmin"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        ports:
+        - containerPort: 9533
         args:
           - "--repo=https://github.com/sp-202/airflow-dags.git"
           - "--ref=main"
