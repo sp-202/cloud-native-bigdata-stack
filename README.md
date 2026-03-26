@@ -1,7 +1,8 @@
 # 🚀 Cloud-Native Big Data Platform on Kubernetes (Raw K8s / AWS)
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue)](CHANGELOG.md)
 [![Status](https://img.shields.io/badge/status-production--beta-success)](README.md#🚦-project-status)
+[![Docker Build](https://github.com/subhodeep2022/k8s-bigdata-prod/actions/workflows/docker-build.yml/badge.svg)](https://github.com/subhodeep2022/k8s-bigdata-prod/actions/workflows/docker-build.yml)
 
 > An enterprise-grade, cloud-native orchestration framework for distributed big data workloads. Built on self-managed Kubernetes (kubeadm) on AWS EC2 with **Cilium CNI**, this platform provides a decoupled, elastic environment for **Apache Spark**, **Delta Lake**, and **Airflow**, featuring a unified suite of modern interactive notebook environments.
 
@@ -16,7 +17,8 @@ This repository contains a **Data Platform as Code (DPaC)** implementation, desi
 
 ### Architectural Core Principles:
 *   **Decoupled Compute/Storage**: Persistence is offloaded to S3-compatible object storage (MinIO), allowing compute resources (Spark Executors) to remain ephemeral and cost-efficient.
-*   **GitOps-Centric Design**: Every component, from networking routes to database schemas, is defined as declarative Kubernetes manifests for reproducible deployments.
+*   **GitOps-Centric Design**: Every component, from networking routes to database schemas, is defined as declarative Kubernetes manifests for reproducible deployments. Docker images are built and pushed automatically via GitHub Actions CI/CD on every Dockerfile change.
+*   **Zero-Trust Ingress**: External access is routed through Cloudflare Tunnel (`cloudflared`) — no inbound firewall ports needed. Traefik runs as a pure internal `ClusterIP` service.
 *   **High Observability**: Integrated telemetry across the stack provides deep visibility into job performance, resource utilization, and system health.
 
 ---
@@ -28,7 +30,7 @@ This repository contains a **Data Platform as Code (DPaC)** implementation, desi
 | **JupyterHub / Spark** | ✅ Stable    | Core interactive environment                   |
 | **Spark Connect**      | ✅ Stable    | Shared Spark gateway for all clients           |
 | **Delta Lake**         | ✅ Stable    | ACID transactions and Time Travel on S3        |
-| **Hive Metastore**     | ✅ Stable    | Centralized metadata management (Thrift)       |
+| **Hive Metastore**     | ✅ Stable    | Centralized metadata management (Thrift) — Hive 4.1.0 |
 | **Cilium CNI**         | ✅ Stable    | AWS ENI IPAM mode for native VPC networking    |
 | **StarRocks**          | ✅ Stable      | Verified with Native Delta Catalog (OLAP)      |
 | **Airflow + Git-Sync** | ✅ Stable      | DAGs auto-synced from Git repository           |
@@ -46,10 +48,11 @@ The platform is divided into three logical domains:
 
 ### 1️⃣ Ingress & Networking
 *   **Cilium CNI**: Pod networking with AWS ENI IPAM mode. Pods receive real VPC IPs for full AWS compatibility.
-*   **MetalLB**: Provides a network load-balancer implementation, assigning a dedicated Elastic IP (`44.203.26.241`).
-*   **Traefik Proxy**: The unified ingress controller. Handles external traffic on ports `80`/`443` and routes it to internal services. Runs as a `LoadBalancer` service (no `hostNetwork`).
+*   **MetalLB**: Provides a network load-balancer implementation, assigning a dedicated Elastic IP (`44.203.26.241`) for internal cluster use.
+*   **Cloudflare Tunnel (`cloudflared`)**: Replaces public LoadBalancer exposure. A 3-replica HA deployment of `cloudflared` in its own namespace connects outbound to Cloudflare's edge, routing external HTTPS traffic securely to Traefik without opening inbound firewall ports. Includes PodDisruptionBudget, topology spread, NetworkPolicy, RBAC, and Prometheus ServiceMonitor.
+*   **Traefik Proxy**: The unified ingress controller. Operates as `ClusterIP` (not `LoadBalancer`) — receives traffic exclusively from `cloudflared`. Routes requests to internal services. No `hostNetwork`.
 *   **Hubble UI**: Cilium's observability dashboard for real-time network flow visibility.
-*   **SSLIP.IO**: Automatic DNS resolution for LoadBalancer IPs.
+*   **SSLIP.IO**: Automatic DNS resolution for LoadBalancer IPs (internal cluster access).
 
 ### 2️⃣ Application Layer (Blue Domain)
 *   **Apache Airflow (2.x)**: The workflow orchestrator. It schedules DAGs that trigger Spark jobs, move data, and manage dependencies. configured with the **KubernetesExecutor** for scaling tasks.
@@ -57,7 +60,7 @@ The platform is divided into three logical domains:
     *   **JupyterHub**: Standard interactive environment with **Zeppelin features** (SQL magic, Scala kernel, `z.show()`).
     *   **Marimo**: Reactive Python notebooks with high-performance UI components.
     *   **Polynote**: IDE-focused notebook for Scala and multi-language Spark development.
-*   **Apache Spark (4.0.1)**: The distributed compute engine, pre-configured with **Delta Lake** and **Hadoop 3.3.4** support.
+*   **Apache Spark (4.1.1)**: The distributed compute engine, pre-configured with **Delta Lake** and **Hadoop 3.4.1** support.
 *   **Apache Superset**: Enterprise-ready BI. Connects to the platform for data visualization.
 *   **Hive Metastore (HMS)**: Standalone Thrift service acting as the central catalog for Spark and StarRocks.
 
@@ -76,11 +79,11 @@ The platform is divided into three logical domains:
 | Component | Version | Role | Usage |
 | :--- | :--- | :--- | :--- |
 | **Apache Airflow** | `2.10.x` | Orchestrator | Scheduling ETL pipelines |
-| **Spark / Delta** | `4.0.1 / 4.0.1` | Compute / Format | Distributed processing & ACID tables |
-| **Hadoop / AWS SDK** | `3.3.4 / 2.20.160` | Storage Access | S3A FileSystem optimizations |
+| **Spark / Delta** | `4.1.1 / 4.0.1` | Compute / Format | Distributed processing & ACID tables |
+| **Hadoop / AWS SDK** | `3.4.1 / 1.12.367` | Storage Access | S3A FileSystem optimizations |
 | **JupyterHub** | `4.0.7` | Notebooks | Standard Data Engineering workflow |
 | **Marimo / Polynote** | `latest` | Notebooks | Reactive & Multi-language environments |
-| **Hive Metastore** | `3.1.3` | Catalog | Metadata persistence |
+| **Hive Metastore** | `4.1.0` | Catalog | Metadata persistence (arm64 native, JDK 17+) |
 | **StarRocks** | `v3.x` | OLAP Database | Sub-second queries on large datasets |
 | **Apache Superset** | `4.0.x` | BI / Viz | Dashboards & Analytics |
 | **MinIO** | `RELEASE.2024` | Object Store | Data Lake (S3 API) |
@@ -106,6 +109,9 @@ cd k8s-big-data-platform
 ### Step 2: Build Custom Images (Crucial)
 The platform uses optimized images for notebooks and executors. Build and push them to your registry. If you want to customize these images (e.g. adding specific spark dependencies or Python libraries), explore and modify the Dockerfiles within the `docker/` folder before running these scripts:
 ```bash
+# Hive Metastore (arm64-native, Hive 4.1.0)
+docker/hive/build.sh
+
 # Spark Executor & Driver Base
 docker/spark/build.sh
 
@@ -113,6 +119,9 @@ docker/spark/build.sh
 docker/jupyterhub/build.sh
 docker/marimo/build.sh
 ```
+
+> [!TIP]
+> **CI/CD Auto-Build**: Any push to `main` that modifies a `docker/*/Dockerfile` will automatically trigger a multi-arch (`linux/amd64` + `linux/arm64`) build and push via GitHub Actions. You only need to run these scripts manually for local testing. See [`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml).
 
 ### Step 3: Deploy Platform
 Run the main deployment script. This automation handles namespace creation, CRD installation, and Helm chart deployments.
@@ -198,15 +207,19 @@ Superset is pre-connected to the internal Postgres and Hive Metastore.
 
 ## 📂 Repository Structure
 ```bash
+├── .github/workflows/        # CI/CD — auto-build Docker images on Dockerfile change
+│   └── docker-build.yml      # Per-image build jobs (hive, spark, jupyterhub, marimo, k8s-git-sync)
 ├── docker/                   # Custom image source code and Dockerfiles (Customize here!)
+│   ├── hive/                 # Hive 4.1.0 + Postgres JDBC + AWS JARs (arm64 native)
 │   ├── jupyterhub/           # Notebook environment with Spark & Scala
+│   ├── k8s-git-sync/         # Git-sync sidecar for Airflow DAGs
 │   ├── marimo/               # Reactive Python notebook
-│   └── spark/                # Golden Spark image
+│   └── spark/                # Golden Spark image (4.1.1, multi-arch)
 ├── deploy-v2.sh              # Main automation script
 ├── k8s_diagram.drawio.svg    # Architecture Diagram
 ├── k8s-platform-v2/          # V2 Source of Truth (Kustomize)
 │   ├── 00-core/              # Namespaces, OpenEBS StorageClasses, PVCs
-│   ├── 01-networking/        # Cilium, MetalLB, Traefik, Hubble UI
+│   ├── 01-networking/        # Cilium, MetalLB, Traefik (ClusterIP), Cloudflare Tunnel, Hubble UI
 │   ├── 02-database/          # Postgres, MinIO (S3), Redis
 │   ├── 03-apps/              # Airflow, Spark Connect, JupyterHub, Superset
 │   ├── 04-configs/           # Global configs, Spark defaults, Ingress domain

@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.4.0] - 2026-03-26
+
+### 🚀 Added
+- **GitHub Actions CI/CD** (`.github/workflows/docker-build.yml`): Automatic multi-arch (`linux/amd64` + `linux/arm64`) Docker builds triggered on any `docker/*/Dockerfile` change pushed to `main`. Covers all 5 images: `hive`, `spark`, `jupyterhub`, `marimo`, `k8s-git-sync`. Supports `workflow_dispatch` for manual per-image builds.
+- **Cloudflare Tunnel (`cloudflared`)**: Production-grade zero-trust ingress replacing the public LoadBalancer. 3-replica HA deployment in a dedicated `cloudflare` namespace with topology spread constraints, PodDisruptionBudget, NetworkPolicy, RBAC, Prometheus ServiceMonitor, and Cilium policy fix. No inbound firewall ports required.
+
+### 🔄 Changed
+- **Hive Metastore upgraded 3.1.3 → 4.1.0**: Resolves `exec format error` on ARM64 Graviton nodes. `apache/hive:4.1.0` is based on `eclipse-temurin:21-jre-ubi9-minimal` which ships native `linux/arm64` support.
+- **Hive base image package manager**: Replaced `apt-get` with `microdnf` — UBI9-minimal does not include apt.
+- **Hadoop AWS JARs bumped to 3.4.1**: Aligns Hive's S3 connector with Spark 4.1.1's Hadoop version (was 3.1.0 / 3.3.6).
+- **AWS SDK bundle bumped to 1.12.367**: Consistent across Hive and HMS init-container (was 1.11.271).
+- **Spark version 4.0.1 → 4.1.1**: Updated in `docker/spark/Dockerfile` and all references.
+- **Custom Hive image tag**: `hive-3.1.3-custom-prod` → `hive-4.1.0-custom-prod` across `hive.yaml` and `hms.yaml`.
+- **Traefik service type**: Changed from `LoadBalancer` to `ClusterIP` — external traffic now enters exclusively via Cloudflare Tunnel. Removes dependency on MetalLB for external exposure.
+
+### 🐛 Fixed
+- **`exec format error` on arm64 nodes**: Root cause was `apache/hive:3.1.3` having no `linux/arm64` layer. Fixed by upgrading to Hive 4.1.0.
+- **CI/CD skipped jobs on re-run**: Replaced `github.event.commits[*].modified` array-concatenation logic (invalid `+` operator) with `git diff --name-only` in a `detect-changes` job for reliable change detection.
+
+---
+
 ## [v0.3.1] - 2026-03-09
 ### 🚀 Added
 - **Headlamp UI**: Integrated the modern Headlamp dashboard to replace the deprecated Kubernetes Dashboard.
