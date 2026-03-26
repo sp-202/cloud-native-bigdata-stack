@@ -14,99 +14,99 @@
                                        │  encrypted tunnel
                                        ▼
 ┌══════════════════════════════════════════════════════════════════════════════════════════════╗
-║                        AWS EC2 — Self-Managed Kubernetes (kubeadm)                         ║
-║                        ARM64 Graviton Nodes  |  Cilium CNI (ENI IPAM)                      ║
+║                        AWS EC2 — Self-Managed Kubernetes (kubeadm)                           ║
+║                        ARM64 Graviton Nodes  |  Cilium CNI (ENI IPAM)                        ║
 ║                                                                                              ║
 ║  namespace: cloudflare                                                                       ║
-║  ┌────────────────────────────────────────────┐                                             ║
-║  │  cloudflared  (3 replicas, HA)             │                                             ║
-║  │  ┌──────────┐ ┌──────────┐ ┌──────────┐   │                                             ║
-║  │  │  pod-1   │ │  pod-2   │ │  pod-3   │   │  topology spread across nodes               ║
-║  │  └────┬─────┘ └────┬─────┘ └────┬─────┘   │  PodDisruptionBudget enforced               ║
-║  └───────┼────────────┼────────────┼──────────┘                                             ║
+║  ┌────────────────────────────────────────────┐                                              ║
+║  │  cloudflared  (3 replicas, HA)             │                                              ║
+║  │  ┌──────────┐ ┌──────────┐ ┌──────────┐    │                                              ║
+║  │  │  pod-1   │ │  pod-2   │ │  pod-3   │    │  topology spread across nodes                ║
+║  │  └────┬─────┘ └────┬─────┘ └────┬─────┘    │  PodDisruptionBudget enforced                ║
+║  └───────┼────────────┼────────────┼──────────┘                                              ║
 ║          └────────────┴────────────┘                                                         ║
 ║                          │ routes to Traefik ClusterIP                                       ║
 ║                          ▼                                                                   ║
 ║  namespace: kube-system                                                                      ║
-║  ┌─────────────────────────────────────────────────────────────────┐                        ║
-║  │  Traefik Ingress Controller  (ClusterIP — no LoadBalancer)      │                        ║
-║  │                                                                  │                        ║
-║  │  IngressRoutes:                                                  │                        ║
-║  │    airflow.*        →  airflow svc                               │                        ║
-║  │    jupyterhub.*     →  jupyterhub svc                           │                        ║
-║  │    superset.*       →  superset svc                             │                        ║
-║  │    minio.*          →  minio svc                                │                        ║
-║  │    grafana.*        →  grafana svc                              │                        ║
-║  │    spark.*          →  spark-connect svc                        │                        ║
-║  │    spark-history.*  →  spark-history svc                        │                        ║
-║  │    hubble.*         →  hubble-ui svc                            │                        ║
-║  │    headlamp.*       →  headlamp svc                             │                        ║
-║  └──────────────────────────────┬──────────────────────────────────┘                        ║
+║  ┌─────────────────────────────────────────────────────────────────┐                         ║
+║  │  Traefik Ingress Controller  (ClusterIP — no LoadBalancer)      │                         ║
+║  │                                                                 │                         ║
+║  │  IngressRoutes:                                                 │                         ║
+║  │    airflow.*        →  airflow svc                              │                         ║
+║  │    jupyterhub.*     →  jupyterhub svc                           │                         ║
+║  │    superset.*       →  superset svc                             │                         ║
+║  │    minio.*          →  minio svc                                │                         ║
+║  │    grafana.*        →  grafana svc                              │                         ║
+║  │    spark.*          →  spark-connect svc                        │                         ║
+║  │    spark-history.*  →  spark-history svc                        │                         ║
+║  │    hubble.*         →  hubble-ui svc                            │                         ║
+║  │    headlamp.*       →  headlamp svc                             │                         ║
+║  └──────────────────────────────┬──────────────────────────────────┘                         ║
 ║                                 │                                                            ║
-║          ┌──────────────────────┼────────────────────────────────┐                          ║
-║          │                      │                                │                          ║
-║          ▼                      ▼                                ▼                          ║
-║  ┌───────────────┐   ┌──────────────────────┐   ┌───────────────────────────────┐          ║
-║  │  NOTEBOOK &   │   │  COMPUTE LAYER       │   │  OBSERVABILITY STACK          │          ║
-║  │  WORKFLOW     │   │                      │   │                               │          ║
-║  │               │   │  ns: default         │   │  ns: monitoring               │          ║
-║  │  ns: default  │   │  ┌────────────────┐  │   │  ┌───────────┐ ┌──────────┐  │          ║
-║  │  ┌──────────┐ │   │  │ Spark Connect  │  │   │  │Prometheus │ │  Loki    │  │          ║
-║  │  │JupyterHub│ │   │  │    Server      │  │   │  │ Operator  │ │  Stack   │  │          ║
-║  │  │          │◄├───┤  │  (gateway for  │  │   │  └─────┬─────┘ └─────┬────┘  │          ║
-║  │  │PySpark   │ │   │  │   all clients) │  │   │        │             │       │          ║
-║  │  │Scala     │ │   │  └───────┬────────┘  │   │  ┌─────▼─────────────▼────┐  │          ║
-║  │  │SQL magic │ │   │          │           │   │  │      Grafana            │  │          ║
-║  │  └──────────┘ │   │          │ submits   │   │  │  Dashboards / Alerts    │  │          ║
-║  │               │   │          ▼           │   │  └─────────────────────────┘  │          ║
-║  │  ┌──────────┐ │   │  ┌────────────────┐  │   │                               │          ║
-║  │  │  Marimo  │ │   │  │ Spark Operator │  │   │  ServiceMonitors watching:    │          ║
-║  │  │(reactive │◄├───┤  │                │  │   │   - Spark driver/executors    │          ║
-║  │  │ Python)  │ │   │  │  SparkApp CRDs │  │   │   - Airflow scheduler         │          ║
-║  │  └──────────┘ │   │  └───────┬────────┘  │   │   - cloudflared metrics       │          ║
-║  │               │   │          │ spawns     │   │   - Node metrics              │          ║
-║  │  ┌──────────┐ │   │          ▼           │   └───────────────────────────────┘          ║
-║  │  │ Airflow  │ │   │  ┌────────────────┐  │                                              ║
-║  │  │          │ │   │  │Spark Executors │  │   ┌───────────────────────────────┐          ║
-║  │  │K8s Exec  │─┼───►  │  (ephemeral    │  │   │  METADATA & CATALOG           │          ║
-║  │  │Git-Sync  │ │   │  │   pods, auto-  │  │   │                               │          ║
-║  │  │DAG sync  │ │   │  │   scaled)      │  │   │  ns: default                  │          ║
-║  │  └──────────┘ │   │  └────────────────┘  │   │  ┌─────────────────────────┐  │          ║
-║  │               │   │                      │   │  │   Hive Metastore 4.1.0  │  │          ║
-║  │  ┌──────────┐ │   │  ┌────────────────┐  │   │  │                         │  │          ║
-║  │  │ Superset │ │   │  │  Spark History │  │   │  │  HMS (Thrift :9083)      │  │          ║
-║  │  │  (BI/Viz)│ │   │  │    Server      │  │   │  │  HiveServer2 (:10000)    │  │          ║
-║  │  └──────────┘ │   │  └────────────────┘  │   │  │                         │  │          ║
-║  └───────────────┘   └──────────────────────┘   │  │  Drivers (in image):    │  │          ║
-║                                                  │  │   postgresql-42.6.0.jar │  │          ║
-║                                                  │  │   hadoop-aws-3.4.1.jar  │  │          ║
-║                                                  │  │   aws-sdk-1.12.367.jar  │  │          ║
-║                                                  │  └──────────┬──────────────┘  │          ║
-║                                                  │             │ reads/writes     │          ║
-║                                                  │             ▼                  │          ║
-║                                                  │  ┌─────────────────────────┐  │          ║
-║                                                  │  │   StarRocks (OLAP)      │  │          ║
-║                                                  │  │   Delta Native Catalog  │  │          ║
-║                                                  │  │   reads MinIO directly  │  │          ║
-║                                                  │  └─────────────────────────┘  │          ║
-║                                                  └───────────────────────────────┘          ║
+║          ┌──────────────────────┼────────────────────────────────┐                           ║
+║          │                      │                                │                           ║
+║          ▼                      ▼                                ▼                           ║
+║  ┌───────────────┐   ┌──────────────────────┐   ┌───────────────────────────────┐            ║
+║  │  NOTEBOOK &   │   │  COMPUTE LAYER       │   │  OBSERVABILITY STACK          │            ║
+║  │  WORKFLOW     │   │                      │   │                               │            ║
+║  │               │   │  ns: default         │   │  ns: monitoring               │            ║
+║  │  ns: default  │   │  ┌────────────────┐  │   │  ┌───────────┐ ┌──────────┐   │            ║
+║  │  ┌──────────┐ │   │  │ Spark Connect  │  │   │  │Prometheus │ │  Loki    │   │            ║
+║  │  │JupyterHub│ │   │  │    Server      │  │   │  │ Operator  │ │  Stack   │   │            ║
+║  │  │          │◄├───┤  │  (gateway for  │  │   │  └─────┬─────┘ └─────┬────┘   │            ║
+║  │  │PySpark   │ │   │  │   all clients) │  │   │        │             │        │            ║
+║  │  │Scala     │ │   │  └───────┬────────┘  │   │  ┌─────▼─────────────▼────┐   │            ║
+║  │  │SQL magic │ │   │          │           │   │  │      Grafana           │   │            ║
+║  │  └──────────┘ │   │          │ submits   │   │  │  Dashboards / Alerts   │   │            ║
+║  │               │   │          ▼           │   │  └────────────────────────┘   │            ║
+║  │  ┌──────────┐ │   │  ┌────────────────┐  │   │                               │            ║
+║  │  │  Marimo  │ │   │  │ Spark Operator │  │   │  ServiceMonitors watching:    │            ║
+║  │  │(reactive │◄├───┤  │                │  │   │   - Spark driver/executors    │            ║
+║  │  │ Python)  │ │   │  │  SparkApp CRDs │  │   │   - Airflow scheduler         │            ║
+║  │  └──────────┘ │   │  └───────┬────────┘  │   │   - cloudflared metrics       │            ║
+║  │               │   │          │ spawns    │   │   - Node metrics              │            ║
+║  │  ┌──────────┐ │   │          ▼           │   └───────────────────────────────┘            ║
+║  │  │ Airflow  │ │   │  ┌────────────────┐  │                                                ║
+║  │  │          │ │   │  │Spark Executors │  │   ┌───────────────────────────────┐            ║
+║  │  │K8s Exec  │─┼───►  │  (ephemeral    │  │   │  METADATA & CATALOG           │            ║
+║  │  │Git-Sync  │ │   │  │   pods, auto-  │  │   │                               │            ║
+║  │  │DAG sync  │ │   │  │   scaled)      │  │   │  ns: default                  │            ║
+║  │  └──────────┘ │   │  └────────────────┘  │   │  ┌─────────────────────────┐  │            ║
+║  │               │   │                      │   │  │   Hive Metastore 4.1.0  │  │            ║
+║  │  ┌──────────┐ │   │  ┌────────────────┐  │   │  │                         │  │            ║
+║  │  │ Superset │ │   │  │  Spark History │  │   │  │  HMS (Thrift :9083)     │  │            ║
+║  │  │  (BI/Viz)│ │   │  │    Server      │  │   │  │  HiveServer2 (:10000)   │  │            ║
+║  │  └──────────┘ │   │  └────────────────┘  │   │  │                         │  │            ║
+║  └───────────────┘   └──────────────────────┘   │  │  Drivers (in image):    │  │            ║
+║                                                 │  │   postgresql-42.6.0.jar │  │            ║
+║                                                 │  │   hadoop-aws-3.4.1.jar  │  │            ║
+║                                                 │  │   aws-sdk-1.12.367.jar  │  │            ║
+║                                                 │  └──────────┬──────────────┘  │            ║
+║                                                 │             │ reads/writes    │            ║
+║                                                 │             ▼                 │            ║
+║                                                 │  ┌─────────────────────────┐  │            ║
+║                                                 │  │   StarRocks (OLAP)      │  │            ║
+║                                                 │  │   Delta Native Catalog  │  │            ║
+║                                                 │  │   reads MinIO directly  │  │            ║
+║                                                 │  └─────────────────────────┘  │            ║
+║                                                 └───────────────────────────────┘            ║
 ║                                                                                              ║
-║  ┌───────────────────────────────────────────────────────────────────────────────────────┐  ║
-║  │                        DATA & PERSISTENCE LAYER                                       │  ║
-║  │                                                                                       │  ║
-║  │  ns: default                                                                          │  ║
-║  │                                                                                       │  ║
-║  │  ┌──────────────────────────┐   ┌────────────────────────┐   ┌──────────────────┐    │  ║
-║  │  │        MinIO             │   │      PostgreSQL         │   │      Redis        │    │  ║
-║  │  │  (S3-compatible)         │   │  (metadata backbone)   │   │  (Superset cache) │    │  ║
-║  │  │                          │   │                        │   └──────────────────┘    │  ║
-║  │  │  Buckets:                │   │  Databases:            │                           │  ║
-║  │  │  ├── spark-data/         │   │  ├── airflow_db        │   Storage: OpenEBS        │  ║
-║  │  │  ├── delta-lake/         │   │  ├── superset_db       │   (hostpath dynamic       │  ║
-║  │  │  ├── warehouse/          │   │  └── hive_metastore    │    provisioner on each    │  ║
-║  │  │  └── checkpoints/        │   │                        │    node)                  │  ║
-║  │  └──────────────────────────┘   └────────────────────────┘                           │  ║
-║  └───────────────────────────────────────────────────────────────────────────────────────┘  ║
+║  ┌───────────────────────────────────────────────────────────────────────────────────────┐   ║
+║  │                        DATA & PERSISTENCE LAYER                                       │   ║
+║  │                                                                                       │   ║
+║  │  ns: default                                                                          │   ║
+║  │                                                                                       │   ║
+║  │  ┌──────────────────────────┐   ┌────────────────────────┐   ┌──────────────────┐     │   ║
+║  │  │        MinIO             │   │      PostgreSQL        │   │      Redis       │     │   ║
+║  │  │  (S3-compatible)         │   │  (metadata backbone)   │   │  (Superset cache)│     │   ║
+║  │  │                          │   │                        │   └──────────────────┘     │   ║
+║  │  │  Buckets:                │   │  Databases:            │                            │   ║
+║  │  │  ├── spark-data/         │   │  ├── airflow_db        │   Storage: OpenEBS         │   ║
+║  │  │  ├── delta-lake/         │   │  ├── superset_db       │   (hostpath dynamic        │   ║
+║  │  │  ├── warehouse/          │   │  └── hive_metastore    │    provisioner on each     │   ║
+║  │  │  └── checkpoints/        │   │                        │    node)                   │   ║
+║  │  └──────────────────────────┘   └────────────────────────┘                            │   ║
+║  └───────────────────────────────────────────────────────────────────────────────────────┘   ║
 ║                                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════════════════════╝
 
@@ -180,10 +180,10 @@ NAMESPACE MAP
   │ Namespace       │ Workloads                                                        │
   ├─────────────────┼──────────────────────────────────────────────────────────────────┤
   │ cloudflare      │ cloudflared (3 pods, HA tunnel)                                  │
-  │ kube-system     │ Traefik, Cilium, CoreDNS, MetalLB                               │
+  │ kube-system     │ Traefik, Cilium, CoreDNS, MetalLB                                │
   │ default         │ Airflow, JupyterHub, Marimo, Superset, Spark Connect,            │
   │                 │ Spark History, Hive Metastore, StarRocks, MinIO, PostgreSQL,     │
-  │                 │ Redis, airflow-git-sync                                           │
+  │                 │ Redis, airflow-git-sync                                          │
   │ monitoring      │ Prometheus Operator, Grafana, Loki, Alertmanager                 │
   │ spark-operator  │ Spark Operator controller                                        │
   │ headlamp        │ Headlamp UI (cluster dashboard)                                  │
