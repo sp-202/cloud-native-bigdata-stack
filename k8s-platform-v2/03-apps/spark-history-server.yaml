@@ -13,9 +13,8 @@ spec:
       labels:
         app: spark-history-server
     spec:
-      # --- Pinning to Spark Node ---
       nodeSelector:
-        node-role.kubernetes.io/spark-node: ""
+        node-role.kubernetes.io/$(SPARK_NODE_ROLE): ""
       containers:
         - name: spark-history-server
           image: $(SPARK_IMAGE)
@@ -26,20 +25,20 @@ spec:
             ]
           resources:
             requests:
-              cpu: "1000m"
-              memory: "1Gi"
+              cpu: "$(SPARK_HISTORY_CPU_REQUEST)"
+              memory: "$(SPARK_HISTORY_MEM_REQUEST)"
             limits:
-              cpu: "1500m"
-              memory: "1.5Gi"
+              cpu: "$(SPARK_HISTORY_CPU_LIMIT)"
+              memory: "$(SPARK_HISTORY_MEM_LIMIT)"
           env:
             - name: SPARK_DAEMON_MEMORY
               value: "1g"
             - name: SPARK_HISTORY_OPTS
               value: >-
                 -Dspark.history.fs.logDirectory=s3a://spark-logs/
-                -Dspark.hadoop.fs.s3a.endpoint=http://minio.default.svc.cluster.local:9000
-                -Dspark.hadoop.fs.s3a.access.key=minioadmin
-                -Dspark.hadoop.fs.s3a.secret.key=minioadmin
+                -Dspark.hadoop.fs.s3a.endpoint=$(MINIO_ENDPOINT)
+                -Dspark.hadoop.fs.s3a.access.key=$(AWS_ACCESS_KEY_ID)
+                -Dspark.hadoop.fs.s3a.secret.key=$(AWS_SECRET_ACCESS_KEY)
                 -Dspark.hadoop.fs.s3a.path.style.access=true
                 -Dspark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
                 -Dspark.history.fs.subpath.enabled=true

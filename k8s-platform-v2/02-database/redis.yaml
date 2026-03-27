@@ -28,9 +28,8 @@ spec:
       labels:
         app: redis
     spec:
-      # --- Pinning to GP Node ---
       nodeSelector:
-        node-role.kubernetes.io/k8s-gp-node: ""
+        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
       containers:
         - name: redis
           image: redis:7.2-alpine
@@ -63,11 +62,11 @@ spec:
             failureThreshold: 3
           resources:
             requests:
-              memory: "1024Mi"
-              cpu: "1000m"
+              memory: "$(REDIS_MEM_REQUEST)"
+              cpu: "$(REDIS_CPU_REQUEST)"
             limits:
-              memory: "2048Mi"
-              cpu: "1500m"
+              memory: "$(REDIS_MEM_LIMIT)"
+              cpu: "$(REDIS_CPU_LIMIT)"
           volumeMounts:
             - name: storage
               mountPath: /data

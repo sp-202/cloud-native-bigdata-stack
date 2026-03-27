@@ -15,9 +15,8 @@ spec:
       labels:
         app: postgres
     spec:
-      # --- Pinning to GP Node ---
       nodeSelector:
-        node-role.kubernetes.io/k8s-gp-node: ""
+        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
       containers:
         - name: postgres
           image: postgres:13
@@ -25,7 +24,7 @@ spec:
             - name: POSTGRES_USER
               value: "postgres"
             - name: POSTGRES_PASSWORD
-              value: "password" # Root password (internal only)
+              value: "password"
             - name: POSTGRES_DB
               value: "postgres"
             - name: PGDATA
@@ -42,11 +41,11 @@ spec:
             periodSeconds: 5
           resources:
             requests:
-              memory: "1Gi"
-              cpu: "500m"
+              memory: "$(POSTGRES_MEM_REQUEST)"
+              cpu: "$(POSTGRES_CPU_REQUEST)"
             limits:
-              memory: "2Gi"
-              cpu: "1000m"
+              memory: "$(POSTGRES_MEM_LIMIT)"
+              cpu: "$(POSTGRES_CPU_LIMIT)"
           ports:
             - containerPort: 5432
           volumeMounts:

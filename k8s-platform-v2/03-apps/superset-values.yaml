@@ -225,7 +225,7 @@ hostAliases: []
 supersetNode:
   replicas:
     enabled: true
-    replicaCount: 1
+    replicaCount: $(SUPERSET_NODE_REPLICAS)
   autoscaling:
     enabled: true
     minReplicas: 2
@@ -327,11 +327,11 @@ supersetNode:
 
   resources:
     requests:
-      memory: "2Gi"
-      cpu: "1000m"
+      memory: "$(SUPERSET_NODE_MEM_REQUEST)"
+      cpu: "$(SUPERSET_NODE_CPU_REQUEST)"
     limits:
-      memory: "4Gi"
-      cpu: "2000m"
+      memory: "$(SUPERSET_NODE_MEM_LIMIT)"
+      cpu: "$(SUPERSET_NODE_CPU_LIMIT)"
 
   podSecurityContext:
     runAsNonRoot: true
@@ -354,7 +354,7 @@ supersetNode:
 supersetWorker:
   replicas:
     enabled: true
-    replicaCount: 1
+    replicaCount: $(SUPERSET_WORKER_REPLICAS)
   autoscaling:
     enabled: true
     minReplicas: 2
@@ -408,11 +408,11 @@ supersetWorker:
 
   resources:
     requests:
-      memory: "2Gi"
-      cpu: "1000m"
+      memory: "$(SUPERSET_WORKER_MEM_REQUEST)"
+      cpu: "$(SUPERSET_WORKER_CPU_REQUEST)"
     limits:
-      memory: "4Gi"
-      cpu: "2000m"
+      memory: "$(SUPERSET_WORKER_MEM_LIMIT)"
+      cpu: "$(SUPERSET_WORKER_CPU_LIMIT)"
 
   podSecurityContext:
     runAsNonRoot: true
@@ -482,11 +482,11 @@ supersetCeleryBeat:
   podLabels: {}
   resources:
     requests:
-      memory: "256Mi"
-      cpu: "250m"
+      memory: "$(SUPERSET_BEAT_MEM_REQUEST)"
+      cpu: "$(SUPERSET_BEAT_CPU_REQUEST)"
     limits:
-      memory: "512Mi"
-      cpu: "500m"
+      memory: "$(SUPERSET_BEAT_MEM_LIMIT)"
+      cpu: "$(SUPERSET_BEAT_CPU_LIMIT)"
   podSecurityContext:
     runAsNonRoot: true
 
@@ -661,11 +661,11 @@ supersetWebsockets:
 init:
   resources:
     requests:
-      cpu: "500m"
-      memory: "1Gi"
+      cpu: "$(SUPERSET_INIT_CPU_REQUEST)"
+      memory: "$(SUPERSET_INIT_MEM_REQUEST)"
     limits:
-      cpu: "1000m"
-      memory: "2Gi"
+      cpu: "$(SUPERSET_INIT_CPU_LIMIT)"
+      memory: "$(SUPERSET_INIT_MEM_LIMIT)"
   command:
     - "/bin/sh"
     - "-c"

@@ -13,11 +13,10 @@ spec:
       labels:
         app: minio
     spec:
-      # --- Pinning to MinIO Worker Node (Local NVMe) ---
       nodeSelector:
-        node-role.kubernetes.io/minio-worker: ""
+        node-role.kubernetes.io/$(MINIO_NODE_ROLE): ""
       tolerations:
-        - key: "node-role.kubernetes.io/minio-worker"
+        - key: "node-role.kubernetes.io/$(MINIO_NODE_ROLE)"
           operator: "Exists"
           effect: "NoSchedule"
       containers:
@@ -30,16 +29,16 @@ spec:
             - name: MINIO_ROOT_PASSWORD
               value: "minioadmin"
             - name: MINIO_SERVER_URL
-              value: "http://minio:9000" # Internal Service
+              value: "http://minio:9000"
             - name: MINIO_BROWSER_REDIRECT_URL
-              value: "http://minio:9001" # Internal Service
+              value: "http://minio:9001"
           resources:
             requests:
-              memory: "1Gi"
-              cpu: "500m"
+              memory: "$(MINIO_MEM_REQUEST)"
+              cpu: "$(MINIO_CPU_REQUEST)"
             limits:
-              memory: "2Gi"
-              cpu: "1000m"
+              memory: "$(MINIO_MEM_LIMIT)"
+              cpu: "$(MINIO_CPU_LIMIT)"
           ports:
             - containerPort: 9000
             - containerPort: 9001
@@ -81,6 +80,13 @@ spec:
         - name: create-buckets
           image: minio/mc:latest
           command: ["/bin/bash", "/scripts/create-buckets.sh"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
           volumeMounts:
             - name: scripts
               mountPath: /scripts

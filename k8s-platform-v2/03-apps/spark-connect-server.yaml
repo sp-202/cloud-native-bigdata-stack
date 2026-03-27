@@ -16,10 +16,9 @@ spec:
         app: spark-connect-server
         spark-role: driver
     spec:
-      serviceAccountName: spark-operator-spark # Use the SA that has permissions to create pods
-      # --- Pinning Spark Driver to spark-node ---
+      serviceAccountName: spark-operator-spark
       nodeSelector:
-        node-role.kubernetes.io/spark-node: ""
+        node-role.kubernetes.io/$(SPARK_NODE_ROLE): ""
       containers:
         - name: spark-connect-server
           image: $(SPARK_IMAGE)
@@ -75,18 +74,16 @@ spec:
                   fieldPath: metadata.name
           resources:
             requests:
-              cpu: "500m"
-              memory: "1Gi"
+              cpu: "$(SPARK_CONNECT_CPU_REQUEST)"
+              memory: "$(SPARK_CONNECT_MEM_REQUEST)"
             limits:
-              cpu: "1000m"
-              memory: "2Gi"
+              cpu: "$(SPARK_CONNECT_CPU_LIMIT)"
+              memory: "$(SPARK_CONNECT_MEM_LIMIT)"
           volumeMounts:
-            # --- UPDATED SECTION ---
             - name: spark-config-volume
               mountPath: /opt/spark/conf/spark-defaults.conf
               subPath: spark-defaults.conf
       volumes:
-        # --- UPDATED SECTION ---
         - name: spark-config-volume
           configMap:
             name: spark-config
