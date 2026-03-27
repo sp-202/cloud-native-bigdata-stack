@@ -38,5 +38,7 @@ data:
         service: https://traefik.kube-system.svc.cluster.local:443
         originRequest:
           noTLSVerify: true
+      - hostname: argocd.$(CF_DOMAIN)
+        service: http://traefik.kube-system.svc.cluster.local:80
       # Catch-all rule (required by cloudflared)
       - service: http_status:404

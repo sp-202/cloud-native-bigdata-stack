@@ -249,14 +249,20 @@ MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://minio.default.svc.cluster.local:9000}"
 MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
 MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
 
-# Auto-generate global-config.env for Kustomize ConfigMap (single source of truth: .env)
+# Write global-config.env — single source of truth for all non-secret kustomize vars.
+# ArgoCD reads this file directly from git on every sync, so it must contain ALL fields.
+# Secrets (cloudflared-credentials) are injected out-of-band and never written here.
 cat > k8s-platform-v2/04-configs/global-config.env <<GCEOF
 INGRESS_DOMAIN=${INGRESS_DOMAIN}
+CF_DOMAIN=${CF_DOMAIN}
+CF_TUNNEL_ID=${CF_TUNNEL_ID}
 AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
 AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
 MINIO_ENDPOINT=${MINIO_ENDPOINT}
+SPARK_IMAGE=${SPARK_IMAGE:-subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3}
+JUPYTERHUB_IMAGE=${JUPYTERHUB_IMAGE:-subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v2}
 GCEOF
-echo "Generated k8s-platform-v2/04-configs/global-config.env from .env values"
+echo "Generated k8s-platform-v2/04-configs/global-config.env (ArgoCD reads this from git)"
 
 echo "Deploying Stack to $INGRESS_DOMAIN..."
 
@@ -369,19 +375,6 @@ kubectl apply --server-side --force-conflicts -f generated-manifests.yaml
 echo "Waiting for Resources..."
 kubectl wait --for=condition=available --timeout=300s deployment/minio -n default || echo "MinIO wait timed out"
 kubectl wait --for=condition=available --timeout=300s deployment/postgres -n default || echo "Postgres wait timed out"
-
-# ---------------------------------------------------
-# 5. Patch ArgoCD IngressRoute with real domain
-# (post-cluster-bootstrap.sh creates it with a placeholder)
-# ---------------------------------------------------
-if [ -n "$CF_DOMAIN" ]; then
-  echo "==> Patching ArgoCD IngressRoute with domain: argocd.${CF_DOMAIN}..."
-  kubectl -n argocd get ingressroute argocd-server -o yaml 2>/dev/null | \
-    sed "s|argocd.__ARGOCD_DOMAIN__|argocd.${CF_DOMAIN}|g" | \
-    kubectl apply -f - || true
-  echo "ArgoCD UI available at: https://argocd.${CF_DOMAIN}"
-  echo "Initial admin password: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
-fi
 
 echo "Deployment Complete!"
 PROTO="http"
