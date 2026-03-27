@@ -4,6 +4,9 @@ kind: Kustomization
 resources:
   - ingress.yaml
 
+generatorOptions:
+  disableNameSuffixHash: true
+
 configMapGenerator:
   - name: global-config
     envs:
