@@ -4,7 +4,7 @@ metadata:
   name: hive-metastore
   namespace: default
 spec:
-  replicas: $(HIVE_REPLICAS)
+  replicas: 1
   selector:
     matchLabels:
       app: hive-metastore
@@ -15,7 +15,7 @@ spec:
     spec:
       # --- Pinning to GP Node ---
       nodeSelector:
-        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
+        node-role.kubernetes.io/k8s-gp-node: ""
       initContainers:
         - name: init-permissions
           image: subhodeep2022/spark-bigdata:hive-4.1.0-custom-prod
@@ -49,11 +49,11 @@ spec:
               value: "-Dhive.log.level=INFO"
           resources:
             requests:
-              memory: "$(HIVE_METASTORE_MEM_REQUEST)"
-              cpu: "$(HIVE_METASTORE_CPU_REQUEST)"
+              memory: "1Gi"
+              cpu: "500m"
             limits:
-              memory: "$(HIVE_METASTORE_MEM_LIMIT)"
-              cpu: "$(HIVE_METASTORE_CPU_LIMIT)"
+              memory: "2Gi"
+              cpu: "1000m"
           ports:
             - containerPort: 9083
           volumeMounts:
@@ -76,11 +76,11 @@ spec:
               value: "2048"
           resources:
             requests:
-              memory: "$(HIVE_SERVER_MEM_REQUEST)"
-              cpu: "$(HIVE_SERVER_CPU_REQUEST)"
+              memory: "1Gi"
+              cpu: "500m"
             limits:
-              memory: "$(HIVE_SERVER_MEM_LIMIT)"
-              cpu: "$(HIVE_SERVER_CPU_LIMIT)"
+              memory: "2Gi"
+              cpu: "1000m"
           ports:
             - containerPort: 10000
           volumeMounts:

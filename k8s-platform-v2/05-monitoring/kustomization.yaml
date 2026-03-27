@@ -7,10 +7,7 @@ resources:
   - kong-manual-config.yaml
   - spark-ui-service.yaml
   - spark-service-monitor.yaml
-  # Generated Helm Charts
-  - charts/gen/kube-prometheus-stack.yaml
-  - charts/gen/loki-stack.yaml
-  - charts/gen/headlamp.yaml
+  - headlamp.yaml
 
 configMapGenerator:
   - name: spark-grafana-dashboard
@@ -25,3 +22,19 @@ configMapGenerator:
     options:
       labels:
         grafana_dashboard: "1"
+
+helmCharts:
+  - name: kube-prometheus-stack
+    repo: https://prometheus-community.github.io/helm-charts
+    version: 56.6.2
+    namespace: default
+    releaseName: kube-prometheus-stack
+    includeCRDs: true
+    valuesFile: values-prometheus.yaml
+
+  - name: loki-stack
+    repo: https://grafana.github.io/helm-charts
+    version: 2.10.2
+    namespace: default
+    releaseName: loki-stack
+    valuesFile: values-loki.yaml

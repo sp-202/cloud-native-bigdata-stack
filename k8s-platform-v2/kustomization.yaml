@@ -18,3 +18,31 @@ vars:
       apiVersion: v1
     fieldref:
       fieldpath: data.INGRESS_DOMAIN
+  - name: CF_DOMAIN
+    objref:
+      kind: ConfigMap
+      name: global-config
+      apiVersion: v1
+    fieldref:
+      fieldpath: data.CF_DOMAIN
+  - name: CF_TUNNEL_ID
+    objref:
+      kind: ConfigMap
+      name: global-config
+      apiVersion: v1
+    fieldref:
+      fieldpath: data.CF_TUNNEL_ID
+  - name: SPARK_IMAGE
+    objref:
+      kind: ConfigMap
+      name: global-config
+      apiVersion: v1
+    fieldref:
+      fieldpath: data.SPARK_IMAGE
+  - name: JUPYTERHUB_IMAGE
+    objref:
+      kind: ConfigMap
+      name: global-config
+      apiVersion: v1
+    fieldref:
+      fieldpath: data.JUPYTERHUB_IMAGE

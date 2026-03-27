@@ -14,9 +14,6 @@ resources:
   - spark-ui-service.yaml
   - spark-connect-server.yaml
   - starrocks.yaml
-  # Generated Helm Charts
-  - charts/gen/spark-operator.yaml
-  - charts/gen/superset.yaml
 
 configMapGenerator:
   - name: spark-config
@@ -26,5 +23,20 @@ configMapGenerator:
     files:
       - configs/hive-site.xml
 
+helmCharts:
+  - name: spark-operator
+    repo: https://kubeflow.github.io/spark-operator
+    version: 2.4.0
+    namespace: default
+    releaseName: spark-operator
+    includeCRDs: true
+    valuesFile: spark-operator-values.yaml
+    apiVersions:
+      - monitoring.coreos.com/v1/PodMonitor
 
-
+  - name: superset
+    repo: https://apache.github.io/superset
+    version: 0.12.0
+    namespace: default
+    releaseName: superset
+    valuesFile: superset-values.yaml
