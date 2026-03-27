@@ -8,37 +8,37 @@ metadata:
     app.kubernetes.io/part-of: cloudflare-tunnel
 data:
   config.yaml: |
-    tunnel: $(CF_TUNNEL_ID)
+    tunnel: 91e5be1d-3b51-4cac-aebf-d330aafda394
     credentials-file: /etc/cloudflared/creds/credentials.json
     protocol: quic
     metrics: 0.0.0.0:2000
     no-autoupdate: true
     ingress:
-      - hostname: airflow.$(CF_DOMAIN)
+      - hostname: airflow.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      - hostname: minio.$(CF_DOMAIN)
+      - hostname: minio.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      - hostname: s3.$(CF_DOMAIN)
+      - hostname: s3.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      - hostname: superset.$(CF_DOMAIN)
+      - hostname: superset.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      - hostname: jupyterhub.$(CF_DOMAIN)
+      - hostname: jupyterhub.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      - hostname: spark.$(CF_DOMAIN)
+      - hostname: spark.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      - hostname: grafana.$(CF_DOMAIN)
+      - hostname: grafana.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      - hostname: headlamp.$(CF_DOMAIN)
+      - hostname: headlamp.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      - hostname: traefik.$(CF_DOMAIN)
+      - hostname: traefik.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      - hostname: hubble.$(CF_DOMAIN)
+      - hostname: hubble.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      - hostname: dashboard.$(CF_DOMAIN)
+      - hostname: dashboard.dailyblogstudio.com
         service: https://traefik.kube-system.svc.cluster.local:443
         originRequest:
           noTLSVerify: true
-      - hostname: argocd.$(CF_DOMAIN)
+      - hostname: argocd.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
       # Catch-all rule (required by cloudflared)
       - service: http_status:404

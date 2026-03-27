@@ -75,7 +75,7 @@ spec:
       serviceAccountName: spark-operator-spark
       containers:
         - name: spark-client
-          image: $(SPARK_IMAGE)
+          image: subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3
           imagePullPolicy: Always
           command:
             - "/bin/sh"
@@ -87,7 +87,7 @@ spec:
               --conf spark.driver.host=$POD_IP \
               --conf spark.driver.bindAddress=$POD_IP \
               --conf spark.kubernetes.driver.pod.name=$SPARK_podName \
-              --conf spark.kubernetes.container.image=$(SPARK_IMAGE) \
+              --conf spark.kubernetes.container.image=subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3 \
               /opt/scripts/verify_e2e.py
           env:
             - name: POD_IP

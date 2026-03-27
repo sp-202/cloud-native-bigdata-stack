@@ -9,7 +9,7 @@ metadata:
     traefik.ingress.kubernetes.io/service.serverstransport: insecure-transport@kubernetescrd
 spec:
   rules:
-    - host: dashboard.$(INGRESS_DOMAIN)
+    - host: dashboard.dailyblogstudio.com
       http:
         paths:
           - path: /

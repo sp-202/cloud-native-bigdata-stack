@@ -86,7 +86,7 @@ data:
     spark.kubernetes.executor.annotation.prometheus.io/port   4040
 
     # --- Kubernetes Pod Defaults ---
-    spark.kubernetes.container.image            $(SPARK_IMAGE)
+    spark.kubernetes.container.image            subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3
     spark.kubernetes.container.image.pullPolicy Always
     spark.kubernetes.driver.pod.name            spark-driver
     spark.kubernetes.namespace                  default

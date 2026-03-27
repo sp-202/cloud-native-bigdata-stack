@@ -16,7 +16,7 @@ spec:
     - web
   routes:
     # Rule matching based on the FQDN provided in the environment variable
-    - match: Host(`hubble.$(INGRESS_DOMAIN)`)
+    - match: Host(`hubble.dailyblogstudio.com`)
       kind: Rule
       services:
         # Directs traffic to the Hubble UI pod in the network-policy namespace
