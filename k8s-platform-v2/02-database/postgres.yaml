@@ -16,7 +16,7 @@ spec:
         app: postgres
     spec:
       nodeSelector:
-        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
+        node-role.kubernetes.io/k8s-gp-node: ""
       containers:
         - name: postgres
           image: postgres:13

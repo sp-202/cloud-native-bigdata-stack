@@ -1,7 +1,7 @@
 grafana:
   adminPassword: prom-operator
   nodeSelector:
-    node-role.kubernetes.io/$(GP_NODE_ROLE): ""
+    node-role.kubernetes.io/k8s-gp-node: ""
   additionalDataSources:
     - name: Loki
       type: loki
@@ -18,7 +18,7 @@ grafana:
 prometheus:
   prometheusSpec:
     nodeSelector:
-      node-role.kubernetes.io/$(GP_NODE_ROLE): ""
+      node-role.kubernetes.io/k8s-gp-node: ""
     podMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelectorNilUsesHelmValues: false
     retention: $(PROMETHEUS_RETENTION)

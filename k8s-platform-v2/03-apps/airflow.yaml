@@ -14,7 +14,7 @@ spec:
         app: airflow-webserver
     spec:
       nodeSelector:
-        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
+        node-role.kubernetes.io/k8s-gp-node: ""
       securityContext:
         fsGroup: 50000
       initContainers:
@@ -86,7 +86,7 @@ spec:
         app: airflow-scheduler
     spec:
       nodeSelector:
-        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
+        node-role.kubernetes.io/k8s-gp-node: ""
       securityContext:
         fsGroup: 50000
       containers:

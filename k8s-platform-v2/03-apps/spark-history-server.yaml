@@ -14,7 +14,7 @@ spec:
         app: spark-history-server
     spec:
       nodeSelector:
-        node-role.kubernetes.io/$(SPARK_NODE_ROLE): ""
+        node-role.kubernetes.io/spark-node: ""
       containers:
         - name: spark-history-server
           image: $(SPARK_IMAGE)
