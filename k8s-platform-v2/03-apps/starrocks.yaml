@@ -16,9 +16,8 @@ spec:
       labels:
         app: starrocks-fe
     spec:
-      # --- Pinning to GP Node ---
       nodeSelector:
-        node-role.kubernetes.io/k8s-gp-node: ""
+        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
       containers:
         - name: starrocks-fe
           image: starrocks/fe-ubuntu:3.3-latest
@@ -34,6 +33,21 @@ spec:
           env:
             - name: JAVA_OPTS
               value: "-Xmx1024m -XX:+UseG1GC"
+            - name: MINIO_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: global-config
+                  key: MINIO_ENDPOINT
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: global-config
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                configMapKeyRef:
+                  name: global-config
+                  key: AWS_SECRET_ACCESS_KEY
           volumeMounts:
             - name: fe-meta
               mountPath: /data/meta
@@ -43,7 +57,6 @@ spec:
               /opt/starrocks/fe/bin/start_fe.sh --daemon
               echo "Waiting for FE to start..."
 
-              # Wait for port 9030 to be ready
               for i in {1..30}; do
                   if mysql -h 127.0.0.1 -P 9030 -u root -e "SELECT 1" >/dev/null 2>&1; then
                       echo "FE is ready!"
@@ -54,22 +67,19 @@ spec:
               done
 
               echo "FE is ready! Creating 'demo' database..."
-              # Create DB immediately after FE is ready
               mysql -h 127.0.0.1 -P 9030 -u root -e "CREATE DATABASE IF NOT EXISTS demo;" || echo "Failed to create demo DB"
 
               echo "Starting BE Registration..."
               for i in {1..60}; do
                   echo "Attempt $i: Resolving BE (starrocks-be-0)..."
-                  # Use stable StatefulSet DNS for reliable resolution
                   BE_HOST="starrocks-be-0.starrocks-be.default.svc.cluster.local"
                   BE_IP=$(getent hosts $BE_HOST | awk '{print $1}')
-                  
+
                   if [ -n "$BE_IP" ]; then
                       echo "Resolved BE IP: $BE_IP"
                       echo "Registering BE..."
                       mysql -h 127.0.0.1 -P 9030 -u root -e "ALTER SYSTEM ADD BACKEND '${BE_IP}:9050';" || true
-                      
-                      # Create HMS Delta Catalog (Native Delta Lake)
+
                       echo "Creating 'hms_delta_catalog'..."
                       mysql -h 127.0.0.1 -P 9030 -u root -e "
                       CREATE EXTERNAL CATALOG IF NOT EXISTS hms_delta_catalog
@@ -79,11 +89,11 @@ spec:
                           'hive.metastore.uris' = 'thrift://hive-metastore:9083',
                           'aws.s3.enable_ssl' = 'false',
                           'aws.s3.enable_path_style_access' = 'true',
-                          'aws.s3.endpoint' = 'http://minio.default.svc.cluster.local:9000',
-                          'aws.s3.access_key' = 'minioadmin',
-                          'aws.s3.secret_key' = 'minioadmin'
+                          'aws.s3.endpoint' = '${MINIO_ENDPOINT}',
+                          'aws.s3.access_key' = '${AWS_ACCESS_KEY_ID}',
+                          'aws.s3.secret_key' = '${AWS_SECRET_ACCESS_KEY}'
                       );" || true
-                      
+
                       echo "Initialization Complete."
                       mysql -h 127.0.0.1 -P 9030 -u root -e "SHOW PROC '/backends'; SHOW DATABASES;"
                       break
@@ -111,11 +121,11 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: 500m
-              memory: 2Gi
+              cpu: "$(STARROCKS_FE_CPU_REQUEST)"
+              memory: "$(STARROCKS_FE_MEM_REQUEST)"
             limits:
-              cpu: 2000m
-              memory: 4Gi
+              cpu: "$(STARROCKS_FE_CPU_LIMIT)"
+              memory: "$(STARROCKS_FE_MEM_LIMIT)"
       volumes:
         - name: fe-meta
           persistentVolumeClaim:
@@ -159,9 +169,8 @@ spec:
       labels:
         app: starrocks-be
     spec:
-      # --- Pinning to GP Node ---
       nodeSelector:
-        node-role.kubernetes.io/k8s-gp-node: ""
+        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
       containers:
         - name: starrocks-be
           image: starrocks/be-ubuntu:3.3-latest
@@ -181,11 +190,11 @@ spec:
               value: "0.0.0.0"
           resources:
             requests:
-              cpu: 500m
-              memory: 2Gi
+              cpu: "$(STARROCKS_BE_CPU_REQUEST)"
+              memory: "$(STARROCKS_BE_MEM_REQUEST)"
             limits:
-              cpu: 2000m
-              memory: 4Gi
+              cpu: "$(STARROCKS_BE_CPU_LIMIT)"
+              memory: "$(STARROCKS_BE_MEM_LIMIT)"
           volumeMounts:
             - name: be-storage
               mountPath: /data/storage

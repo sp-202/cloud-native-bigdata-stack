@@ -1,7 +1,7 @@
 grafana:
   adminPassword: prom-operator
   nodeSelector:
-    node-role.kubernetes.io/k8s-gp-node: ""
+    node-role.kubernetes.io/$(GP_NODE_ROLE): ""
   additionalDataSources:
     - name: Loki
       type: loki
@@ -12,16 +12,16 @@ grafana:
         maxLines: 1000
   grafana.ini:
     server:
-      root_url: http://grafana.dailyblogstudio.com
+      root_url: http://grafana.$(INGRESS_DOMAIN)
       serve_from_sub_path: true
 
 prometheus:
   prometheusSpec:
     nodeSelector:
-      node-role.kubernetes.io/k8s-gp-node: ""
+      node-role.kubernetes.io/$(GP_NODE_ROLE): ""
     podMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelectorNilUsesHelmValues: false
-    retention: 168h
+    retention: $(PROMETHEUS_RETENTION)
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -29,4 +29,4 @@ prometheus:
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
-              storage: 10Gi
+              storage: $(PROMETHEUS_STORAGE)

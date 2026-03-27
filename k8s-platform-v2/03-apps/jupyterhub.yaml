@@ -15,15 +15,19 @@ spec:
       labels:
         app: jupyterhub
     spec:
-      # Fix 1: nodeSelector value must be "true" not ""
       nodeSelector:
-        node-role.kubernetes.io/k8s-gp-node: ""
+        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
       serviceAccountName: jupyterhub
-      
-      # Fix 2: wait for MinIO before starting JupyterHub
       initContainers:
         - name: wait-for-minio
           image: curlimages/curl:latest
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
           command:
             - sh
             - -c
@@ -76,13 +80,12 @@ spec:
 
           resources:
             requests:
-              memory: "1Gi"
-              cpu: "500m"
+              memory: "$(JUPYTERHUB_MEM_REQUEST)"
+              cpu: "$(JUPYTERHUB_CPU_REQUEST)"
             limits:
-              memory: "2Gi"
-              cpu: "1000m"
+              memory: "$(JUPYTERHUB_MEM_LIMIT)"
+              cpu: "$(JUPYTERHUB_CPU_LIMIT)"
 
-          # Fix 3: add probes so k8s waits for jupyter to actually be ready
           readinessProbe:
             httpGet:
               path: /api
@@ -112,7 +115,6 @@ spec:
         - name: jupyter-config
           configMap:
             name: jupyterhub-config
-        # Fix 4: emptyDir loses data on restart — keep for now but flag it
         - name: notebooks
           emptyDir: {}
         - name: startup-script
@@ -177,8 +179,6 @@ data:
     c.S3ContentsManager.bucket = "notebooks"
     c.S3ContentsManager.prefix = "jupyterhub"
 
-    # Fix 5: session_kwargs is NOT valid in s3contents 0.5+
-    # Use s3fs_additional_kwargs with client_kwargs instead
     c.S3ContentsManager.s3fs_additional_kwargs = {
         "client_kwargs": {
             "endpoint_url": os.environ.get('JUPYTER_S3_ENDPOINT'),
