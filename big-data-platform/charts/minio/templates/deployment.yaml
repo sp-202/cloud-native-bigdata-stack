@@ -75,15 +75,7 @@ spec:
       containers:
         - name: create-buckets
           image: {{ .Values.mcImage }}
-          command: ["/bin/bash", "-c"]
-          args:
-            - |
-              set -e
-              mc alias set myminio http://minio:9000 {{ .Values.global.s3.accessKey }} {{ .Values.global.s3.secretKey }}
-              {{- range .Values.buckets }}
-              mc mb --ignore-existing myminio/{{ . }}
-              {{- end }}
-              echo "All buckets created successfully"
+          command: ["/bin/bash", "/scripts/create-buckets.sh"]
           resources:
             requests:
               cpu: "100m"
@@ -91,4 +83,13 @@ spec:
             limits:
               cpu: "200m"
               memory: "256Mi"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: scripts
+          configMap:
+            name: minio-scripts
+            defaultMode: 0755
       restartPolicy: OnFailure
