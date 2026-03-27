@@ -19,7 +19,7 @@ stringData:
     DB_USER: "superset"
     DB_PASS: "superset"
     DB_NAME: "superset"
-    SUPERSET_SECRET_KEY: "hoTWwOh6Oq8O3dfer62x1W161v5RIusDWFQBDRDNS2rBg7oxUIhlQ8Et"
+    SUPERSET_SECRET_KEY: "5cL5uQ+IfJWPb39JP2Z+1RODYus4jJHXr6B8/id9IQNfz11N76dxgBHL"
 ---
 # Source: superset/templates/secret-superset-config.yaml
 apiVersion: v1

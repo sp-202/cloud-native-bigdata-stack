@@ -4,7 +4,7 @@ metadata:
   name: postgres
   namespace: default
 spec:
-  replicas: $(POSTGRES_REPLICAS)
+  replicas: 1
   strategy:
     type: Recreate
   selector:
@@ -17,7 +17,7 @@ spec:
     spec:
       # --- Pinning to GP Node ---
       nodeSelector:
-        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
+        node-role.kubernetes.io/k8s-gp-node: ""
       containers:
         - name: postgres
           image: postgres:13
@@ -42,11 +42,11 @@ spec:
             periodSeconds: 5
           resources:
             requests:
-              memory: "$(POSTGRES_MEM_REQUEST)"
-              cpu: "$(POSTGRES_CPU_REQUEST)"
+              memory: "1Gi"
+              cpu: "500m"
             limits:
-              memory: "$(POSTGRES_MEM_LIMIT)"
-              cpu: "$(POSTGRES_CPU_LIMIT)"
+              memory: "2Gi"
+              cpu: "1000m"
           ports:
             - containerPort: 5432
           volumeMounts:

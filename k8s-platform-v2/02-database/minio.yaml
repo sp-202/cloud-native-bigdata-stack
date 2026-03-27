@@ -4,7 +4,7 @@ metadata:
   name: minio
   namespace: default
 spec:
-  replicas: $(MINIO_REPLICAS)
+  replicas: 1
   selector:
     matchLabels:
       app: minio
@@ -15,9 +15,9 @@ spec:
     spec:
       # --- Pinning to MinIO Worker Node (Local NVMe) ---
       nodeSelector:
-        node-role.kubernetes.io/$(MINIO_NODE_ROLE): ""
+        node-role.kubernetes.io/minio-worker: ""
       tolerations:
-        - key: "node-role.kubernetes.io/$(MINIO_NODE_ROLE)"
+        - key: "node-role.kubernetes.io/minio-worker"
           operator: "Exists"
           effect: "NoSchedule"
       containers:
@@ -35,11 +35,11 @@ spec:
               value: "http://minio:9001" # Internal Service
           resources:
             requests:
-              memory: "$(MINIO_MEM_REQUEST)"
-              cpu: "$(MINIO_CPU_REQUEST)"
+              memory: "1Gi"
+              cpu: "500m"
             limits:
-              memory: "$(MINIO_MEM_LIMIT)"
-              cpu: "$(MINIO_CPU_LIMIT)"
+              memory: "2Gi"
+              cpu: "1000m"
           ports:
             - containerPort: 9000
             - containerPort: 9001

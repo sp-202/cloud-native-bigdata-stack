@@ -6,7 +6,7 @@ metadata:
   labels:
     app: spark-connect-server
 spec:
-  replicas: $(SPARK_CONNECT_REPLICAS)
+  replicas: 1
   selector:
     matchLabels:
       app: spark-connect-server
@@ -19,7 +19,7 @@ spec:
       serviceAccountName: spark-operator-spark # Use the SA that has permissions to create pods
       # --- Pinning Spark Driver to spark-node ---
       nodeSelector:
-        node-role.kubernetes.io/$(SPARK_NODE_ROLE): ""
+        node-role.kubernetes.io/spark-node: ""
       containers:
         - name: spark-connect-server
           image: $(SPARK_IMAGE)
@@ -75,11 +75,11 @@ spec:
                   fieldPath: metadata.name
           resources:
             requests:
-              cpu: "$(SPARK_CONNECT_CPU_REQUEST)"
-              memory: "$(SPARK_CONNECT_MEM_REQUEST)"
+              cpu: "500m"
+              memory: "1Gi"
             limits:
-              cpu: "$(SPARK_CONNECT_CPU_LIMIT)"
-              memory: "$(SPARK_CONNECT_MEM_LIMIT)"
+              cpu: "1000m"
+              memory: "2Gi"
           volumeMounts:
             # --- UPDATED SECTION ---
             - name: spark-config-volume
