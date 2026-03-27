@@ -157,6 +157,16 @@ airflow:
   enabled: true
   executor: "LocalExecutor"
   fernetKey: "46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho="
+  postgresql:
+    enabled: false
+  data:
+    metadataConnection:
+      user: airflow
+      pass: airflow
+      protocol: postgresql
+      host: postgres.default.svc.cluster.local
+      port: 5432
+      db: airflow
   images:
     airflow:
       repository: apache/airflow
