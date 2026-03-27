@@ -370,6 +370,19 @@ echo "Waiting for Resources..."
 kubectl wait --for=condition=available --timeout=300s deployment/minio -n default || echo "MinIO wait timed out"
 kubectl wait --for=condition=available --timeout=300s deployment/postgres -n default || echo "Postgres wait timed out"
 
+# ---------------------------------------------------
+# 5. Patch ArgoCD IngressRoute with real domain
+# (post-cluster-bootstrap.sh creates it with a placeholder)
+# ---------------------------------------------------
+if [ -n "$CF_DOMAIN" ]; then
+  echo "==> Patching ArgoCD IngressRoute with domain: argocd.${CF_DOMAIN}..."
+  kubectl -n argocd get ingressroute argocd-server -o yaml 2>/dev/null | \
+    sed "s|argocd.__ARGOCD_DOMAIN__|argocd.${CF_DOMAIN}|g" | \
+    kubectl apply -f - || true
+  echo "ArgoCD UI available at: https://argocd.${CF_DOMAIN}"
+  echo "Initial admin password: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
+fi
+
 echo "Deployment Complete!"
 PROTO="http"
 if [ -n "$CF_DOMAIN" ]; then
