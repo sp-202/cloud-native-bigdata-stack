@@ -1,0 +1,17 @@
+{{- if .Values.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: argocd-server
+  namespace: argocd
+spec:
+  entryPoints:
+    - web
+    - websecure
+  routes:
+    - match: Host(`argocd.dailyblogstudio.com`)
+      kind: Rule
+      services:
+        - name: argocd-server
+          port: 80
+{{- end }}

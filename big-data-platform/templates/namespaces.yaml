@@ -1,0 +1,8 @@
+{{- if .Values.namespaces.createDashboard }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubernetes-dashboard
+  labels:
+    {{- include "big-data-platform.labels" . | nindent 4 }}
+{{- end }}

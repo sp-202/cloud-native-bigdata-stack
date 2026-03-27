@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hive-config
+  labels:
+    app: hive-metastore
+data:
+  hive-site.xml: |
+    <configuration>
+        <property>
+            <name>javax.jdo.option.ConnectionURL</name>
+            <value>jdbc:postgresql://{{ .Values.global.postgres.host }}:{{ .Values.global.postgres.port }}/{{ .Values.db.name }}</value>
+        </property>
+        <property>
+            <name>javax.jdo.option.ConnectionDriverName</name>
+            <value>org.postgresql.Driver</value>
+        </property>
+        <property>
+            <name>javax.jdo.option.ConnectionUserName</name>
+            <value>{{ .Values.db.user }}</value>
+        </property>
+        <property>
+            <name>javax.jdo.option.ConnectionPassword</name>
+            <value>{{ .Values.db.password }}</value>
+        </property>
+        <property>
+            <name>hive.metastore.warehouse.dir</name>
+            <value>s3a://warehouse/</value>
+        </property>
+        <property>
+            <name>fs.s3a.endpoint</name>
+            <value>{{ .Values.global.s3.endpoint }}</value>
+        </property>
+        <property>
+            <name>fs.s3a.access.key</name>
+            <value>{{ .Values.global.s3.accessKey }}</value>
+        </property>
+        <property>
+            <name>fs.s3a.secret.key</name>
+            <value>{{ .Values.global.s3.secretKey }}</value>
+        </property>
+        <property>
+            <name>fs.s3a.path.style.access</name>
+            <value>{{ .Values.global.s3.pathStyleAccess }}</value>
+        </property>
+        <property>
+            <name>fs.s3a.impl</name>
+            <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+        </property>
+        <property>
+            <name>hive.metastore.schema.verification</name>
+            <value>false</value>
+        </property>
+        <property>
+            <name>hive.server2.enable.doAs</name>
+            <value>false</value>
+        </property>
+        <property>
+            <name>hive.server2.thrift.bind.host</name>
+            <value>0.0.0.0</value>
+        </property>
+        <property>
+            <name>hive.server2.transport.mode</name>
+            <value>binary</value>
+        </property>
+        <property>
+            <name>hive.server2.authentication</name>
+            <value>NOSASL</value>
+        </property>
+        <property>
+            <name>hive.exec.mode.local.auto</name>
+            <value>true</value>
+        </property>
+        <property>
+            <name>hive.vectorized.execution.enabled</name>
+            <value>false</value>
+        </property>
+        <property>
+            <name>mapreduce.framework.name</name>
+            <value>local</value>
+        </property>
+    </configuration>
