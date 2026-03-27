@@ -1,0 +1,239 @@
+{{- $storageClass := .Values.global.storageClassName }}
+# =============================================================================
+# PostgreSQL PV/PVC
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-data-pv
+  labels:
+    app: postgres
+spec:
+  capacity:
+    storage: {{ .Values.postgres.size }}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ $storageClass }}
+  volumeMode: Filesystem
+  local:
+    path: {{ .Values.postgres.localPath }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: {{ (keys .Values.postgres.nodeSelector | first) }}
+              operator: Exists
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ $storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.postgres.size }}
+  volumeName: postgres-data-pv
+
+---
+# =============================================================================
+# MinIO PV/PVC
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: minio-data-pv
+  labels:
+    app: minio
+spec:
+  capacity:
+    storage: {{ .Values.minio.size }}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ $storageClass }}
+  volumeMode: Filesystem
+  local:
+    path: {{ .Values.minio.localPath }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: {{ (keys .Values.minio.nodeSelector | first) }}
+              operator: Exists
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-data-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ $storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.minio.size }}
+  volumeName: minio-data-pv
+
+---
+# =============================================================================
+# Airflow DAGs PV/PVC
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: airflow-dags-shared-pv
+  labels:
+    app: airflow
+spec:
+  capacity:
+    storage: {{ .Values.airflow.size }}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ $storageClass }}
+  volumeMode: Filesystem
+  local:
+    path: {{ .Values.airflow.localPath }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: {{ (keys .Values.airflow.nodeSelector | first) }}
+              operator: Exists
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-dags-shared-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ $storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.airflow.size }}
+  volumeName: airflow-dags-shared-pv
+
+---
+# =============================================================================
+# StarRocks FE PV/PVC
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: starrocks-fe-pv
+  labels:
+    app: starrocks-fe
+spec:
+  capacity:
+    storage: {{ .Values.starrocksFe.size }}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ $storageClass }}
+  volumeMode: Filesystem
+  local:
+    path: {{ .Values.starrocksFe.localPath }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: {{ (keys .Values.starrocksFe.nodeSelector | first) }}
+              operator: Exists
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: starrocks-fe-meta-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ $storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.starrocksFe.size }}
+  volumeName: starrocks-fe-pv
+
+---
+# =============================================================================
+# StarRocks BE PV/PVC
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: starrocks-be-pv
+  labels:
+    app: starrocks-be
+spec:
+  capacity:
+    storage: {{ .Values.starrocksBe.size }}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ $storageClass }}
+  volumeMode: Filesystem
+  local:
+    path: {{ .Values.starrocksBe.localPath }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: {{ (keys .Values.starrocksBe.nodeSelector | first) }}
+              operator: Exists
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: starrocks-be-meta-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ $storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.starrocksBe.size }}
+  volumeName: starrocks-be-pv
+
+---
+# =============================================================================
+# Redis PV/PVC
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redis-data-pv
+  labels:
+    app: redis
+spec:
+  capacity:
+    storage: {{ .Values.redis.size }}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ $storageClass }}
+  volumeMode: Filesystem
+  local:
+    path: {{ .Values.redis.localPath }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: {{ (keys .Values.redis.nodeSelector | first) }}
+              operator: Exists
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ $storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.redis.size }}
+  volumeName: redis-data-pv
