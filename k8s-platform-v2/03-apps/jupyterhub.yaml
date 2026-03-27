@@ -41,7 +41,7 @@ spec:
 
       containers:
         - name: jupyterhub
-          image: $(JUPYTERHUB_IMAGE)
+          image: subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v2
           imagePullPolicy: Always
           ports:
             - containerPort: 8888
@@ -80,11 +80,11 @@ spec:
 
           resources:
             requests:
-              memory: "$(JUPYTERHUB_MEM_REQUEST)"
-              cpu: "$(JUPYTERHUB_CPU_REQUEST)"
+              memory: "1Gi"
+              cpu: "500m"
             limits:
-              memory: "$(JUPYTERHUB_MEM_LIMIT)"
-              cpu: "$(JUPYTERHUB_CPU_LIMIT)"
+              memory: "2Gi"
+              cpu: "1000m"
 
           readinessProbe:
             httpGet:

@@ -103,7 +103,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: headlamp.$(INGRESS_DOMAIN)
+    - host: headlamp.dailyblogstudio.com
       http:
         paths:
           - path: /

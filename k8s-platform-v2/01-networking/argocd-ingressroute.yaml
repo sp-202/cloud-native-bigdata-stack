@@ -8,7 +8,7 @@ spec:
     - web
     - websecure
   routes:
-    - match: Host(`argocd.$(CF_DOMAIN)`)
+    - match: Host(`argocd.dailyblogstudio.com`)
       kind: Rule
       services:
         - name: argocd-server

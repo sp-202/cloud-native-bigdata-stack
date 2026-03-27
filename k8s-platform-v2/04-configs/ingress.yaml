@@ -9,7 +9,7 @@ spec:
   ingressClassName: traefik
   rules:
   # Airflow
-  - host: airflow.$(INGRESS_DOMAIN)
+  - host: airflow.dailyblogstudio.com
     http:
       paths:
       - path: /
@@ -20,7 +20,7 @@ spec:
             port:
               name: web
   # MinIO Console
-  - host: minio.$(INGRESS_DOMAIN)
+  - host: minio.dailyblogstudio.com
     http:
       paths:
       - path: /
@@ -31,7 +31,7 @@ spec:
             port:
               name: console
   # MinIO API
-  - host: s3.$(INGRESS_DOMAIN)
+  - host: s3.dailyblogstudio.com
     http:
       paths:
       - path: /
@@ -42,7 +42,7 @@ spec:
             port:
               name: api
   # Superset
-  - host: superset.$(INGRESS_DOMAIN)
+  - host: superset.dailyblogstudio.com
     http:
       paths:
       - path: /
@@ -53,7 +53,7 @@ spec:
             port:
               name: http
   # JupyterHub
-  - host: jupyterhub.$(INGRESS_DOMAIN)
+  - host: jupyterhub.dailyblogstudio.com
     http:
       paths:
       - path: /
@@ -64,7 +64,7 @@ spec:
             port:
               name: web
   # Spark UI
-  - host: spark.$(INGRESS_DOMAIN)
+  - host: spark.dailyblogstudio.com
     http:
       paths:
       - path: /

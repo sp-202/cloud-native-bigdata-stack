@@ -34,11 +34,11 @@ spec:
               value: "http://minio:9001"
           resources:
             requests:
-              memory: "$(MINIO_MEM_REQUEST)"
-              cpu: "$(MINIO_CPU_REQUEST)"
+              memory: "1Gi"
+              cpu: "500m"
             limits:
-              memory: "$(MINIO_MEM_LIMIT)"
-              cpu: "$(MINIO_CPU_LIMIT)"
+              memory: "2Gi"
+              cpu: "1000m"
           ports:
             - containerPort: 9000
             - containerPort: 9001

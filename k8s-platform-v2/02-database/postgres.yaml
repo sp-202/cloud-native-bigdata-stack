@@ -41,11 +41,11 @@ spec:
             periodSeconds: 5
           resources:
             requests:
-              memory: "$(POSTGRES_MEM_REQUEST)"
-              cpu: "$(POSTGRES_CPU_REQUEST)"
+              memory: "1Gi"
+              cpu: "500m"
             limits:
-              memory: "$(POSTGRES_MEM_LIMIT)"
-              cpu: "$(POSTGRES_CPU_LIMIT)"
+              memory: "2Gi"
+              cpu: "1000m"
           ports:
             - containerPort: 5432
           volumeMounts:

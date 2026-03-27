@@ -49,11 +49,11 @@ spec:
             failureThreshold: 3
           resources:
             requests:
-              memory: "$(REDIS_MEM_REQUEST)"
-              cpu: "$(REDIS_CPU_REQUEST)"
+              memory: "1024Mi"
+              cpu: "1000m"
             limits:
-              memory: "$(REDIS_MEM_LIMIT)"
-              cpu: "$(REDIS_CPU_LIMIT)"
+              memory: "2048Mi"
+              cpu: "1500m"
           volumeMounts:
             - name: storage
               mountPath: /data

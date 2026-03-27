@@ -121,11 +121,11 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: "$(STARROCKS_FE_CPU_REQUEST)"
-              memory: "$(STARROCKS_FE_MEM_REQUEST)"
+              cpu: "500m"
+              memory: "2Gi"
             limits:
-              cpu: "$(STARROCKS_FE_CPU_LIMIT)"
-              memory: "$(STARROCKS_FE_MEM_LIMIT)"
+              cpu: "2000m"
+              memory: "4Gi"
       volumes:
         - name: fe-meta
           persistentVolumeClaim:
@@ -190,11 +190,11 @@ spec:
               value: "0.0.0.0"
           resources:
             requests:
-              cpu: "$(STARROCKS_BE_CPU_REQUEST)"
-              memory: "$(STARROCKS_BE_MEM_REQUEST)"
+              cpu: "500m"
+              memory: "2Gi"
             limits:
-              cpu: "$(STARROCKS_BE_CPU_LIMIT)"
-              memory: "$(STARROCKS_BE_MEM_LIMIT)"
+              cpu: "2000m"
+              memory: "4Gi"
           volumeMounts:
             - name: be-storage
               mountPath: /data/storage
@@ -247,7 +247,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: starrocks.$(INGRESS_DOMAIN)
+    - host: starrocks.dailyblogstudio.com
       http:
         paths:
           - path: /
