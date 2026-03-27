@@ -14,9 +14,9 @@ spec:
         app: minio
     spec:
       nodeSelector:
-        node-role.kubernetes.io/$(MINIO_NODE_ROLE): ""
+        node-role.kubernetes.io/minio-worker: ""
       tolerations:
-        - key: "node-role.kubernetes.io/$(MINIO_NODE_ROLE)"
+        - key: "node-role.kubernetes.io/minio-worker"
           operator: "Exists"
           effect: "NoSchedule"
       containers:

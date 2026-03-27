@@ -16,7 +16,7 @@ spec:
         app: jupyterhub
     spec:
       nodeSelector:
-        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
+        node-role.kubernetes.io/k8s-gp-node: ""
       serviceAccountName: jupyterhub
       initContainers:
         - name: wait-for-minio

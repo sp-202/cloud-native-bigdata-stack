@@ -203,3 +203,45 @@ spec:
     requests:
       storage: 10Gi
   volumeName: starrocks-be-pv
+
+---
+# =============================================================================
+# WORKLOAD: Redis
+# DESCRIPTION: Persistent storage for Redis data on k8s-gp-node.
+# NOTE: Ensure '/var/openebs/local/redis-data' exists on 'k8s-gp-node'.
+# =============================================================================
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redis-data-pv
+spec:
+  capacity:
+    storage: 8Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: openebs-hostpath
+  volumeMode: Filesystem
+  local:
+    path: /var/openebs/local/redis-data
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-role.kubernetes.io/k8s-gp-node
+              operator: Exists
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: openebs-hostpath
+  resources:
+    requests:
+      storage: 8Gi
+  volumeName: redis-data-pv

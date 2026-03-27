@@ -17,7 +17,7 @@ spec:
         app: starrocks-fe
     spec:
       nodeSelector:
-        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
+        node-role.kubernetes.io/k8s-gp-node: ""
       containers:
         - name: starrocks-fe
           image: starrocks/fe-ubuntu:3.3-latest
@@ -170,7 +170,7 @@ spec:
         app: starrocks-be
     spec:
       nodeSelector:
-        node-role.kubernetes.io/$(GP_NODE_ROLE): ""
+        node-role.kubernetes.io/k8s-gp-node: ""
       containers:
         - name: starrocks-be
           image: starrocks/be-ubuntu:3.3-latest
