@@ -198,6 +198,11 @@ airflow:
       limits:
         cpu: "2000m"
         memory: "1536Mi"
+  logs:
+    persistence:
+      enabled: true
+      storageClassName: "openebs-hostpath"
+      size: 5Gi
   config:
     core:
       parallelism: "64"
