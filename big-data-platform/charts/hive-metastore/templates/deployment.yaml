@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-metastore
+  labels:
+    app: hive-metastore
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: hive-metastore
+  template:
+    metadata:
+      labels:
+        app: hive-metastore
+    spec:
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+      initContainers:
+        - name: init-permissions
+          image: {{ .Values.global.hiveImage }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - "mkdir -p /tmp/hive && chmod 777 /tmp/hive"
+          resources:
+            {{- toYaml .Values.initContainer.resources | nindent 12 }}
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: hive-scratch
+              mountPath: /tmp/hive
+      containers:
+        - name: hive-metastore
+          image: {{ .Values.global.hiveImage }}
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              /opt/hive/bin/schematool -dbType postgres -validate || /opt/hive/bin/schematool -dbType postgres -initSchema
+              /opt/hive/bin/hive --service metastore
+          env:
+            - name: HADOOP_OPTS
+              value: "-Dhive.log.level=INFO"
+          resources:
+            {{- toYaml .Values.metastore.resources | nindent 12 }}
+          ports:
+            - containerPort: 9083
+          volumeMounts:
+            - name: hive-config
+              mountPath: /opt/hive/conf/hive-site.xml
+              subPath: hive-site.xml
+            - name: hive-scratch
+              mountPath: /tmp/hive
+        - name: hive-server
+          image: {{ .Values.global.hiveImage }}
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - "/opt/hive/bin/hive --service hiveserver2"
+          env:
+            - name: HADOOP_OPTS
+              value: "-Dhive.log.level=INFO"
+            - name: HADOOP_HEAPSIZE
+              value: "2048"
+          resources:
+            {{- toYaml .Values.server.resources | nindent 12 }}
+          ports:
+            - containerPort: 10000
+          volumeMounts:
+            - name: hive-config
+              mountPath: /opt/hive/conf/hive-site.xml
+              subPath: hive-site.xml
+            - name: hive-scratch
+              mountPath: /tmp/hive
+      volumes:
+        - name: hive-config
+          configMap:
+            name: hive-config
+        - name: hive-scratch
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive-metastore
+spec:
+  ports:
+    - name: metastore
+      port: 9083
+      targetPort: 9083
+    - name: hiveserver2
+      port: 10000
+      targetPort: 10000
+  selector:
+    app: hive-metastore

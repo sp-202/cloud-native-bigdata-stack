@@ -1,0 +1,5 @@
+apiVersion: v2
+name: cloudflared
+description: Cloudflare Tunnel sub-chart including deployment, config, and Cilium fixes
+type: application
+version: 1.0.0

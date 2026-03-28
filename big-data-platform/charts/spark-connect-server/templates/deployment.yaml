@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-connect-server
+  labels:
+    app: spark-connect-server
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: spark-connect-server
+  template:
+    metadata:
+      labels:
+        app: spark-connect-server
+        spark-role: driver
+    spec:
+      serviceAccountName: spark-operator-spark
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.spark | nindent 8 }}
+      containers:
+        - name: spark-connect-server
+          image: {{ .Values.global.sparkImage }}
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              /opt/spark/bin/spark-submit \
+              --master k8s://https://kubernetes.default.svc.cluster.local:443 \
+              --deploy-mode client \
+              --class org.apache.spark.sql.connect.service.SparkConnectServer \
+              --conf spark.driver.host=$POD_IP \
+              --conf spark.driver.bindAddress=0.0.0.0 \
+              --conf spark.dynamicAllocation.enabled=true \
+              --conf spark.dynamicAllocation.minExecutors={{ .Values.dynamicAllocation.minExecutors }} \
+              --conf spark.dynamicAllocation.maxExecutors={{ .Values.dynamicAllocation.maxExecutors }} \
+              --conf spark.kubernetes.container.image={{ .Values.global.sparkImage }} \
+              --conf spark.kubernetes.driver.pod.name=$POD_NAME \
+              --conf spark.kubernetes.namespace=default \
+              --conf spark.sql.connect.port=15002 \
+              --conf spark.sql.connect.common.enforce_pyspark_compat=true \
+              --conf spark.hadoop.fs.s3a.path.style.access={{ .Values.global.s3.pathStyleAccess }} \
+              --conf spark.hadoop.fs.s3a.connection.ssl.enabled={{ .Values.global.s3.sslEnabled }} \
+              --conf spark.hadoop.fs.s3a.endpoint={{ .Values.global.s3.endpoint }} \
+              --conf spark.hadoop.fs.s3a.access.key={{ .Values.global.s3.accessKey }} \
+              --conf spark.hadoop.fs.s3a.secret.key={{ .Values.global.s3.secretKey }} \
+              --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
+              --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
+              --conf spark.sql.catalogImplementation=hive \
+              --conf spark.hadoop.hive.metastore.uris={{ .Values.global.hiveMetastore.uri }} \
+              --conf spark.sql.warehouse.dir=s3a://warehouse/managed/ \
+              {{- range $key, $val := .Values.executor.nodeSelector }}
+              --conf spark.kubernetes.executor.node.selector.{{ $key }}="{{ $val }}" \
+              {{- end }}
+              --conf spark.kubernetes.executor.volumes.hostPath.spark-local-dir.mount.path={{ .Values.executor.localDir }} \
+              --conf spark.kubernetes.executor.volumes.hostPath.spark-local-dir.options.path={{ .Values.executor.hostPath }} \
+              --conf spark.local.dir={{ .Values.executor.localDir }} \
+              local:///opt/spark/jars/spark-connect_2.13-4.1.1.jar
+          ports:
+            - containerPort: 15002
+              name: spark-connect
+            - containerPort: 4040
+              name: spark-ui
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: AWS_ACCESS_KEY_ID
+              value: {{ .Values.global.s3.accessKey | quote }}
+            - name: AWS_SECRET_ACCESS_KEY
+              value: {{ .Values.global.s3.secretKey | quote }}
+            - name: MINIO_ENDPOINT
+              value: {{ .Values.global.s3.endpoint | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: spark-config-volume
+              mountPath: /opt/spark/conf/spark-defaults.conf
+              subPath: spark-defaults.conf
+      volumes:
+        - name: spark-config-volume
+          configMap:
+            name: spark-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-connect-server-driver-svc
+spec:
+  ports:
+    - name: spark-connect
+      port: 15002
+      targetPort: 15002
+    - name: spark-ui
+      port: 4040
+      targetPort: 4040
+  selector:
+    app: spark-connect-server
+    spark-role: driver
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-ui
+spec:
+  ports:
+    - name: spark-ui
+      port: 4040
+      protocol: TCP
+      targetPort: 4040
+  selector:
+    app: spark-connect-server
+    spark-role: driver
+  type: ClusterIP
