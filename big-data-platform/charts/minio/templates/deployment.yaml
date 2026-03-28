@@ -66,9 +66,8 @@ kind: Job
 metadata:
   name: minio-create-buckets
   annotations:
-    "helm.sh/hook": post-install
-    "helm.sh/hook-weight": "5"
-    "helm.sh/hook-delete-policy": before-hook-creation
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   template:
     spec:
