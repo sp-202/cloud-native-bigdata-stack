@@ -200,7 +200,7 @@ airflow:
         memory: "1536Mi"
   logs:
     persistence:
-      enabled: true
+      enabled: false
       storageClassName: "openebs-hostpath"
       size: 5Gi
   config:
@@ -444,6 +444,9 @@ superset:
       limits:
         memory: "512Mi"
         cpu: "500m"
+  configOverrides:
+    secret: |
+      SECRET_KEY = 'bigdata-platform-superset-secret-key-change-me'
   init:
     enabled: true
     createAdmin: true
