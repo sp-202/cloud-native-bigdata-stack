@@ -31,6 +31,12 @@ k3s/superset/
 k8s-platform-v2/03-apps/charts/
 k8s-platform-v2/05-monitoring/charts/
 
+# Helm dependency tarballs — never commit these.
+# ArgoCD runs `helm dependency update` from source at sync time.
+# Committing .tgz files means ArgoCD uses stale bundled charts and ignores
+# any changes made to sub-chart source under charts/*/
+big-data-platform/charts/*.tgz
+
 # Binaries and Archives
 helm
 *.tar.gz
