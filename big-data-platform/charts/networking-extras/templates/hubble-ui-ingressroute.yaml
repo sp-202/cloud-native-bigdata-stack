@@ -1,0 +1,26 @@
+{{- if .Values.enabled }}
+# =============================================================================
+# WORKLOAD: Hubble UI (Cilium)
+# DESCRIPTION: Manages external access to the Hubble Observability dashboard.
+# ROUTING: Maps 'hubble.example.com' to the 'hubble-ui' service.
+# CROSS-NAMESPACE: IngressRoute is in 'default', Service is in 'kube-system'.
+# =============================================================================
+
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: hubble-ui-route
+  namespace: kube-system
+spec:
+  # Defines which Traefik port/listener to use (Port 80 by default)
+  entryPoints:
+    - web
+  routes:
+    # Rule matching based on the FQDN provided in the environment variable
+    - match: Host(`hubble.dailyblogstudio.com`)
+      kind: Rule
+      services:
+        # Directs traffic to the Hubble UI pod in the network-policy namespace
+        - name: hubble-ui
+          namespace: kube-system
+          port: 80{{- end }}

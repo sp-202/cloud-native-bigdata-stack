@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  labels:
+    app: minio
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.minio | nindent 8 }}
+      tolerations:
+        - key: "node-role.kubernetes.io/minio-worker"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: minio
+          image: {{ .Values.image }}
+          args: ["server", "/data", "--console-address", ":9001"]
+          env:
+            - name: MINIO_ROOT_USER
+              value: {{ .Values.global.s3.accessKey | quote }}
+            - name: MINIO_ROOT_PASSWORD
+              value: {{ .Values.global.s3.secretKey | quote }}
+            - name: MINIO_SERVER_URL
+              value: "http://minio:9000"
+            - name: MINIO_BROWSER_REDIRECT_URL
+              value: "http://minio:9001"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          ports:
+            - containerPort: 9000
+            - containerPort: 9001
+          volumeMounts:
+            - name: storage
+              mountPath: /data
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: minio-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+spec:
+  ports:
+    - name: api
+      port: 9000
+      targetPort: 9000
+    - name: console
+      port: 9001
+      targetPort: 9001
+  selector:
+    app: minio
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-create-buckets
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    spec:
+      containers:
+        - name: create-buckets
+          image: {{ .Values.mcImage }}
+          command: ["/bin/bash", "/scripts/create-buckets.sh"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: scripts
+          configMap:
+            name: minio-scripts
+            defaultMode: 0755
+      restartPolicy: OnFailure

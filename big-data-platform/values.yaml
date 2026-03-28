@@ -1,0 +1,563 @@
+# =============================================================================
+# big-data-platform — Root values.yaml
+# Data Platform as Code (DPaC) on AWS EC2 (ARM64/Graviton)
+#
+# This single file centralizes 60+ variables that were previously scattered
+# across global-config.env and hardcoded in static manifests.
+# =============================================================================
+
+# --- Override Helpers ---
+nameOverride: ""
+fullnameOverride: ""
+
+# --- Namespace Toggles ---
+namespaces:
+  createDashboard: true
+
+# =============================================================================
+# GLOBAL — shared across ALL sub-charts via .Values.global.*
+# =============================================================================
+global:
+  # --- Platform Routing & Domain ---
+  domain: "dailyblogstudio.com"
+  cfTunnelId: "91e5be1d-3b51-4cac-aebf-d330aafda394"
+
+  # --- Container Images ---
+  sparkImage: "subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3"
+  jupyterhubImage: "subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v2"
+  hiveImage: "subhodeep2022/spark-bigdata:hive-4.1.0-custom-prod"
+  airflowImage: "apache/airflow:2.7.1"
+  gitSyncImage: "subhodeep2022/k8s-git-sync:v2-prod"
+
+  # --- S3/MinIO Credentials & Endpoints ---
+  s3:
+    endpoint: "http://minio.default.svc.cluster.local:9000"
+    accessKey: "minioadmin"
+    secretKey: "minioadmin"
+    pathStyleAccess: true
+    sslEnabled: false
+
+  # --- Node Selectors ---
+  nodeSelector:
+    gp:
+      node-role.kubernetes.io/k8s-gp-node: ""
+    spark:
+      node-role.kubernetes.io/spark-node: ""
+    minio:
+      node-role.kubernetes.io/minio-worker: ""
+    controlPlane:
+      node-role.kubernetes.io/control-plane: ""
+
+  # --- Storage ---
+  storageClassName: "openebs-hostpath"
+
+  # --- PostgreSQL Connection (shared by Hive, Airflow, Superset) ---
+  postgres:
+    host: "postgres.default.svc.cluster.local"
+    port: 5432
+    user: "postgres"
+    password: "password"
+    database: "postgres"
+
+  # --- Hive Metastore Connection (shared by Spark, StarRocks) ---
+  hiveMetastore:
+    uri: "thrift://hive-metastore.default.svc.cluster.local:9083"
+
+# =============================================================================
+# PERSISTENCE — PV/PVC definitions
+# =============================================================================
+persistence:
+  postgres:
+    size: 10Gi
+    localPath: "/var/openebs/local/postgres-data"
+    nodeSelector:
+      node-role.kubernetes.io/k8s-gp-node: ""
+  minio:
+    size: 10Gi
+    localPath: "/mnt/spark-nvme/minio"
+    nodeSelector:
+      node-role.kubernetes.io/minio-worker: ""
+  airflow:
+    size: 5Gi
+    localPath: "/var/openebs/local/airflow-shared"
+    nodeSelector:
+      node-role.kubernetes.io/k8s-gp-node: ""
+  starrocksFe:
+    size: 10Gi
+    localPath: "/mnt/spark-nvme/starrocks-fe"
+    nodeSelector:
+      node-role.kubernetes.io/k8s-gp-node: ""
+  starrocksBe:
+    size: 10Gi
+    localPath: "/mnt/spark-nvme/starrocks-be"
+    nodeSelector:
+      node-role.kubernetes.io/k8s-gp-node: ""
+  redis:
+    size: 8Gi
+    localPath: "/var/openebs/local/redis-data"
+    nodeSelector:
+      node-role.kubernetes.io/k8s-gp-node: ""
+
+# =============================================================================
+# POSTGRES
+# =============================================================================
+postgres:
+  enabled: true
+  replicas: 1
+  image: "postgres:13"
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+
+# =============================================================================
+# REDIS
+# =============================================================================
+redis:
+  enabled: true
+  replicas: 1
+  image: "redis:7.2-alpine"
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "1024Mi"
+    limits:
+      cpu: "1500m"
+      memory: "2048Mi"
+
+# =============================================================================
+# MINIO
+# =============================================================================
+minio:
+  enabled: true
+  replicas: 1
+  image: "minio/minio:latest"
+  mcImage: "minio/mc:latest"
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+  buckets:
+    - warehouse
+    - spark-logs
+    - notebooks
+    - airflow
+    - delta-tables
+
+# =============================================================================
+# APACHE AIRFLOW (external dependency)
+# =============================================================================
+airflow:
+  enabled: true
+  executor: "LocalExecutor"
+  fernetKey: "46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho="
+  postgresql:
+    enabled: false
+  data:
+    metadataConnection:
+      user: airflow
+      pass: airflow
+      protocol: postgresql
+      host: postgres.default.svc.cluster.local
+      port: 5432
+      db: airflow
+  images:
+    airflow:
+      repository: apache/airflow
+      tag: 2.7.1
+  dags:
+    gitSync:
+      enabled: true
+      repo: "https://github.com/sp-202/airflow-dags.git"
+      branch: "main"
+      rev: "HEAD"
+      depth: 1
+      maxFailures: 0
+      subPath: ""
+  webserver:
+    replicas: 1
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+  scheduler:
+    replicas: 1
+    resources:
+      requests:
+        cpu: "1000m"
+        memory: "1Gi"
+      limits:
+        cpu: "2000m"
+        memory: "1536Mi"
+  config:
+    core:
+      parallelism: "64"
+      max_active_runs_per_dag: "20"
+      max_active_tasks_per_dag: "20"
+    database:
+      sql_alchemy_pool_size: "15"
+
+# =============================================================================
+# HIVE METASTORE (+ HiveServer2)
+# =============================================================================
+hive-metastore:
+  enabled: true
+  replicas: 1
+  db:
+    user: "hive"
+    password: "hive"
+    name: "metastore"
+  metastore:
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "1000m"
+        memory: "2Gi"
+  server:
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "1000m"
+        memory: "2Gi"
+  initContainer:
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "250m"
+        memory: "256Mi"
+
+# =============================================================================
+# SPARK HISTORY SERVER
+# =============================================================================
+spark-history-server:
+  enabled: true
+  replicas: 1
+  daemonMemory: "1g"
+  logDirectory: "s3a://spark-logs/"
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "1Gi"
+    limits:
+      cpu: "1500m"
+      memory: "1536Mi"
+
+# =============================================================================
+# SPARK CONNECT SERVER
+# =============================================================================
+spark-connect-server:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+  dynamicAllocation:
+    minExecutors: 2
+    maxExecutors: 4
+  executor:
+    nodeSelector:
+      node-role.kubernetes.io/spark-worker: ""
+    localDir: "/mnt/spark-nvme"
+    hostPath: "/mnt/spark-nvme/spark-shuffle"
+
+# =============================================================================
+# KUBE-STARROCKS (external dependency)
+# =============================================================================
+starrocks:
+  enabled: true
+  starrocksCluster:
+    name: starrocks-cluster
+    starrocksFeSpec:
+      image: "starrocks/fe-ubuntu:3.3-latest"
+      replicas: 1
+      requests:
+        cpu: "500m"
+        memory: "2Gi"
+      limits:
+        cpu: "2000m"
+        memory: "4Gi"
+    starrocksBeSpec:
+      image: "starrocks/be-ubuntu:3.3-latest"
+      replicas: 1
+      requests:
+        cpu: "500m"
+        memory: "2Gi"
+      limits:
+        cpu: "2000m"
+        memory: "4Gi"
+      storageVolume:
+        name: be-storage
+        storageClassName: "openebs-hostpath"
+        storageSize: 20Gi
+
+# =============================================================================
+# JUPYTERHUB
+# =============================================================================
+jupyterhub:
+  enabled: true
+  replicas: 1
+  sparkRemote: "sc://spark-connect-server-driver-svc:15002"
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+
+# =============================================================================
+# INGRESS — centralized Traefik ingress rules
+# =============================================================================
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+
+# =============================================================================
+# SPARK OPERATOR (external dependency)
+# =============================================================================
+spark-operator:
+  enabled: true
+  nodeSelector:
+    node-role.kubernetes.io/k8s-gp-node: ""
+  webhook:
+    enable: true
+    nodeSelector:
+      node-role.kubernetes.io/k8s-gp-node: ""
+  prometheus:
+    metrics:
+      enable: true
+    podMonitor:
+      create: false
+      labels:
+        release: kube-prometheus-stack
+  spark:
+    jobNamespaces:
+      - default
+    serviceAccount:
+      create: true
+      name: "spark-operator-spark"
+
+# =============================================================================
+# SUPERSET (external dependency)
+# =============================================================================
+superset:
+  enabled: true
+  postgresql:
+    enabled: false
+  redis:
+    enabled: false
+  nodeSelector:
+    node-role.kubernetes.io/k8s-gp-node: ""
+  image:
+    repository: apachesuperset.docker.scarf.sh/apache/superset
+    tag: "3.1.0"
+    pullPolicy: IfNotPresent
+  initImage:
+    repository: apache/superset
+    tag: dockerize
+    pullPolicy: IfNotPresent
+  bootstrapScript: |
+    #!/bin/bash
+    set -e
+    pip install --no-cache-dir \
+      starrocks==1.0.6 \
+      pymysql \
+      psycopg2-binary \
+      pyhive \
+      thrift \
+      sasl \
+      thrift-sasl
+    if [ ! -f ~/bootstrap ]; then
+      echo "Running Superset with uid {{ .Values.runAsUser }}" > ~/bootstrap
+    fi
+  ingress:
+    enabled: false
+  supersetNode:
+    replicas:
+      enabled: true
+      replicaCount: 1
+    connections:
+      redis_host: "redis"
+      redis_port: "6379"
+      redis_user: ""
+      redis_cache_db: "1"
+      redis_celery_db: "0"
+      redis_ssl:
+        enabled: false
+        ssl_cert_reqs: CERT_NONE
+      db_type: "postgresql"
+      db_host: "postgres.default.svc.cluster.local"
+      db_port: "5432"
+      db_user: superset
+      db_pass: superset
+      db_name: superset
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+  supersetWorker:
+    replicas:
+      enabled: true
+      replicaCount: 1
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+  supersetCeleryBeat:
+    enabled: true
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+  init:
+    enabled: true
+    createAdmin: true
+    adminUser:
+      username: admin
+      firstname: Superset
+      lastname: Admin
+      email: admin@superset.com
+      password: "CHANGE_ME_STRONG_PASSWORD"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "1000m"
+        memory: "2Gi"
+
+# =============================================================================
+# METRICS SERVER (external dependency - required for Headlamp)
+# =============================================================================
+metrics-server:
+  enabled: true
+  args:
+    - --kubelet-insecure-tls
+
+# =============================================================================
+# KUBE-PROMETHEUS-STACK (external dependency)
+# =============================================================================
+kube-prometheus-stack:
+  enabled: true
+  grafana:
+    enabled: true
+    adminPassword: "admin"
+    ingress:
+      enabled: false  # Using centralized ingress instead
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        labelValue: "1"
+        folder: /tmp/dashboards
+        searchNamespace: ALL
+  prometheus:
+    prometheusSpec:
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+
+# =============================================================================
+# LOKI STACK (external dependency)
+# =============================================================================
+loki-stack:
+  enabled: true
+  loki:
+    image:
+      repository: grafana/loki
+      tag: 2.9.3
+    config:
+      schema_config:
+        configs:
+          - from: 2020-10-24
+            store: boltdb-shipper
+            object_store: filesystem
+            schema: v11
+            index:
+              prefix: index_
+              period: 24h
+      storage_config:
+        boltdb_shipper:
+          active_index_directory: /data/loki/boltdb-shipper-active
+          cache_location: /data/loki/boltdb-shipper-cache
+          cache_ttl: 24h
+          shared_store: filesystem
+        filesystem:
+          directory: /data/loki/chunks
+  promtail:
+    enabled: true
+    config:
+      snippets:
+        pipelineStages:
+          - cri: {}
+
+# =============================================================================
+# CLOUDFLARED (local sub-chart)
+# =============================================================================
+cloudflared:
+  enabled: true
+  replicas: 3
+  image: "cloudflare/cloudflared:2025.1.0"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+
+# =============================================================================
+# HEADLAMP (local sub-chart)
+# =============================================================================
+headlamp:
+  enabled: true
+  replicas: 1
+  image: "ghcr.io/headlamp-k8s/headlamp:latest"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+# =============================================================================
+# MONITORING EXTRAS (local sub-chart)
+# =============================================================================
+monitoring:
+  enabled: true
+
+# =============================================================================
+# NETWORKING EXTRAS (local sub-chart)
+# =============================================================================
+networking-extras:
+  enabled: true

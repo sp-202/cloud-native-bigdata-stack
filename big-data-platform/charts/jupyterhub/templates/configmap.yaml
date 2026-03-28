@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jupyterhub-config
+  labels:
+    app: jupyterhub
+data:
+  jupyter_notebook_config.py: |
+    c = get_config()
+    c.ServerApp.ip = '0.0.0.0'
+    c.ServerApp.allow_remote_access = True
+    c.IdentityProvider.token = ''
+
+    # Notebook Persistence with MinIO using s3contents
+    import os
+    from s3contents import S3ContentsManager
+
+    c.ServerApp.contents_manager_class = S3ContentsManager
+    c.S3ContentsManager.access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+    c.S3ContentsManager.secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    c.S3ContentsManager.endpoint_url = os.environ.get('JUPYTER_S3_ENDPOINT')
+    c.S3ContentsManager.bucket = "notebooks"
+    c.S3ContentsManager.prefix = "jupyterhub"
+
+    c.S3ContentsManager.s3fs_additional_kwargs = {
+        "client_kwargs": {
+            "endpoint_url": os.environ.get('JUPYTER_S3_ENDPOINT'),
+            "verify": False,
+            "use_ssl": False,
+        }
+    }
+
+  setup-kernels.sh: |
+    #!/bin/bash
+    set -e
+
+    echo "=== Spark Connect Thin Client Setup ==="
+    echo "Spark Remote: ${SPARK_REMOTE}"
+
+    mkdir -p /home/jovyan/.local/share/jupyter/kernels/pyspark_connect
+    cat > /home/jovyan/.local/share/jupyter/kernels/pyspark_connect/kernel.json << 'KERNEL_EOF'
+    {
+      "argv": ["python", "-m", "ipykernel_launcher", "-f", "{connection_file}"],
+      "display_name": "PySpark (Connect)",
+      "language": "python",
+      "env": {
+        "PYSPARK_PYTHON": "python3",
+        "SPARK_REMOTE": "${SPARK_REMOTE}",
+        "MINIO_ENDPOINT": "${MINIO_ENDPOINT}",
+        "AWS_ACCESS_KEY_ID": "${AWS_ACCESS_KEY_ID}",
+        "AWS_SECRET_ACCESS_KEY": "${AWS_SECRET_ACCESS_KEY}"
+      }
+    }
+    KERNEL_EOF
+
+    mkdir -p /home/jovyan/.ipython/profile_default/startup/
+    cat > /home/jovyan/.ipython/profile_default/startup/00-pyspark-setup.py << 'STARTUP_EOF'
+    import os
+
+    spark_remote = os.environ.get('SPARK_REMOTE')
+
+    if spark_remote:
+        try:
+            from pyspark.sql import SparkSession
+            spark = SparkSession.builder.remote(spark_remote).getOrCreate()
+            import builtins
+            builtins.spark = spark
+            print(f"✅ Connected to Spark {spark.version} via Spark Connect")
+            print(f"   Remote: {spark_remote}")
+        except Exception as e:
+            print(f"⚠️ Spark Connect initialization failed: {e}")
+            print(f"   Ensure Spark Connect Server is running at {spark_remote}")
+    else:
+        print("⚠️ SPARK_REMOTE not set. Spark session not initialized.")
+    STARTUP_EOF
+
+    echo "=== Spark Connect configuration complete ==="

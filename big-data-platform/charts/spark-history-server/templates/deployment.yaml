@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-history-server
+  labels:
+    app: spark-history-server
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: spark-history-server
+  template:
+    metadata:
+      labels:
+        app: spark-history-server
+    spec:
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.spark | nindent 8 }}
+      containers:
+        - name: spark-history-server
+          image: {{ .Values.global.sparkImage }}
+          command:
+            [
+              "/opt/spark/bin/spark-class",
+              "org.apache.spark.deploy.history.HistoryServer",
+            ]
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          env:
+            - name: SPARK_DAEMON_MEMORY
+              value: {{ .Values.daemonMemory | quote }}
+            - name: SPARK_HISTORY_OPTS
+              value: >-
+                -Dspark.history.fs.logDirectory={{ .Values.logDirectory }}
+                -Dspark.hadoop.fs.s3a.endpoint={{ .Values.global.s3.endpoint }}
+                -Dspark.hadoop.fs.s3a.access.key={{ .Values.global.s3.accessKey }}
+                -Dspark.hadoop.fs.s3a.secret.key={{ .Values.global.s3.secretKey }}
+                -Dspark.hadoop.fs.s3a.path.style.access={{ .Values.global.s3.pathStyleAccess }}
+                -Dspark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
+                -Dspark.history.fs.subpath.enabled=true
+                -Dspark.history.fs.cleaner.enabled=false
+                -Dspark.history.retainedApplications=500
+                -Dspark.history.fs.update.interval=10s
+          ports:
+            - containerPort: 18080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-history-server
+spec:
+  type: ClusterIP
+  ports:
+    - port: 18080
+      targetPort: 18080
+      protocol: TCP
+      name: http
+  selector:
+    app: spark-history-server

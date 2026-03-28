@@ -1,0 +1,46 @@
+{{- if .Values.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-config
+  namespace: cloudflare
+  labels:
+    app.kubernetes.io/name: cloudflared
+    app.kubernetes.io/part-of: cloudflare-tunnel
+data:
+  config.yaml: |
+    tunnel: 91e5be1d-3b51-4cac-aebf-d330aafda394
+    credentials-file: /etc/cloudflared/creds/credentials.json
+    protocol: quic
+    metrics: 0.0.0.0:2000
+    no-autoupdate: true
+    ingress:
+      - hostname: airflow.dailyblogstudio.com
+        service: http://traefik.kube-system.svc.cluster.local:80
+      - hostname: minio.dailyblogstudio.com
+        service: http://traefik.kube-system.svc.cluster.local:80
+      - hostname: s3.dailyblogstudio.com
+        service: http://traefik.kube-system.svc.cluster.local:80
+      - hostname: superset.dailyblogstudio.com
+        service: http://traefik.kube-system.svc.cluster.local:80
+      - hostname: jupyterhub.dailyblogstudio.com
+        service: http://traefik.kube-system.svc.cluster.local:80
+      - hostname: spark.dailyblogstudio.com
+        service: http://traefik.kube-system.svc.cluster.local:80
+      - hostname: grafana.dailyblogstudio.com
+        service: http://traefik.kube-system.svc.cluster.local:80
+      - hostname: headlamp.dailyblogstudio.com
+        service: http://traefik.kube-system.svc.cluster.local:80
+      - hostname: traefik.dailyblogstudio.com
+        service: http://traefik.kube-system.svc.cluster.local:80
+      - hostname: hubble.dailyblogstudio.com
+        service: http://traefik.kube-system.svc.cluster.local:80
+      - hostname: dashboard.dailyblogstudio.com
+        service: https://traefik.kube-system.svc.cluster.local:443
+        originRequest:
+          noTLSVerify: true
+      - hostname: argocd.dailyblogstudio.com
+        service: http://traefik.kube-system.svc.cluster.local:80
+      # Catch-all rule (required by cloudflared)
+      - service: http_status:404
+{{- end }}
