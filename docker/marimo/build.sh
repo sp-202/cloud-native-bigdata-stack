@@ -4,8 +4,8 @@ set -e
 # Navigate to the directory containing this script
 cd "$(dirname "$0")"
 
-# Load environment variables from .env file
-ENV_FILE="../../.env"
+# Load environment variables from local .env.marimo file
+ENV_FILE=".env.marimo"
 if [ -f "$ENV_FILE" ]; then
     echo "📦 Loading configuration from $ENV_FILE"
     set -a
@@ -13,9 +13,11 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 else
     echo "⚠️  Warning: $ENV_FILE not found, using default values"
+    MARIMO_IMAGE_VERSION="v1"
 fi
 
-IMAGE_NAME="subhodeep2022/spark-bigdata:marimo-v1"
+# Construct image name from environment variables
+IMAGE_NAME="subhodeep2022/spark-bigdata:marimo-${MARIMO_IMAGE_VERSION}"
 DOCKERFILE_PATH="Dockerfile"
 
 echo "=============================================="

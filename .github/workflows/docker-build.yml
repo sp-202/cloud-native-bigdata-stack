@@ -72,6 +72,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Load Hive configuration
+        id: hive-config
+        run: |
+          source docker/hive/.env.hive
+          echo "HIVE_VERSION=${HIVE_VERSION}" >> $GITHUB_OUTPUT
+          echo "HIVE_IMAGE_VERSION_TAG=${HIVE_IMAGE_VERSION_TAG}" >> $GITHUB_OUTPUT
+
       - name: Set up QEMU (arm64 emulation)
         uses: docker/setup-qemu-action@v3
 
@@ -91,7 +98,7 @@ jobs:
           file: docker/hive/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: subhodeep2022/spark-bigdata:hive-4.1.0-custom-prod
+          tags: subhodeep2022/spark-bigdata:hive-${{ steps.hive-config.outputs.HIVE_VERSION }}-${{ steps.hive-config.outputs.HIVE_IMAGE_VERSION_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -106,12 +113,16 @@ jobs:
       always() &&
       (github.event_name == 'workflow_dispatch' && github.event.inputs.image == 'spark') ||
       (needs.detect-changes.result == 'success' && needs.detect-changes.outputs.spark == 'true')
-    env:
-      SPARK_VERSION: "4.1.1"
-      UNITY_CATALOG_VERSION: "0.3.1"
-      SPARK_IMAGE_VERSION: "v8-sedona-h3"
     steps:
       - uses: actions/checkout@v4
+
+      - name: Load Spark configuration
+        id: spark-config
+        run: |
+          source docker/spark/.env.spark
+          echo "SPARK_VERSION=${SPARK_VERSION}" >> $GITHUB_OUTPUT
+          echo "UNITY_CATALOG_VERSION=${UNITY_CATALOG_VERSION}" >> $GITHUB_OUTPUT
+          echo "SPARK_IMAGE_VERSION=${SPARK_IMAGE_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU (arm64 emulation)
         uses: docker/setup-qemu-action@v3
@@ -132,7 +143,7 @@ jobs:
           file: docker/spark/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: subhodeep2022/spark-bigdata:spark-${{ env.SPARK_VERSION }}-uc-${{ env.UNITY_CATALOG_VERSION }}-${{ env.SPARK_IMAGE_VERSION }}
+          tags: subhodeep2022/spark-bigdata:spark-${{ steps.spark-config.outputs.SPARK_VERSION }}-uc-${{ steps.spark-config.outputs.UNITY_CATALOG_VERSION }}-${{ steps.spark-config.outputs.SPARK_IMAGE_VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -147,11 +158,15 @@ jobs:
       always() &&
       (github.event_name == 'workflow_dispatch' && github.event.inputs.image == 'jupyterhub') ||
       (needs.detect-changes.result == 'success' && needs.detect-changes.outputs.jupyterhub == 'true')
-    env:
-      JUPYTERHUB_VERSION_TAG: "4.0.7"
-      JUPYTERHUB_IMAGE_VERSION_TAG: "prod-v2"
     steps:
       - uses: actions/checkout@v4
+
+      - name: Load JupyterHub configuration
+        id: jupyterhub-config
+        run: |
+          source docker/jupyterhub/.env.jupyterhub
+          echo "JUPYTERHUB_VERSION_TAG=${JUPYTERHUB_VERSION_TAG}" >> $GITHUB_OUTPUT
+          echo "JUPYTERHUB_IMAGE_VERSION_TAG=${JUPYTERHUB_IMAGE_VERSION_TAG}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU (arm64 emulation)
         uses: docker/setup-qemu-action@v3
@@ -172,7 +187,7 @@ jobs:
           file: docker/jupyterhub/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: subhodeep2022/spark-bigdata:jupyterhub-${{ env.JUPYTERHUB_VERSION_TAG }}-pyspark-scala-sql-${{ env.JUPYTERHUB_IMAGE_VERSION_TAG }}
+          tags: subhodeep2022/spark-bigdata:jupyterhub-${{ steps.jupyterhub-config.outputs.JUPYTERHUB_VERSION_TAG }}-pyspark-scala-sql-${{ steps.jupyterhub-config.outputs.JUPYTERHUB_IMAGE_VERSION_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -189,6 +204,12 @@ jobs:
       (needs.detect-changes.result == 'success' && needs.detect-changes.outputs.marimo == 'true')
     steps:
       - uses: actions/checkout@v4
+
+      - name: Load Marimo configuration
+        id: marimo-config
+        run: |
+          source docker/marimo/.env.marimo
+          echo "MARIMO_IMAGE_VERSION=${MARIMO_IMAGE_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU (arm64 emulation)
         uses: docker/setup-qemu-action@v3
@@ -209,7 +230,7 @@ jobs:
           file: docker/marimo/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: subhodeep2022/spark-bigdata:marimo-v1
+          tags: subhodeep2022/spark-bigdata:marimo-${{ steps.marimo-config.outputs.MARIMO_IMAGE_VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -226,6 +247,12 @@ jobs:
       (needs.detect-changes.result == 'success' && needs.detect-changes.outputs.k8s-git-sync == 'true')
     steps:
       - uses: actions/checkout@v4
+
+      - name: Load k8s-git-sync configuration
+        id: git-sync-config
+        run: |
+          source docker/k8s-git-sync/.env.k8s-git-sync
+          echo "GIT_SYNC_IMAGE_VERSION=${GIT_SYNC_IMAGE_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU (arm64 emulation)
         uses: docker/setup-qemu-action@v3
@@ -246,6 +273,6 @@ jobs:
           file: docker/k8s-git-sync/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: subhodeep2022/k8s-git-sync:v2-prod
+          tags: subhodeep2022/k8s-git-sync:${{ steps.git-sync-config.outputs.GIT_SYNC_IMAGE_VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

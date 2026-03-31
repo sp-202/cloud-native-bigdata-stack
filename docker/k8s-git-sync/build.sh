@@ -4,8 +4,8 @@ set -e
 # Navigate to the directory containing this script
 cd "$(dirname "$0")"
 
-# Load environment variables from .env file
-ENV_FILE="../../.env"
+# Load environment variables from local .env.k8s-git-sync file
+ENV_FILE=".env.k8s-git-sync"
 if [ -f "$ENV_FILE" ]; then
     echo "📦 Loading configuration from $ENV_FILE"
     set -a
@@ -13,13 +13,11 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 else
     echo "⚠️  Warning: $ENV_FILE not found, using default values"
-    SPARK_VERSION="4.0.1"
-    UNITY_CATALOG_VERSION="0.3.1"
-    SPARK_IMAGE_VERSION="v4"
+    GIT_SYNC_IMAGE_VERSION="v2-prod"
 fi
 
-# Image name as requested
-IMAGE_NAME="subhodeep2022/k8s-git-sync:v2-prod"
+# Construct image name from environment variables
+IMAGE_NAME="subhodeep2022/k8s-git-sync:${GIT_SYNC_IMAGE_VERSION}"
 DOCKERFILE_PATH="Dockerfile"
 
 echo "=============================================="

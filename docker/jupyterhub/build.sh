@@ -4,8 +4,8 @@ set -e
 # Navigate to the directory containing this script
 cd "$(dirname "$0")"
 
-# Load environment variables from .env file
-ENV_FILE="../../.env"
+# Load environment variables from local .env.jupyterhub file
+ENV_FILE=".env.jupyterhub"
 if [ -f "$ENV_FILE" ]; then
     echo "📦 Loading configuration from $ENV_FILE"
     set -a
@@ -17,8 +17,8 @@ else
     JUPYTERHUB_IMAGE_VERSION_TAG="prod-v2"
 fi
 
-# Define custom image name fallback or use exact from .env
-JUPYTERHUB_CUSTOM_IMAGE=${JUPYTERHUB_IMAGE:-"subhodeep2022/spark-bigdata:jupyterhub-${JUPYTERHUB_VERSION_TAG}-pyspark-scala-sql-${JUPYTERHUB_IMAGE_VERSION_TAG}"}
+# Construct image name from environment variables
+JUPYTERHUB_CUSTOM_IMAGE="subhodeep2022/spark-bigdata:jupyterhub-${JUPYTERHUB_VERSION_TAG}-pyspark-scala-sql-${JUPYTERHUB_IMAGE_VERSION_TAG}"
 DOCKERFILE_PATH="Dockerfile"
 
 echo "=============================================="
