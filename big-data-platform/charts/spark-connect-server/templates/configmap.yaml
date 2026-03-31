@@ -21,6 +21,10 @@ data:
     spark.kubernetes.container.image {{ .Values.global.sparkImage }}
     spark.kubernetes.authenticate.driver.serviceAccountName spark-operator-spark
 
+    # --- Serialization (Sedona + Kryo) ---
+    spark.serializer                 org.apache.spark.serializer.KryoSerializer
+    spark.kryo.registrator           org.apache.sedona.spark.SedonaKryoRegistrator
+
     # --- SQL & ANSI Mode ---
     spark.sql.ansi.enabled           false
 
@@ -63,17 +67,27 @@ data:
     spark.metrics.conf.*.source.jvm.class             org.apache.spark.metrics.source.JvmSource
     spark.metrics.staticSources.enabled               true
 
-    # --- SQL & Catalogs (Delta Lake & Hive) ---
-    spark.sql.extensions             io.delta.sql.DeltaSparkSessionExtension
-    spark.sql.defaultCatalog         spark_catalog
-    spark.sql.catalog.spark_catalog  org.apache.spark.sql.delta.catalog.DeltaCatalog
+    # --- SQL & Catalogs (Delta Lake, Hive & Unity Catalog) ---
+    spark.sql.extensions             org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,io.delta.sql.DeltaSparkSessionExtension
     spark.sql.catalogImplementation  hive
     spark.hadoop.hive.metastore.uris {{ .Values.global.hiveMetastore.uri }}
     spark.sql.warehouse.dir          s3a://warehouse/managed/
 
+    # --- spark_catalog (Delta Lake default) ---
+    spark.sql.catalog.spark_catalog  org.apache.spark.sql.delta.catalog.DeltaCatalog
+
+    # --- Unity Catalog OSS ---
+    spark.sql.catalog.unity          io.unitycatalog.spark.UCSingleCatalog
+    spark.sql.catalog.unity.uri      {{ .Values.global.unityCatalog.uri }}
+    spark.sql.catalog.unity.token    {{ .Values.global.unityCatalog.token }}
+    spark.sql.defaultCatalog         unity
+
     # --- Delta Lake Features ---
-    spark.databricks.delta.universalFormat.enabledFormats none
+    spark.databricks.delta.catalog.enableServerSidePlanning true
     spark.databricks.delta.allowArbitraryProperties.enabled true
+    spark.databricks.delta.universalFormat.enabledFormats iceberg
+    spark.databricks.delta.enableIcebergCompatV2 true
+    spark.databricks.delta.columnMapping.mode name
 
     # --- S3 / MinIO Configuration ---
     spark.hadoop.fs.s3a.impl                 org.apache.hadoop.fs.s3a.S3AFileSystem

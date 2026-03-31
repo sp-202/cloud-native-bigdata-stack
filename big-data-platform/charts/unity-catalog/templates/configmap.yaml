@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unity-catalog-config
+  labels:
+    app: unity-catalog
+data:
+  server.properties: |
+    ## Unity Catalog OSS 0.4.0 Server Configuration
+    server.port={{ .Values.server.port }}
+
+    ## Storage root is injected at runtime via STORAGE_ROOT env var
+    ## (populated from unity-catalog-s3 Secret created by bootstrap script)
+
+  hibernate.properties: |
+    hibernate.connection.driver_class=org.postgresql.Driver
+    hibernate.connection.url=jdbc:postgresql://{{ .Values.global.postgres.host }}:{{ .Values.global.postgres.port }}/{{ .Values.db.name }}
+    hibernate.connection.username={{ .Values.db.user }}
+    hibernate.connection.password={{ .Values.db.password }}
+    hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+    hibernate.hbm2ddl.auto=update
+    hibernate.show_sql=false
+
+  entrypoint.sh: |
+    #!/bin/bash
+    set -e
+    ## Dynamically inject storage-root from Secret into server.properties
+    CONF_DIR="/opt/unitycatalog/etc/conf"
+    if [ -n "$UC_STORAGE_ROOT" ]; then
+      echo "storage-root=${UC_STORAGE_ROOT}" >> "${CONF_DIR}/server.properties"
+    fi
+    if [ -n "$UC_S3_REGION" ]; then
+      echo "s3.region=${UC_S3_REGION}" >> "${CONF_DIR}/server.properties"
+    fi
+    ## UC OSS uses instance profile credentials (IAM role on EC2 nodes)
+    ## No static access keys needed
+    exec /opt/unitycatalog/bin/start-uc-server
