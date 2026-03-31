@@ -44,11 +44,21 @@ spec:
               --conf spark.hadoop.fs.s3a.endpoint={{ .Values.global.s3.endpoint }} \
               --conf spark.hadoop.fs.s3a.access.key={{ .Values.global.s3.accessKey }} \
               --conf spark.hadoop.fs.s3a.secret.key={{ .Values.global.s3.secretKey }} \
-              --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
+              --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+              --conf spark.kryo.registrator=org.apache.sedona.spark.SedonaKryoRegistrator \
+              --conf spark.sql.extensions=org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,io.delta.sql.DeltaSparkSessionExtension \
               --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
+              --conf spark.sql.catalog.unity=io.unitycatalog.spark.UCSingleCatalog \
+              --conf spark.sql.catalog.unity.uri={{ .Values.global.unityCatalog.uri }} \
+              --conf spark.sql.catalog.unity.token={{ .Values.global.unityCatalog.token }} \
+              --conf spark.sql.defaultCatalog=unity \
               --conf spark.sql.catalogImplementation=hive \
               --conf spark.hadoop.hive.metastore.uris={{ .Values.global.hiveMetastore.uri }} \
               --conf spark.sql.warehouse.dir=s3a://warehouse/managed/ \
+              --conf spark.databricks.delta.catalog.enableServerSidePlanning=true \
+              --conf spark.databricks.delta.universalFormat.enabledFormats=iceberg \
+              --conf spark.databricks.delta.enableIcebergCompatV2=true \
+              --conf spark.databricks.delta.columnMapping.mode=name \
               {{- range $key, $val := .Values.executor.nodeSelector }}
               --conf spark.kubernetes.executor.node.selector.{{ $key }}="{{ $val }}" \
               {{- end }}

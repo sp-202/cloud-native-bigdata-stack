@@ -1,0 +1,5 @@
+apiVersion: v2
+name: unity-catalog
+description: Unity Catalog OSS 0.4.0 server and UI sub-chart
+type: application
+version: 1.0.0

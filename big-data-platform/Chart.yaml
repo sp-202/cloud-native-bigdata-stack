@@ -94,6 +94,11 @@ dependencies:
     repository: "file://./charts/spark-history-server"
     condition: spark-history-server.enabled
 
+  - name: unity-catalog
+    version: "1.0.0"
+    repository: "file://./charts/unity-catalog"
+    condition: unity-catalog.enabled
+
   - name: spark-connect-server
     version: "1.0.0"
     repository: "file://./charts/spark-connect-server"

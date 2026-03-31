@@ -63,6 +63,11 @@ global:
   hiveMetastore:
     uri: "thrift://hive-metastore.default.svc.cluster.local:9083"
 
+  # --- Unity Catalog OSS (shared by Spark, JupyterHub) ---
+  unityCatalog:
+    uri: "http://unity-catalog-server.default.svc.cluster.local:8080"
+    token: ""
+
 # =============================================================================
 # PERSISTENCE — PV/PVC definitions
 # =============================================================================
@@ -283,6 +288,40 @@ spark-connect-server:
       node-role.kubernetes.io/spark-worker: ""
     localDir: "/mnt/spark-nvme"
     hostPath: "/mnt/spark-nvme/spark-shuffle"
+
+# =============================================================================
+# UNITY CATALOG OSS 0.4.0
+# =============================================================================
+unity-catalog:
+  enabled: true
+  replicas: 1
+  db:
+    name: "unity_catalog"
+    user: "postgres"
+    password: "password"
+  server:
+    image: "unitycatalog/unitycatalog:0.4.0"
+    port: 8080
+    # S3 bucket name + region are injected dynamically:
+    #   Terraform → SSM param → bootstrap script → K8s Secret (unity-catalog-s3)
+    # AWS credentials use EC2 instance profile (IAM role) — no static keys needed
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "1000m"
+        memory: "2Gi"
+  ui:
+    image: "unitycatalog/unitycatalog-ui:0.4.0"
+    port: 3000
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
 
 # =============================================================================
 # KUBE-STARROCKS (external dependency)
