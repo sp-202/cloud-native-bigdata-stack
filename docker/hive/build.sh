@@ -4,8 +4,8 @@ set -e
 # Navigate to the directory containing this script
 cd "$(dirname "$0")"
 
-# Load environment variables from .env file
-ENV_FILE="../../.env"
+# Load environment variables from local .env.hive file
+ENV_FILE=".env.hive"
 if [ -f "$ENV_FILE" ]; then
     echo "📦 Loading configuration from $ENV_FILE"
     set -a
@@ -13,9 +13,12 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 else
     echo "⚠️  Warning: $ENV_FILE not found, using default values"
+    HIVE_VERSION="4.1.0"
+    HIVE_IMAGE_VERSION_TAG="custom-prod"
 fi
 
-IMAGE_NAME="subhodeep2022/spark-bigdata:hive-4.1.0-custom-prod"
+# Construct image name from environment variables
+IMAGE_NAME="subhodeep2022/spark-bigdata:hive-${HIVE_VERSION}-${HIVE_IMAGE_VERSION_TAG}"
 DOCKERFILE_PATH="Dockerfile"
 
 echo "=============================================="
