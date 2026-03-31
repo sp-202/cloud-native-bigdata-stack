@@ -50,8 +50,8 @@ data:
     spark.hadoop.fs.s3a.paging.maximum           5000
 
     # --- Executor & Driver Resources ---
-    spark.executor.cores             4
-    spark.executor.memory            20g
+    spark.executor.cores             2
+    spark.executor.memory            4g
     spark.driver.cores               2
     spark.driver.memory              2g
 
