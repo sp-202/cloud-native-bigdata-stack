@@ -1,5 +1,10 @@
 apiVersion: v2
+# name kept as 'unity-catalog' to match parent Chart.yaml dependency reference
 name: unity-catalog
-description: Unity Catalog OSS 0.4.0 server and UI sub-chart
+description: Unity Catalog OSS — official Helm chart (sourced from unitycatalog/unitycatalog)
+home: "https://github.com/unitycatalog/unitycatalog/tree/main/helm"
+sources: ["https://github.com/unitycatalog/unitycatalog/tree/main/helm"]
 type: application
+
 version: 1.0.0
+appVersion: "0.4.0"
