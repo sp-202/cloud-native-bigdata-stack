@@ -235,9 +235,7 @@ airflow:
         memory: "2Gi"
   logs:
     persistence:
-      enabled: true
-      storageClassName: "openebs-hostpath"
-      size: 10Gi
+      enabled: false
   config:
     core:
       parallelism: "64"
@@ -649,8 +647,14 @@ loki-stack:
   promtail:
     enabled: true
     livenessProbe:
+      httpGet:
+        path: /ready
+        port: http-metrics
       timeoutSeconds: 5
     readinessProbe:
+      httpGet:
+        path: /ready
+        port: http-metrics
       timeoutSeconds: 5
     config:
       snippets:
@@ -697,4 +701,4 @@ monitoring:
 # NETWORKING EXTRAS (local sub-chart)
 # =============================================================================
 networking-extras:
-  enabled: true
+  enabled: false
