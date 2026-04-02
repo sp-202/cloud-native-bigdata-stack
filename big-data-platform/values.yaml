@@ -40,14 +40,14 @@ global:
   # --- Node Selectors ---
   # Labels are applied by the node-auto-labeler DaemonSet in the bootstrap script.
   # The auto-labeler reads the `node-role` K8s label set by Terraform on each node
-  # and creates node-role.kubernetes.io/<role>=  e.g. spark-critical → node-role.kubernetes.io/spark-critical
+  # and creates node-role.kubernetes.io/<role>=  e.g. spark-node → node-role.kubernetes.io/spark-node
   nodeSelector:
     gp:
       node-role.kubernetes.io/k8s-gp-node: ""
     spark:
-      node-role.kubernetes.io/spark-critical: ""
+      node-role.kubernetes.io/spark-node: ""
     sparkWorker:
-      node-role.kubernetes.io/spark-critical: ""
+      node-role.kubernetes.io/spark-worker: ""
     minio:
       node-role.kubernetes.io/minio-worker: ""
     controlPlane:
