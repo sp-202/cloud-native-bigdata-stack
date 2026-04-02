@@ -10,17 +10,17 @@ data:
     kind: Pod
     spec:
       # nodeSelectorTerms uses OR logic — executor lands on whichever
-      # spark pool (critical OR spot) has available capacity.
+      # spark pool (spark-node OR spark-worker) has available capacity.
       # This ensures minExecutors always find a node even if spot is empty.
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: node-role.kubernetes.io/spark-critical
+                  - key: node-role.kubernetes.io/spark-node
                     operator: Exists
               - matchExpressions:
-                  - key: node-role.kubernetes.io/spark-spot
+                  - key: node-role.kubernetes.io/spark-worker
                     operator: Exists
       # Tolerate spot interruption taint if applied by NTH
       tolerations:
