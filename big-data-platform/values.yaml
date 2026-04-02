@@ -156,22 +156,33 @@ minio:
     - delta-tables
 
 # =============================================================================
+# AIRFLOW SECRETS — used by templates/airflow-secrets.yaml
+# These values are NOT passed to the airflow sub-chart.
+# The sub-chart references the pre-created secrets by name below.
+# =============================================================================
+airflowSecrets:
+  fernetKey: "46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho="
+  webserverSecretKey: "bigdata-platform-airflow-webserver-key-change-me"
+  metadataConnection:
+    user: airflow
+    pass: airflow
+    host: postgres.default.svc.cluster.local
+    port: 5432
+    db: airflow
+
+# =============================================================================
 # APACHE AIRFLOW (external dependency)
 # =============================================================================
 airflow:
   enabled: true
   executor: "LocalExecutor"
-  fernetKey: "46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho="
+  # Reference pre-created secrets from templates/airflow-secrets.yaml
+  fernetKeySecretName: "big-data-platform-fernet-key"
+  webserverSecretKeySecretName: "big-data-platform-webserver-secret-key"
   postgresql:
     enabled: false
   data:
-    metadataConnection:
-      user: airflow
-      pass: airflow
-      protocol: postgresql
-      host: postgres.default.svc.cluster.local
-      port: 5432
-      db: airflow
+    metadataSecretName: "big-data-platform-metadata"
   images:
     airflow:
       repository: apache/airflow
@@ -205,7 +216,7 @@ airflow:
         memory: "1536Mi"
   logs:
     persistence:
-      enabled: false
+      enabled: true
       storageClassName: "openebs-hostpath"
       size: 5Gi
   config:
@@ -291,9 +302,11 @@ spark-connect-server:
 
 # =============================================================================
 # UNITY CATALOG OSS 0.4.0
+# NOTE: unitycatalog/unitycatalog:0.4.0 does not exist on Docker Hub.
+# Disabled until a valid image tag is confirmed (check ghcr.io or build custom).
 # =============================================================================
 unity-catalog:
-  enabled: true
+  enabled: false
   replicas: 1
   db:
     name: "unity_catalog"
@@ -384,10 +397,19 @@ spark-operator:
   enabled: true
   nodeSelector:
     node-role.kubernetes.io/k8s-gp-node: ""
+  controller:
+    livenessProbe:
+      timeoutSeconds: 5
+    readinessProbe:
+      timeoutSeconds: 5
   webhook:
     enable: true
     nodeSelector:
       node-role.kubernetes.io/k8s-gp-node: ""
+    livenessProbe:
+      timeoutSeconds: 5
+    readinessProbe:
+      timeoutSeconds: 5
   prometheus:
     metrics:
       enable: true
@@ -510,6 +532,10 @@ metrics-server:
   enabled: true
   args:
     - --kubelet-insecure-tls
+  livenessProbe:
+    timeoutSeconds: 5
+  readinessProbe:
+    timeoutSeconds: 5
 
 # =============================================================================
 # KUBE-PROMETHEUS-STACK (external dependency)
@@ -533,6 +559,11 @@ kube-prometheus-stack:
       serviceMonitorSelectorNilUsesHelmValues: false
       podMonitorSelectorNilUsesHelmValues: false
   prometheus-node-exporter:
+    livenessProbe:
+      timeoutSeconds: 5
+    readinessProbe:
+      timeoutSeconds: 5
+  kube-state-metrics:
     livenessProbe:
       timeoutSeconds: 5
     readinessProbe:
@@ -567,6 +598,10 @@ loki-stack:
           directory: /data/loki/chunks
   promtail:
     enabled: true
+    livenessProbe:
+      timeoutSeconds: 5
+    readinessProbe:
+      timeoutSeconds: 5
     config:
       snippets:
         pipelineStages:
