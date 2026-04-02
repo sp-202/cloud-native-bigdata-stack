@@ -61,8 +61,8 @@ data:
     spark.executor.cores             2
     spark.executor.memory            4g
     spark.executor.memoryOverhead    1g
-    spark.driver.cores               4
-    spark.driver.memory              8g
+    spark.driver.cores               2
+    spark.driver.memory              4g
     spark.driver.memoryOverhead      2g
     spark.kubernetes.executor.request.cores 2
     spark.kubernetes.executor.limit.cores   2
