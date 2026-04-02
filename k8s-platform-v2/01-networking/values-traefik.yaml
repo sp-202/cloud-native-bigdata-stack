@@ -45,3 +45,9 @@ podSecurityContext:
   runAsUser: 65532
   runAsGroup: 65532
   runAsNonRoot: true
+
+# Increase probe timeouts from default 2s to avoid false restarts under load
+readinessProbe:
+  timeoutSeconds: 10
+livenessProbe:
+  timeoutSeconds: 10
