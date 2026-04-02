@@ -33,4 +33,4 @@ data:
           effect: "NoExecute"
           tolerationSeconds: 30
       containers:
-        - name: spark-kubernetes-driver
+        - name: spark-kubernetes-executor
