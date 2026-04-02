@@ -117,7 +117,7 @@ persistence:
       node-role.kubernetes.io/k8s-gp-node: ""
 
 # =============================================================================
-# POSTGRES
+# POSTGRES — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
 # =============================================================================
 postgres:
   enabled: true
@@ -128,11 +128,11 @@ postgres:
       cpu: "500m"
       memory: "1Gi"
     limits:
-      cpu: "1000m"
-      memory: "2Gi"
+      cpu: "2000m"
+      memory: "4Gi"
 
 # =============================================================================
-# REDIS
+# REDIS — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
 # =============================================================================
 redis:
   enabled: true
@@ -140,14 +140,14 @@ redis:
   image: "redis:7.2-alpine"
   resources:
     requests:
-      cpu: "1000m"
-      memory: "1024Mi"
+      cpu: "500m"
+      memory: "512Mi"
     limits:
-      cpu: "1500m"
-      memory: "2048Mi"
+      cpu: "1000m"
+      memory: "1Gi"
 
 # =============================================================================
-# MINIO
+# MINIO — MinIO node (im4gn.8xlarge: 32 vCPU / 128 GB + NVMe RAID0)
 # =============================================================================
 minio:
   enabled: true
@@ -156,11 +156,11 @@ minio:
   mcImage: "minio/mc:latest"
   resources:
     requests:
-      cpu: "500m"
-      memory: "1Gi"
+      cpu: "2000m"
+      memory: "4Gi"
     limits:
-      cpu: "1000m"
-      memory: "2Gi"
+      cpu: "8000m"
+      memory: "16Gi"
   buckets:
     - warehouse
     - spark-logs
@@ -214,19 +214,19 @@ airflow:
     resources:
       requests:
         cpu: "500m"
-        memory: "512Mi"
-      limits:
-        cpu: "1000m"
         memory: "1Gi"
+      limits:
+        cpu: "1500m"
+        memory: "2Gi"
   scheduler:
     replicas: 1
     resources:
       requests:
-        cpu: "1000m"
+        cpu: "500m"
         memory: "1Gi"
       limits:
         cpu: "2000m"
-        memory: "1536Mi"
+        memory: "2Gi"
   logs:
     persistence:
       enabled: true
@@ -241,7 +241,7 @@ airflow:
       sql_alchemy_pool_size: "15"
 
 # =============================================================================
-# HIVE METASTORE (+ HiveServer2)
+# HIVE METASTORE (+ HiveServer2) — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
 # =============================================================================
 hive-metastore:
   enabled: true
@@ -256,16 +256,16 @@ hive-metastore:
         cpu: "500m"
         memory: "1Gi"
       limits:
-        cpu: "1000m"
-        memory: "2Gi"
+        cpu: "2000m"
+        memory: "4Gi"
   server:
     resources:
       requests:
         cpu: "500m"
         memory: "1Gi"
       limits:
-        cpu: "1000m"
-        memory: "2Gi"
+        cpu: "2000m"
+        memory: "4Gi"
   initContainer:
     resources:
       requests:
@@ -276,23 +276,25 @@ hive-metastore:
         memory: "256Mi"
 
 # =============================================================================
-# SPARK HISTORY SERVER
+# SPARK HISTORY SERVER — Spark node (i4g.8xlarge: 32 vCPU / 256 GB)
+# Light read workload; runs on spark node so it can access local NVMe event logs
 # =============================================================================
 spark-history-server:
   enabled: true
   replicas: 1
-  daemonMemory: "1g"
+  daemonMemory: "2g"
   logDirectory: "s3a://spark-logs/"
   resources:
     requests:
-      cpu: "1000m"
-      memory: "1Gi"
+      cpu: "500m"
+      memory: "2Gi"
     limits:
-      cpu: "1500m"
-      memory: "1536Mi"
+      cpu: "2000m"
+      memory: "4Gi"
 
 # =============================================================================
-# SPARK CONNECT SERVER
+# SPARK CONNECT SERVER — Spark node (i4g.8xlarge: 32 vCPU / 256 GB)
+# Driver runs on spark node; executors dispatched to spark-worker nodes
 # =============================================================================
 spark-connect-server:
   enabled: true
@@ -300,13 +302,13 @@ spark-connect-server:
   resources:
     requests:
       cpu: "4000m"
-      memory: "2Gi"
+      memory: "8Gi"
     limits:
-      cpu: "4500m"
-      memory: "3Gi"
+      cpu: "8000m"
+      memory: "16Gi"
   dynamicAllocation:
     minExecutors: 2
-    maxExecutors: 4
+    maxExecutors: 8
   executor:
     nodeSelector:
       node-role.kubernetes.io/spark-worker: ""
@@ -380,7 +382,7 @@ starrocks:
         storageSize: 20Gi
 
 # =============================================================================
-# JUPYTERHUB
+# JUPYTERHUB — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
 # =============================================================================
 jupyterhub:
   enabled: true
@@ -389,10 +391,10 @@ jupyterhub:
   resources:
     requests:
       cpu: "500m"
-      memory: "1Gi"
-    limits:
-      cpu: "1000m"
       memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "8Gi"
 
 # =============================================================================
 # INGRESS — centralized Traefik ingress rules
@@ -493,8 +495,8 @@ superset:
       db_name: superset
     resources:
       requests:
-        memory: "2Gi"
-        cpu: "1000m"
+        memory: "1Gi"
+        cpu: "500m"
       limits:
         memory: "4Gi"
         cpu: "2000m"
@@ -504,8 +506,8 @@ superset:
       replicaCount: 1
     resources:
       requests:
-        memory: "2Gi"
-        cpu: "1000m"
+        memory: "1Gi"
+        cpu: "500m"
       limits:
         memory: "4Gi"
         cpu: "2000m"
@@ -513,8 +515,8 @@ superset:
     enabled: true
     resources:
       requests:
-        memory: "256Mi"
-        cpu: "250m"
+        memory: "128Mi"
+        cpu: "100m"
       limits:
         memory: "512Mi"
         cpu: "500m"
@@ -532,8 +534,8 @@ superset:
       password: "CHANGE_ME_STRONG_PASSWORD"
     resources:
       requests:
-        cpu: "500m"
-        memory: "1Gi"
+        cpu: "250m"
+        memory: "512Mi"
       limits:
         cpu: "1000m"
         memory: "2Gi"
@@ -567,20 +569,48 @@ kube-prometheus-stack:
         labelValue: "1"
         folder: /tmp/dashboards
         searchNamespace: ALL
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
   prometheus:
     prometheusSpec:
       serviceMonitorSelectorNilUsesHelmValues: false
       podMonitorSelectorNilUsesHelmValues: false
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
+        limits:
+          cpu: "2000m"
+          memory: "4Gi"
   prometheus-node-exporter:
     livenessProbe:
       timeoutSeconds: 5
     readinessProbe:
       timeoutSeconds: 5
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
   kube-state-metrics:
     livenessProbe:
       timeoutSeconds: 5
     readinessProbe:
       timeoutSeconds: 5
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"
 
 # =============================================================================
 # LOKI STACK (external dependency)
@@ -621,7 +651,7 @@ loki-stack:
           - cri: {}
 
 # =============================================================================
-# CLOUDFLARED (local sub-chart)
+# CLOUDFLARED (local sub-chart) — spread across GP nodes for tunnel HA
 # =============================================================================
 cloudflared:
   enabled: true
@@ -630,13 +660,13 @@ cloudflared:
   resources:
     requests:
       cpu: "100m"
-      memory: "128Mi"
+      memory: "64Mi"
     limits:
-      cpu: "500m"
-      memory: "256Mi"
+      cpu: "200m"
+      memory: "128Mi"
 
 # =============================================================================
-# HEADLAMP (local sub-chart)
+# HEADLAMP (local sub-chart) — GP node
 # =============================================================================
 headlamp:
   enabled: true
@@ -647,8 +677,8 @@ headlamp:
       cpu: "100m"
       memory: "128Mi"
     limits:
-      cpu: "500m"
-      memory: "512Mi"
+      cpu: "300m"
+      memory: "256Mi"
 
 # =============================================================================
 # MONITORING EXTRAS (local sub-chart)
