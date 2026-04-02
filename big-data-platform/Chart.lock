@@ -50,6 +50,9 @@ dependencies:
 - name: spark-history-server
   repository: file://./charts/spark-history-server
   version: 1.0.0
+- name: unity-catalog
+  repository: file://./charts/unity-catalog
+  version: 1.0.0
 - name: spark-connect-server
   repository: file://./charts/spark-connect-server
   version: 1.0.0
@@ -59,5 +62,5 @@ dependencies:
 - name: ingress
   repository: file://./charts/ingress
   version: 1.0.0
-digest: sha256:6bd2fb0d2031e42f57e2151a6b8efda2d2737b7a41740c5a059921138ab560b2
-generated: "2026-03-27T22:04:07.25737178+05:30"
+digest: sha256:b44f4d4369a38e64af35ff8c6bfe564ad61fe63c9f6ad30d96da13ab2b32000b
+generated: "2026-04-02T05:54:12.091729914Z"
