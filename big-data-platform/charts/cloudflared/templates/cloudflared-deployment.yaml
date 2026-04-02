@@ -78,10 +78,10 @@ spec:
             httpGet:
               path: /ready
               port: metrics
-            initialDelaySeconds: 10
+            initialDelaySeconds: 30
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
+            timeoutSeconds: 10
+            failureThreshold: 20
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:

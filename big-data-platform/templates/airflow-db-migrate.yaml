@@ -6,8 +6,12 @@ metadata:
   name: airflow-db-migrate
   namespace: default
   annotations:
-    # ArgoCD: run this Job after every sync so postgres is already running
-    argocd.argoproj.io/hook: PostSync
+    # ArgoCD sync wave 5: runs after Postgres (wave 0) is healthy but before
+    # Airflow components attempt to check for completed migrations.
+    # Using Sync hook (not PostSync) so it runs within the sync operation,
+    # allowing ArgoCD to verify completion before marking the app healthy.
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "5"
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 3
@@ -17,6 +21,18 @@ spec:
       restartPolicy: OnFailure
       nodeSelector:
         {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+      initContainers:
+        - name: wait-for-postgres
+          image: "postgres:15-alpine"
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} -U {{ .Values.global.postgres.user }}; do
+                echo "Waiting for postgres at {{ .Values.global.postgres.host }}:{{ .Values.global.postgres.port }}...";
+                sleep 3;
+              done
+              echo "Postgres is ready."
       containers:
         - name: airflow-db-migrate
           image: {{ .Values.global.airflowImage | quote }}
