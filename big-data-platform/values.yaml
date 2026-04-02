@@ -77,6 +77,7 @@ global:
 # PERSISTENCE — PV/PVC definitions
 # =============================================================================
 persistence:
+  enabled: true
   postgres:
     size: 10Gi
     localPath: "/var/openebs/local/postgres-data"
