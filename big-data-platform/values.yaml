@@ -294,34 +294,153 @@ spark-connect-server:
 # =============================================================================
 unity-catalog:
   enabled: true
-  replicas: 1
-  db:
-    name: "unity_catalog"
-    user: "postgres"
-    password: "password"
+  # Fix service names to 'unity-catalog-server' and 'unity-catalog-ui' so the
+  # centralized ingress (charts/ingress/) can reference them without release-name prefix.
+  fullnameOverride: unity-catalog
+
+  # ----------------------------------------------------------------------------
+  # Storage — S3 on AWS with EC2 instance profile (no static access keys).
+  # The K8s Secret 'unity-catalog-s3' is created by the bootstrap script
+  # (Terraform → SSM param → bootstrap script → K8s Secret). It must have:
+  #   storage-root  full S3 URI  e.g. s3://warehouse-bucket/unity-catalog
+  #   region        AWS region   e.g. us-east-1
+  #   role-arn      (optional) IAM role ARN for STS assume-role
+  #
+  # We bypass the official chart's S3 credential loop (which requires
+  # static accessKey/secretKey) and instead inject the dynamic S3 properties
+  # in 'inject-s3-config' extraInitContainer, which runs after the official
+  # init container has already rendered server.properties via envsubst.
+  # The AWS SDK then auto-discovers credentials from the EC2 instance profile.
+  # ----------------------------------------------------------------------------
+  storage:
+    modelStorageRoot: "file:/tmp/ucroot"
+    credentials:
+      s3: []    # empty — dynamic config injected by extraInitContainer below
+
+  auth:
+    enabled: false
+
   server:
-    image: "unitycatalog/unitycatalog:0.4.0"
-    port: 8080
-    # S3 bucket name + region are injected dynamically:
-    #   Terraform → SSM param → bootstrap script → K8s Secret (unity-catalog-s3)
-    # AWS credentials use EC2 instance profile (IAM role) — no static keys needed
-    resources:
-      requests:
-        cpu: "500m"
-        memory: "1Gi"
-      limits:
-        cpu: "1000m"
-        memory: "2Gi"
+    enabled: true
+    db:
+      type: postgresql
+      postgresqlConfig:
+        host: "postgres.default.svc.cluster.local"
+        port: 5432
+        dbName: "unity_catalog"
+        username: "postgres"
+      # Override the generated hibernate.properties to inject the password directly.
+      # The official chart requires a K8s Secret for the password; we bypass that
+      # here since the password is already managed in global.postgres.password.
+      overrideConfig: |
+        hibernate.connection.driver_class=org.postgresql.Driver
+        hibernate.connection.url=jdbc:postgresql://postgres.default.svc.cluster.local:5432/unity_catalog
+        hibernate.connection.username=postgres
+        hibernate.connection.password=password
+        hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+        hibernate.hbm2ddl.auto=update
+        hibernate.show_sql=false
+        hibernate.archive.autodetection=class
+        hibernate.use_sql_comments=true
+    service:
+      type: ClusterIP
+      port: 8080
+    deployment:
+      replicaCount: 1
+      image:
+        repository: unitycatalog/unitycatalog
+        pullPolicy: Always
+        tag: "0.4.0"
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
+        limits:
+          cpu: "1000m"
+          memory: "2Gi"
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
+      enableStartupProbe: true
+      enableReadinessProbe: true
+      enableLivenessProbe: true
+      # Runs AFTER the official init container (which renders server.properties).
+      # Appends dynamic S3 config from the unity-catalog-s3 Secret using
+      # UC 0.4.0 indexed property format (s3.bucketPath.0, s3.region.0, etc.).
+      extraInitContainers:
+        - name: inject-s3-config
+          image: alpine:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              CONF="/home/unitycatalog/etc/conf/server.properties"
+              # storage-root: default location for all UC-managed data
+              echo "storage-root=${UC_STORAGE_ROOT}" >> "${CONF}"
+              # Derive bucket-level path from storage-root for the auth scope
+              BUCKET_PATH=$(echo "${UC_STORAGE_ROOT}" | sed 's|\(s3://[^/]*\).*|\1|')
+              echo "s3.bucketPath.0=${BUCKET_PATH}" >> "${CONF}"
+              echo "s3.region.0=${UC_S3_REGION}" >> "${CONF}"
+              # IAM role ARN is optional — omit to use EC2 instance profile directly
+              if [ -n "${UC_S3_ROLE_ARN}" ]; then
+                echo "s3.awsRoleArn.0=${UC_S3_ROLE_ARN}" >> "${CONF}"
+              fi
+              echo "S3 config injected into ${CONF}"
+          env:
+            - name: UC_STORAGE_ROOT
+              valueFrom:
+                secretKeyRef:
+                  name: unity-catalog-s3
+                  key: storage-root
+            - name: UC_S3_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: unity-catalog-s3
+                  key: region
+            - name: UC_S3_ROLE_ARN
+              valueFrom:
+                secretKeyRef:
+                  name: unity-catalog-s3
+                  key: role-arn
+                  optional: true
+          volumeMounts:
+            - name: config-volume
+              mountPath: /home/unitycatalog/etc/conf
+
   ui:
-    image: "unitycatalog/unitycatalog-ui:0.4.0"
-    port: 3000
-    resources:
-      requests:
-        cpu: "250m"
-        memory: "256Mi"
-      limits:
-        cpu: "500m"
-        memory: "512Mi"
+    enabled: true
+    # With ingress enabled the UI must NOT proxy /api internally.
+    # The centralized ingress routes /api → server and / → UI on the same host.
+    proxyApiRequests: false
+    service:
+      type: ClusterIP
+      port: 3000
+    deployment:
+      replicaCount: 1
+      image:
+        repository: unitycatalog/unitycatalog-ui
+        pullPolicy: Always
+        tag: "0.4.0"
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "256Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
+      enableStartupProbe: true
+
+  ingress:
+    # UC chart built-in ingress disabled — handled by charts/ingress/ sub-chart
+    # which routes unity-catalog.dailyblogstudio.com:
+    #   /api  → unity-catalog-server (port 8080)
+    #   /     → unity-catalog-ui    (port 3000)
+    enabled: false
+
+  serviceAccount:
+    create: false
 
 # =============================================================================
 # KUBE-STARROCKS (external dependency)
