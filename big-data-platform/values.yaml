@@ -315,13 +315,9 @@ spark-connect-server:
     minExecutors: 2
     maxExecutors: 8
   executor:
-    # Targets spark-critical (i4g.8xlarge: 32 vCPU / 256 GB) nodes.
-    # To also use spot nodes (r6gd.12xlarge), add node-role.kubernetes.io/spark-spot
-    # as a second nodeSelector entry — but note nodeSelector is AND logic so you
-    # cannot target multiple pools with a single selector. Use SparkApplication
-    # CRD with nodeAffinity for OR-pool scheduling across critical + spot.
-    nodeSelector:
-      node-role.kubernetes.io/spark-critical: ""
+    # Node targeting is handled by executor-pod-template-cm.yaml via nodeAffinity
+    # (OR logic: spark-critical OR spark-spot). nodeSelector removed — it is
+    # AND-only and cannot target multiple pools.
     localDir: "/mnt/spark-nvme"
     hostPath: "/mnt/spark-nvme/spark-shuffle"
 

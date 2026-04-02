@@ -59,9 +59,7 @@ spec:
               --conf spark.databricks.delta.universalFormat.enabledFormats=iceberg \
               --conf spark.databricks.delta.enableIcebergCompatV2=true \
               --conf spark.databricks.delta.columnMapping.mode=name \
-              {{- range $key, $val := .Values.executor.nodeSelector }}
-              --conf spark.kubernetes.executor.node.selector.{{ $key }}="{{ $val }}" \
-              {{- end }}
+              --conf spark.kubernetes.executor.podTemplateFile=local:///opt/spark/conf/executor-pod-template.yaml \
               --conf spark.kubernetes.executor.volumes.hostPath.spark-local-dir.mount.path={{ .Values.executor.localDir }} \
               --conf spark.kubernetes.executor.volumes.hostPath.spark-local-dir.options.path={{ .Values.executor.hostPath }} \
               --conf spark.local.dir={{ .Values.executor.localDir }} \
@@ -92,10 +90,16 @@ spec:
             - name: spark-config-volume
               mountPath: /opt/spark/conf/spark-defaults.conf
               subPath: spark-defaults.conf
+            - name: executor-pod-template
+              mountPath: /opt/spark/conf/executor-pod-template.yaml
+              subPath: executor-pod-template.yaml
       volumes:
         - name: spark-config-volume
           configMap:
             name: spark-config
+        - name: executor-pod-template
+          configMap:
+            name: spark-executor-pod-template
 ---
 apiVersion: v1
 kind: Service

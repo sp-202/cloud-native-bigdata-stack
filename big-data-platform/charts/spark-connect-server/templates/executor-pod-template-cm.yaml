@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-executor-pod-template
+  labels:
+    app: spark
+data:
+  executor-pod-template.yaml: |
+    apiVersion: v1
+    kind: Pod
+    spec:
+      # nodeSelectorTerms uses OR logic — executor lands on whichever
+      # spark pool (critical OR spot) has available capacity.
+      # This ensures minExecutors always find a node even if spot is empty.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/spark-critical
+                    operator: Exists
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/spark-spot
+                    operator: Exists
+      # Tolerate spot interruption taint if applied by NTH
+      tolerations:
+        - key: "node.kubernetes.io/unreachable"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 30
+        - key: "node.kubernetes.io/not-ready"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 30
+      containers:
+        - name: spark-kubernetes-driver

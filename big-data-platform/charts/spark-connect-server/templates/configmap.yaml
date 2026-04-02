@@ -54,17 +54,18 @@ data:
     spark.hadoop.fs.s3a.paging.maximum           5000
 
     # --- Executor & Driver Resources ---
-    # Sized for i4g.8xlarge (32 vCPU / 256 GB RAM per node).
-    # 4 executors × (8 cores + 28g mem) + OS overhead fits in one node.
-    # memoryOverhead added to avoid OOM kills from JVM native memory.
-    spark.executor.cores             8
-    spark.executor.memory            24g
-    spark.executor.memoryOverhead    4g
+    # Executor: 2 vCPU / 4g memory — small footprint so more executors
+    # can run in parallel across both spark-critical and spark-spot pools.
+    # With minExecutors=2 and maxExecutors=8 across two pools, the platform
+    # always has warm executors ready for JupyterHub and Airflow Spark jobs.
+    spark.executor.cores             2
+    spark.executor.memory            4g
+    spark.executor.memoryOverhead    1g
     spark.driver.cores               4
     spark.driver.memory              8g
     spark.driver.memoryOverhead      2g
-    spark.kubernetes.executor.request.cores 4
-    spark.kubernetes.executor.limit.cores   8
+    spark.kubernetes.executor.request.cores 2
+    spark.kubernetes.executor.limit.cores   2
 
     # --- Metrics & Monitoring ---
     spark.ui.prometheus.enabled                       true
