@@ -87,15 +87,24 @@ spec:
             name: spark-history-server
             port:
               number: 18080
-  # Unity Catalog UI
+  # Unity Catalog (API + UI)
   - host: unity-catalog.{{ .Values.global.domain }}
     http:
       paths:
+      # API Server routes
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: unity-catalog-server
+            port:
+              name: api
+      # UI routes (root path last as it's catch-all)
       - path: /
         pathType: Prefix
         backend:
           service:
             name: unity-catalog-ui
             port:
-              name: http
+              name: ui
 {{- end }}
