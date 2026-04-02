@@ -120,6 +120,93 @@ spec:
 
 ---
 # =============================================================================
+# Airflow Scheduler Logs PV/PVC
+# PVC name must match the StatefulSet volumeClaimTemplate:
+#   logs-{release-name}-scheduler-0
+# Without this pre-provisioned PV, the scheduler StatefulSet PVC stays
+# Pending forever because there is no matching local volume to bind to.
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: airflow-scheduler-logs-pv
+  labels:
+    app: airflow
+spec:
+  capacity:
+    storage: {{ .Values.airflowSchedulerLogs.size }}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ $storageClass }}
+  volumeMode: Filesystem
+  local:
+    path: {{ .Values.airflowSchedulerLogs.localPath }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: {{ (keys .Values.airflowSchedulerLogs.nodeSelector | first) }}
+              operator: Exists
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: logs-big-data-platform-scheduler-0
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ $storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.airflowSchedulerLogs.size }}
+  volumeName: airflow-scheduler-logs-pv
+
+---
+# =============================================================================
+# Airflow Triggerer Logs PV/PVC
+# PVC name must match the StatefulSet volumeClaimTemplate:
+#   logs-{release-name}-triggerer-0
+# Same root cause as scheduler — triggerer pod stays Pending without this.
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: airflow-triggerer-logs-pv
+  labels:
+    app: airflow
+spec:
+  capacity:
+    storage: {{ .Values.airflowTriggererLogs.size }}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ $storageClass }}
+  volumeMode: Filesystem
+  local:
+    path: {{ .Values.airflowTriggererLogs.localPath }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: {{ (keys .Values.airflowTriggererLogs.nodeSelector | first) }}
+              operator: Exists
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: logs-big-data-platform-triggerer-0
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ $storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.airflowTriggererLogs.size }}
+  volumeName: airflow-triggerer-logs-pv
+
+---
+# =============================================================================
 # StarRocks FE PV/PVC
 # =============================================================================
 apiVersion: v1

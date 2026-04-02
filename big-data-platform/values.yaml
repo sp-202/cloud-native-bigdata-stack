@@ -87,6 +87,19 @@ persistence:
     localPath: "/var/openebs/local/airflow-shared"
     nodeSelector:
       node-role.kubernetes.io/k8s-gp-node: ""
+  # Logs PVs for Airflow StatefulSets (scheduler + triggerer).
+  # Without these, the StatefulSet volumeClaimTemplates create PVCs that
+  # stay Pending forever because there is no matching pre-provisioned PV.
+  airflowSchedulerLogs:
+    size: 10Gi
+    localPath: "/var/openebs/local/airflow-scheduler-logs"
+    nodeSelector:
+      node-role.kubernetes.io/k8s-gp-node: ""
+  airflowTriggererLogs:
+    size: 10Gi
+    localPath: "/var/openebs/local/airflow-triggerer-logs"
+    nodeSelector:
+      node-role.kubernetes.io/k8s-gp-node: ""
   starrocksFe:
     size: 10Gi
     localPath: "/mnt/spark-nvme/starrocks-fe"
@@ -218,7 +231,7 @@ airflow:
     persistence:
       enabled: true
       storageClassName: "openebs-hostpath"
-      size: 5Gi
+      size: 10Gi
   config:
     core:
       parallelism: "64"
