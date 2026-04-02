@@ -20,7 +20,7 @@ spec:
           service:
             name: {{ .Release.Name }}-webserver
             port:
-              name: web
+              name: airflow-ui
   # MinIO Console
   - host: minio.{{ .Values.global.domain }}
     http:
@@ -87,7 +87,8 @@ spec:
             name: spark-history-server
             port:
               number: 18080
-  # Unity Catalog (API + UI)
+  {{- if (index .Values "unity-catalog").enabled }}
+  # Unity Catalog (API + UI) — only rendered when unity-catalog.enabled: true
   - host: unity-catalog.{{ .Values.global.domain }}
     http:
       paths:
@@ -107,4 +108,5 @@ spec:
             name: unity-catalog-ui
             port:
               name: ui
+  {{- end }}
 {{- end }}
