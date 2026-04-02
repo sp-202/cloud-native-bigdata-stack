@@ -701,4 +701,4 @@ monitoring:
 # NETWORKING EXTRAS (local sub-chart)
 # =============================================================================
 networking-extras:
-  enabled: false
+  enabled: true
