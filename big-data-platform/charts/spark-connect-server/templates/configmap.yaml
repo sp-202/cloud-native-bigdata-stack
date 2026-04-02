@@ -54,10 +54,17 @@ data:
     spark.hadoop.fs.s3a.paging.maximum           5000
 
     # --- Executor & Driver Resources ---
-    spark.executor.cores             2
-    spark.executor.memory            4g
-    spark.driver.cores               2
-    spark.driver.memory              2g
+    # Sized for i4g.8xlarge (32 vCPU / 256 GB RAM per node).
+    # 4 executors × (8 cores + 28g mem) + OS overhead fits in one node.
+    # memoryOverhead added to avoid OOM kills from JVM native memory.
+    spark.executor.cores             8
+    spark.executor.memory            24g
+    spark.executor.memoryOverhead    4g
+    spark.driver.cores               4
+    spark.driver.memory              8g
+    spark.driver.memoryOverhead      2g
+    spark.kubernetes.executor.request.cores 4
+    spark.kubernetes.executor.limit.cores   8
 
     # --- Metrics & Monitoring ---
     spark.ui.prometheus.enabled                       true
