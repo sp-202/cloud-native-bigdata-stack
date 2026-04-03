@@ -4,6 +4,8 @@ metadata:
   name: redis
   labels:
     app: redis
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   replicas: {{ .Values.replicas }}
   strategy:
@@ -62,6 +64,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: redis
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   ports:
     - port: 6379
@@ -74,6 +78,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: superset-redis-headless
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   clusterIP: None
   ports:

@@ -52,6 +52,8 @@ metadata:
   name: minio-data-pv
   labels:
     app: minio
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   capacity:
     storage: {{ .Values.minio.size }}
@@ -73,6 +75,8 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: minio-data-pvc
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   accessModes:
     - ReadWriteOnce
@@ -92,6 +96,8 @@ metadata:
   name: airflow-dags-shared-pv
   labels:
     app: airflow
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   capacity:
     storage: {{ .Values.airflow.size }}
@@ -113,6 +119,8 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: airflow-dags-shared-pvc
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   accessModes:
     - ReadWriteOnce
@@ -136,6 +144,8 @@ metadata:
   name: airflow-scheduler-logs-pv
   labels:
     app: airflow
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   capacity:
     storage: {{ .Values.airflowSchedulerLogs.size }}
@@ -157,6 +167,8 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: logs-big-data-platform-scheduler-0
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   accessModes:
     - ReadWriteOnce
@@ -179,6 +191,8 @@ metadata:
   name: airflow-triggerer-logs-pv
   labels:
     app: airflow
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   capacity:
     storage: {{ .Values.airflowTriggererLogs.size }}
@@ -200,6 +214,8 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: logs-big-data-platform-triggerer-0
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   accessModes:
     - ReadWriteOnce
@@ -219,6 +235,8 @@ metadata:
   name: starrocks-fe-pv
   labels:
     app: starrocks-fe
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   capacity:
     storage: {{ .Values.starrocksFe.size }}
@@ -240,6 +258,8 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: starrocks-fe-meta-pvc
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   accessModes:
     - ReadWriteOnce
@@ -259,6 +279,8 @@ metadata:
   name: starrocks-be-pv
   labels:
     app: starrocks-be
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   capacity:
     storage: {{ .Values.starrocksBe.size }}
@@ -280,6 +302,8 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: starrocks-be-meta-pvc
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   accessModes:
     - ReadWriteOnce
@@ -299,6 +323,8 @@ metadata:
   name: redis-data-pv
   labels:
     app: redis
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   capacity:
     storage: {{ .Values.redis.size }}
@@ -320,6 +346,8 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: redis-data-pvc
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   accessModes:
     - ReadWriteOnce
