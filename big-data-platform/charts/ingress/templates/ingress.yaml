@@ -3,10 +3,10 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: centralized-ingress
-  {{- with .Values.annotations }}
   annotations:
-    {{- toYaml . | nindent 4 }}
     argocd.argoproj.io/sync-wave: "0"
+  {{- with .Values.annotations }}
+    {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
   ingressClassName: {{ .Values.className }}
