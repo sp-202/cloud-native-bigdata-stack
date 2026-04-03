@@ -31,16 +31,8 @@
 ║  ┌─────────────────────────────────────────────────────────────────┐                         ║
 ║  │  Traefik Ingress Controller  (ClusterIP — no LoadBalancer)      │                         ║
 ║  │                                                                 │                         ║
-║  │  IngressRoutes:                                                 │                         ║
-║  │    airflow.*        →  airflow svc                              │                         ║
-║  │    jupyterhub.*     →  jupyterhub svc                           │                         ║
-║  │    superset.*       →  superset svc                             │                         ║
-║  │    minio.*          →  minio svc                                │                         ║
-║  │    grafana.*        →  grafana svc                              │                         ║
-║  │    spark.*          →  spark-connect svc                        │                         ║
-║  │    spark-history.*  →  spark-history svc                        │                         ║
-║  │    hubble.*         →  hubble-ui svc                            │                         ║
-║  │    headlamp.*       →  headlamp svc                             │                         ║
+║  │  Managed via `big-data-platform/charts/ingress`                 │                         ║
+║  │  Sync Wave: 0  (Deploys concurrently with apps)                 │                         ║
 ║  └──────────────────────────────┬──────────────────────────────────┘                         ║
 ║                                 │                                                            ║
 ║          ┌──────────────────────┼────────────────────────────────┐                           ║
@@ -174,81 +166,37 @@ DATA FLOW — Airflow DAG triggering a Spark job
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-NAMESPACE MAP
+# 📂 Helm Umbrella Chart Architecture
 
-  ┌─────────────────┬──────────────────────────────────────────────────────────────────┐
-  │ Namespace       │ Workloads                                                        │
-  ├─────────────────┼──────────────────────────────────────────────────────────────────┤
-  │ cloudflare      │ cloudflared (3 pods, HA tunnel)                                  │
-  │ kube-system     │ Traefik, Cilium, CoreDNS, MetalLB                                │
-  │ default         │ Airflow, JupyterHub, Marimo, Superset, Spark Connect,            │
-  │                 │ Spark History, Hive Metastore, StarRocks, MinIO, PostgreSQL,     │
-  │                 │ Redis, airflow-git-sync                                          │
-  │ monitoring      │ Prometheus Operator, Grafana, Loki, Alertmanager                 │
-  │ spark-operator  │ Spark Operator controller                                        │
-  │ headlamp        │ Headlamp UI (cluster dashboard)                                  │
-  └─────────────────┴──────────────────────────────────────────────────────────────────┘
+The platform is now managed as a single **Umbrella Chart** located in `big-data-platform/`. This architecture allows for centralized configuration, simplified dependency management, and robust sync-wave orchestration.
 
+## 🌊 Sync Wave Strategy (ArgoCD)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+To ensure a stable and predictable deployment, the project uses ArgoCD Sync Waves to enforce resource ordering:
 
-CUSTOM DOCKER IMAGES (all multi-arch: linux/amd64 + linux/arm64)
+| Wave | Component | Responsibility |
+| :--- | :--- | :--- |
+| **-3** | `persistence` | Namespaces, PersistentVolumes, and PVCs (Storage Foundation). |
+| **-2** | `infra` | Core databases (Postgres, Redis), MinIO, and Airflow Secrets. |
+| **-1** | `init-jobs` | DB migrations (`airflow-db-migrate`) and bucket creation (`minio-jobs`). |
+| **0** | `apps` | User workloads (JupyterHub, Airflow Webserver/Scheduler), Ingress, and Monitoring. |
 
-  subhodeep2022/spark-bigdata:hive-4.1.0-custom-prod
-      └── apache/hive:4.1.0  (UBI9-minimal, JRE 21)
-          ├── postgresql-42.6.0.jar
-          ├── hadoop-aws-3.4.1.jar
-          └── aws-java-sdk-bundle-1.12.367.jar
+## 🛠 Local Sub-charts
 
-  subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3
-      └── eclipse-temurin:17-jdk-jammy
-          ├── Spark 4.1.1 + Delta 4.0.1
-          ├── hadoop-aws-3.4.1.jar + aws-sdk-v2-bundle-2.29.52.jar
-          ├── Unity Catalog 0.3.1
-          ├── Iceberg 1.10.0
-          ├── Apache Sedona 1.8.1  (geospatial)
-          ├── H3 4.0.1             (spatial indexing)
-          └── Python 3.11 + pandas + pyarrow + numpy
+Each major component is isolated into a local sub-chart within `big-data-platform/charts/`:
+- **airflow**: The core workflow orchestrator.
+- **minio**: S3-compatible object storage.
+- **postgres**: Relational database for metadata.
+- **monitoring**: Prometheus, Grafana, and Loki.
+- **ingress**: Centralized Traefik routing rules.
+- **persistence**: Static and dynamic storage definitions.
+- **cloudflared**: Zero-Trust secure tunnel.
 
-  subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v2
-      └── JupyterHub 4.0.7
-          ├── Apache Toree (Scala kernel)
-          ├── PySpark + SQL magic
-          └── z.show() Zeppelin-style display
+---
 
-  subhodeep2022/spark-bigdata:marimo-v1
-      └── Marimo (reactive Python notebooks)
+# 🌐 Networking (Cilium & Cloudflare)
 
-  subhodeep2022/k8s-git-sync:v2-prod
-      └── Git-sync sidecar for Airflow DAG repository
+The platform leverages **Cilium CNI** in **AWS ENI IPAM mode**. This gives every pod a native VPC IP, allowing for seamless integration with AWS Security Groups and VPC routing.
 
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-CI/CD PIPELINE (GitHub Actions)
-
-  git push to main
-      │
-      │  changed file detected by paths: filter
-      ▼
-  .github/workflows/docker-build.yml
-      │
-      ├── detect-changes job  (git diff --name-only)
-      │       │
-      │       ├── docker/hive/Dockerfile changed?        ──►  hive job
-      │       ├── docker/spark/Dockerfile changed?       ──►  spark job
-      │       ├── docker/jupyterhub/Dockerfile changed?  ──►  jupyterhub job
-      │       ├── docker/marimo/Dockerfile changed?      ──►  marimo job
-      │       └── docker/k8s-git-sync/Dockerfile changed?──► k8s-git-sync job
-      │
-      └── each build job:
-              │
-              ├── actions/checkout@v4
-              ├── docker/setup-qemu-action@v3     (arm64 emulation)
-              ├── docker/setup-buildx-action@v3
-              ├── docker/login-action@v3           (DOCKERHUB_TOKEN secret)
-              └── docker/build-push-action@v6
-                      platforms: linux/amd64, linux/arm64
-                      cache:     type=gha
-                      push:      true  →  Docker Hub
+External access is secured by **Cloudflare Tunnel**, which provides a zero-trust encrypted path to the internal **Traefik** ingress controller. No inbound ports (80/443) are open on the EC2 instances.
 ```

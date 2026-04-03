@@ -1,3 +1,14 @@
+# ------------------------------------------------------------------------------
+# Hive Metastore - Configuration
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Hadoop core-site and hive-site configurations for the metastore.
+# For configuration, see: big-data-platform/values.yaml
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+
 apiVersion: v1
 kind: ConfigMap
 metadata:

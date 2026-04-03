@@ -1,4 +1,14 @@
 {{- if .Values.enabled }}
+# ------------------------------------------------------------------------------
+# Spark Connect Server - RBAC
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: ServiceAccount and RoleBinding for Spark to spawn executor pods.
+# For configuration, see: big-data-platform/values.yaml
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:

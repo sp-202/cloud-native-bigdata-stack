@@ -1,5 +1,16 @@
 {{- if .Values.airflow.enabled }}
 ---
+# ------------------------------------------------------------------------------
+# Airflow - Database Migration Job
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Init Job that runs alembic migrations for the Airflow metadata DB.
+# For configuration, see: big-data-platform/values.yaml
+#
+# Managed via ArgoCD Sync Wave: -1
+# ------------------------------------------------------------------------------
+
 apiVersion: batch/v1
 kind: Job
 metadata:

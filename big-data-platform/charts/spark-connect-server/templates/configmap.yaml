@@ -1,3 +1,14 @@
+# ------------------------------------------------------------------------------
+# Spark Connect Server - Configuration
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Environment variables and Spark configuration for the Connect server.
+# For configuration, see: big-data-platform/values.yaml
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+
 apiVersion: v1
 kind: ConfigMap
 metadata:

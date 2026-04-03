@@ -1,6 +1,17 @@
 {{- if .Values.enabled }}
 {{- range $path, $_ := .Files.Glob "dashboards/*.json" }}
 ---
+# ------------------------------------------------------------------------------
+# Monitoring - Grafana Dashboards
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Pre-configured dashboards for Spark, Airflow, and Cluster health.
+# For configuration, see: big-data-platform/values.yaml
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+
 apiVersion: v1
 kind: ConfigMap
 metadata:

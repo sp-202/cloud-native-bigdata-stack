@@ -1,4 +1,15 @@
 {{- if .Values.namespaces.createDashboard }}
+# ------------------------------------------------------------------------------
+# Core - Namespaces
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Provisions all required namespaces for the platform.
+# For configuration, see: big-data-platform/values.yaml
+#
+# Managed via ArgoCD Sync Wave: -3
+# ------------------------------------------------------------------------------
+
 apiVersion: v1
 kind: Namespace
 metadata:

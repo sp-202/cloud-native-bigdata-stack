@@ -1,3 +1,14 @@
+# ------------------------------------------------------------------------------
+# Spark Connect Server - Deployment
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Shared Spark gateway allowing thin clients to connect via gRPC.
+# For configuration, see: big-data-platform/values.yaml
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:

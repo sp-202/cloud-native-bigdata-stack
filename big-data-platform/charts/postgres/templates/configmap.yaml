@@ -1,3 +1,14 @@
+# ------------------------------------------------------------------------------
+# PostgreSQL - Initialization Scripts
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: SQL scripts to initialize databases and users on first boot.
+# For configuration, see: big-data-platform/values.yaml
+#
+# Managed via ArgoCD Sync Wave: -2
+# ------------------------------------------------------------------------------
+
 apiVersion: v1
 kind: ConfigMap
 metadata:

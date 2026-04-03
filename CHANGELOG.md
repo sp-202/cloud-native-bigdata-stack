@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.5.0] - 2026-04-03
+
+### 🚀 Added
+- **Helm Umbrella Chart Architecture**: Migrated all standalone manifests into a modular, high-performance Umbrella Chart (`big-data-platform`).
+- **ArgoCD Sync Wave Strategy**: Implemented a 4-tier sync-wave ordering system (-3 to 0) to ensure infrastructure (Postgres, MinIO) and secrets are fully ready before application pods (Airflow, JupyterHub) initialize.
+- **Dynamic Local Storage Paths**: Automated host-path directory creation across EC2 nodes using privileged debug containers, resolving `MountVolume.SetUp` failures for Airflow and StarRocks.
+
+### 🔄 Changed
+- **Unified Configuration**: Centralized all platform variables into a single `values.yaml` file.
+- **Networking Refactor**: Moved all Traefik Ingress and IngressRoute definitions from static manifests to the Helm `ingress` sub-chart and moved them to Sync Wave 0 for concurrent deployment with applications.
+
+### 🐛 Fixed
+- **Airflow Scheduler/Triggerer Init Deadlock**: Resolved volume mount failures by pre-provisioning `/var/openebs/local` directories on worker nodes.
+- **Ingress 404 Discrepancy**: Fixed a Helm template bug where the `sync-wave` annotation was omitted if custom annotations were not provided.
+
 ## [v0.4.0] - 2026-03-26
 
 ### 🚀 Added

@@ -1,3 +1,14 @@
+# ------------------------------------------------------------------------------
+# Persistence - Volumes & Storage
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Definitions for PVs, PVCs, and local storage paths (OpenEBS).
+# For configuration, see: big-data-platform/values.yaml
+#
+# Managed via ArgoCD Sync Wave: -3
+# ------------------------------------------------------------------------------
+
 {{- $storageClass := .Values.global.storageClassName }}
 # =============================================================================
 # PostgreSQL PV/PVC
