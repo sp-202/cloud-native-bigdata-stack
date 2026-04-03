@@ -4,6 +4,8 @@ kind: Role
 metadata:
   name: spark-secrets-extension
   namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 rules:
 - apiGroups: [""]
   resources: ["secrets"]
@@ -14,6 +16,8 @@ kind: RoleBinding
 metadata:
   name: spark-secrets-extension-binding
   namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 subjects:
 - kind: ServiceAccount
   name: spark-operator-spark

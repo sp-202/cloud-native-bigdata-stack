@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/name: cloudflared
     app.kubernetes.io/part-of: cloudflare-tunnel
     release: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   selector:
     matchLabels:

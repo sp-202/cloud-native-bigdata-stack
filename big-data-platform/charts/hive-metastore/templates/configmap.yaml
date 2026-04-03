@@ -4,6 +4,8 @@ metadata:
   name: hive-config
   labels:
     app: hive-metastore
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 data:
   hive-site.xml: |
     <configuration>

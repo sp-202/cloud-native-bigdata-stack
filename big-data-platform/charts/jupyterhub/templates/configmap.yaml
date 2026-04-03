@@ -4,6 +4,8 @@ metadata:
   name: jupyterhub-config
   labels:
     app: jupyterhub
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 data:
   jupyter_notebook_config.py: |
     c = get_config()

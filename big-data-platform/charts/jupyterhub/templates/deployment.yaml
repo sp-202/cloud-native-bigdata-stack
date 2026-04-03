@@ -4,6 +4,8 @@ metadata:
   name: jupyterhub
   labels:
     app: jupyterhub
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   replicas: {{ .Values.replicas }}
   selector:
@@ -103,6 +105,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: jupyterhub
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   selector:
     app: jupyterhub
@@ -117,11 +121,15 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: jupyterhub
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: jupyterhub-spark
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

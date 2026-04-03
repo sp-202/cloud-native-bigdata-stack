@@ -4,6 +4,8 @@ kind: CiliumNetworkPolicy
 metadata:
   name: allow-cloudflare-egress
   namespace: cloudflare
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   endpointSelector:
     matchLabels:
