@@ -76,6 +76,17 @@ spec:
             name: spark-ui
             port:
               name: spark-ui
+  # Grafana
+  - host: grafana.{{ .Values.global.domain }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Release.Name }}-grafana
+            port:
+              name: http-web
   # Spark History
   - host: spark-history.{{ .Values.global.domain }}
     http:
