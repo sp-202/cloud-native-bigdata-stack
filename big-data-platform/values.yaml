@@ -207,8 +207,6 @@ airflow:
   # Running both concurrently can cause race conditions under ArgoCD.
   migrateDatabaseJob:
     enabled: false
-  createUserJob:
-    enabled: false
   images:
     airflow:
       repository: apache/airflow
