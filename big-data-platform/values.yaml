@@ -372,7 +372,6 @@ starrocks:
     starrocksFeSpec:
       image: "starrocks/fe-ubuntu:3.3-latest"
       replicas: 1
-      runAsNonRoot: false
       requests:
         cpu: "500m"
         memory: "2Gi"
@@ -382,7 +381,6 @@ starrocks:
     starrocksBeSpec:
       image: "starrocks/be-ubuntu:3.3-latest"
       replicas: 1
-      runAsNonRoot: false
       requests:
         cpu: "500m"
         memory: "2Gi"
