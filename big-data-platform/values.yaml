@@ -241,10 +241,6 @@ airflow:
       timeoutSeconds: 10
       failureThreshold: 20
       initialDelaySeconds: 30
-    readinessProbe:
-      timeoutSeconds: 10
-      failureThreshold: 20
-      initialDelaySeconds: 15
   config:
     core:
       parallelism: "64"
