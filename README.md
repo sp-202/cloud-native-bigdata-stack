@@ -34,47 +34,54 @@ This repository contains a **Data Platform as Code (DPaC)** implementation, desi
 | **Cilium CNI**         | ✅ Stable    | AWS ENI IPAM mode for native VPC networking    |
 | **StarRocks**          | ✅ Stable      | Verified with Native Delta Catalog (OLAP)      |
 | **Airflow + Git-Sync** | ✅ Stable      | DAGs auto-synced from Git repository           |
-| **Monitoring Stack**   | 🏗 Beta      | Prometheus, Grafana, Loki, Hubble UI           |
-| **Marimo Notebooks**   | 🧪 Exp       | Reactive Python UI integration                 |
-
-> [!IMPORTANT]
-> Features marked as **Experimental (🧪 Exp)** are in the development phase. They may have incomplete functionality or require additional configuration.
+| **Umbrella Chart**     | ✅ Stable      | Unified Helm-based GitOps deployment           |
+| **ArgoCD Sync Waves**  | ✅ Stable      | Controlled infrastructure orchestration        |
 
 ---
 
 ## 🏗 Architecture & Components
 
-The platform is divided into three logical domains:
+The platform is managed as a unified **Helm Umbrella Chart** in `big-data-platform/`.
 
 ### 1️⃣ Ingress & Networking
 *   **Cilium CNI**: Pod networking with AWS ENI IPAM mode. Pods receive real VPC IPs for full AWS compatibility.
-*   **MetalLB**: Provides a network load-balancer implementation, assigning a dedicated Elastic IP (`44.203.26.241`) for internal cluster use.
-*   **Cloudflare Tunnel (`cloudflared`)**: Replaces public LoadBalancer exposure. A 3-replica HA deployment of `cloudflared` in its own namespace connects outbound to Cloudflare's edge, routing external HTTPS traffic securely to Traefik without opening inbound firewall ports. Includes PodDisruptionBudget, topology spread, NetworkPolicy, RBAC, and Prometheus ServiceMonitor.
-*   **Traefik Proxy**: The unified ingress controller. Operates as `ClusterIP` (not `LoadBalancer`) — receives traffic exclusively from `cloudflared`. Routes requests to internal services. No `hostNetwork`.
-*   **Hubble UI**: Cilium's observability dashboard for real-time network flow visibility.
-*   **SSLIP.IO**: Automatic DNS resolution for LoadBalancer IPs (internal cluster access).
+*   **MetalLB**: Provides internal network load-balancing.
+*   **Cloudflare Tunnel (`cloudflared`)**: Replaces public LoadBalancer exposure. External traffic is routed securely to Traefik without open inbound ports.
+*   **Traefik Proxy**: The unified ingress controller, managed by the `ingress` sub-chart.
 
-### 2️⃣ Application Layer (Blue Domain)
-*   **Apache Airflow (2.x)**: The workflow orchestrator. It schedules DAGs that trigger Spark jobs, move data, and manage dependencies. configured with the **KubernetesExecutor** for scaling tasks.
-*   **Notebook Suite**: 
-    *   **JupyterHub**: Standard interactive environment with **Zeppelin features** (SQL magic, Scala kernel, `z.show()`).
-    *   **Marimo**: Reactive Python notebooks with high-performance UI components.
-    *   **Polynote**: IDE-focused notebook for Scala and multi-language Spark development.
-*   **Apache Spark (4.1.1)**: The distributed compute engine, pre-configured with **Delta Lake** and **Hadoop 3.4.1** support.
-*   **Apache Superset**: Enterprise-ready BI. Connects to the platform for data visualization.
-*   **Hive Metastore (HMS)**: Standalone Thrift service acting as the central catalog for Spark and StarRocks.
+### 2️⃣ Big Data Sub-charts
+*   **airflow**: Managed workflow orchestration with KubernetesExecutor.
+*   **spark-connect**: Shared gateway for all interactive clients.
+*   **hive-metastore**: Central metadata catalog (Hive 4.1.0).
+*   **starrocks**: High-performance OLAP engine.
 
-### 3️⃣ Data & Persistence (Green Domain)
-*   **OpenEBS (Hostpath)**: Dynamic storage provisioner that manages local node storage. Replaces static PersistentVolumes for an automated storage lifecycle.
-*   **MinIO**: High-performance Object Storage (S3 Compatible). Acts as the "Data Lake" storage layer.
-*   **PostgreSQL**: The relational metadata backbone. Stores state for Airflow, Superset, and Hive.
-*   **Redis**: In-memory cache used by Superset.
-*   **StarRocks**: High-performance analytical (OLAP) database. Reads directly from MinIO via Delta Native Catalog.
-*   **Kong Gateway (Experimental)**: Secondary API gateway for external service management.
+### 3️⃣ Infrastructure & Persistence
+*   **persistence**: Manages dynamic OpenEBS hostpath storage and static PV/PVCs.
+*   **postgres / redis**: Relational and in-memory backends.
+*   **minio**: S3-compatible data lake storage.
 
 ---
 
-## 🛠 Tech Stack
+## ⚡ Deployment Guide
+
+### Prerequisites
+1.  **AWS EC2 Cluster**: K8s 1.28+ on ARM64 nodes.
+2.  **ArgoCD**: To leverage the built-in **Sync Wave** orchestration.
+
+### Quick Start
+```bash
+# Bootstrap the cluster
+./deploy-v2.sh
+
+# Deploy via Helm (Umbrella Chart)
+helm install platform ./big-data-platform
+```
+
+👉 **[Read the Full Deployment Guide](DEPLOYMENT.md)**
+
+---
+
+## 📂 Tech Stack
 
 | Component | Version | Role | Usage |
 | :--- | :--- | :--- | :--- |
@@ -207,35 +214,16 @@ Superset is pre-connected to the internal Postgres and Hive Metastore.
 
 ## 📂 Repository Structure
 ```bash
-├── .github/workflows/        # CI/CD — auto-build Docker images on Dockerfile change
-│   └── docker-build.yml      # Per-image build jobs (hive, spark, jupyterhub, marimo, k8s-git-sync)
-├── docker/                   # Custom image source code and Dockerfiles (Customize here!)
-│   ├── hive/                 # Hive 4.1.0 + Postgres JDBC + AWS JARs (arm64 native)
-│   ├── jupyterhub/           # Notebook environment with Spark & Scala
-│   ├── k8s-git-sync/         # Git-sync sidecar for Airflow DAGs
-│   ├── marimo/               # Reactive Python notebook
-│   └── spark/                # Golden Spark image (4.1.1, multi-arch)
-├── deploy-v2.sh              # Main automation script
-├── k8s_diagram.drawio.svg    # Architecture Diagram
-├── k8s-platform-v2/          # V2 Source of Truth (Kustomize)
-│   ├── 00-core/              # Namespaces, OpenEBS StorageClasses, PVCs
-│   ├── 01-networking/        # Cilium, MetalLB, Traefik (ClusterIP), Cloudflare Tunnel, Hubble UI
-│   ├── 02-database/          # Postgres, MinIO (S3), Redis
-│   ├── 03-apps/              # Airflow, Spark Connect, JupyterHub, Superset
-│   ├── 04-configs/           # Global configs, Spark defaults, Ingress domain
-│   └── 05-monitoring/        # Prometheus, Grafana, Loki
-├── docs/                     # Detailed technical guides
-│   ├── notebooks.md          # Guide: JupyterHub, Marimo
-│   ├── delta_lake.md         # Guide: ACID tables on S3
-│   ├── spark_on_k8s.md       # Deep Dive: Spark Client vs Cluster mode
-│   └── airflow.md            # Workflow orchestration
-├── airflow-dags/             # Airflow DAG definitions
-├── scripts/                  # Utility scripts
-├── CHANGELOG.md              # Version history with detailed changes
-├── ISSUES.md                 # Known issues and resolutions
-├── MONITORING_GUIDE.md       # Observability instructions
-├── README.md                 # Entry point (this file)
-└── SUPERSET_CONNECTION_GUIDE.md # BI connectivity instructions
+├── big-data-platform/        # Main Helm Umbrella Chart (The source of truth)
+│   ├── charts/               # Modular sub-charts (minio, postgres, airflow, etc.)
+│   ├── values.yaml           # Centralized configuration
+│   └── README.md             # Sub-chart documentation index
+├── docker/                   # Custom image Dockerfiles
+├── deploy-v2.sh              # Cluster bootstrap script
+├── ARCHITECTURE.md           # Technical deep-dive & diagrams
+├── CHANGELOG.md              # Detailed version history
+├── ISSUES.md                 # Troubleshooting log & fixes
+└── README.md                 # Entry point (this file)
 ```
 
 ---

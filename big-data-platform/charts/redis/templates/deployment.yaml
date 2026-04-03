@@ -1,3 +1,14 @@
+# ------------------------------------------------------------------------------
+# Redis - Deployment & Service
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: In-memory store for Superset caching and session state.
+# For configuration, see: big-data-platform/values.yaml
+#
+# Managed via ArgoCD Sync Wave: -2
+# ------------------------------------------------------------------------------
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -1,145 +1,76 @@
-# Deployment Guide
+# ⚡ Deployment Guide (AWS / Self-Managed K8s)
 
-This guide details how to set up the environment and deploy the Kubernetes Big Data Platform (v2).
+This guide details the steps to deploy the Cloud-Native Big Data Platform on a Kubernetes cluster.
 
-## Prerequisites
+## 📋 Prerequisites
 
-Ensure you have the following tools installed:
-- **Kubernetes Cluster**: A running K8s cluster (GKE, Minikube, Kind, etc.) and `kubectl` configured.
-- **Helm**: Version 3+ (v4 is also supported by this project).
-- **Git**: To clone repositories.
+- **Cluster**: A Kubernetes 1.28+ cluster. Optimized for AWS EC2 ARM64 (Graviton) nodes.
+- **CNI**: Cilium (configured in AWS ENI IPAM mode recommended).
+- **Storage**: OpenEBS (for dynamic hostpath provisioning).
+- **Tools**:
+  - `kubectl`
+  - `helm` v3.12+
+  - `argocd` CLI (optional, but recommended)
 
-## Installation Instructions
+## 🚀 Installation
 
-### macOS (via Homebrew)
-If you are on macOS, `brew` is the easiest way to install dependencies.
+### 1. Configure Environment
+The platform uses an Umbrella Chart architecture. All configurations are centralized in `big-data-platform/values.yaml`.
 
-```bash
-# Update Homebrew
-brew update
-
-# Install Kubectl
-brew install kubernetes-cli
-
-# Install Helm
-brew install helm
-
-# Install Git
-brew install git
-```
-
-### Linux (Debian/Ubuntu)
-For Debian-based systems, use `apt` and official sources.
+### 2. Run the Bootstrap Script
+The `deploy-v2.sh` script automates the initial cluster setup, including namespace creation and CRD installation.
 
 ```bash
-# 1. Install prerequisites
-sudo apt-get update
-sudo apt-get install -y apt-transport-https ca-certificates curl
-
-# 2. Install Kubectl
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
-sudo apt-get update
-sudo apt-get install -y kubectl
-
-# 3. Install Helm
-curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
-sudo apt-get install apt-transport-https --yes
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
-sudo apt-get update
-sudo apt-get install helm
-
-# 4. Install Git
-sudo apt-get install -y git
+chmod +x deploy-v2.sh
+./deploy-v2.sh
 ```
 
-## Configuration
+### 3. ArgoCD Deployment (GitOps)
+The preferred way to manage the platform is via ArgoCD.
 
-The platform relies on a `.env` file for dynamic configuration (like Spark image versions).
-
-1.  **Create `.env` file**:
+1.  **Install ArgoCD**:
     ```bash
-    cp .env.example .env
-    ```
-    *(If `.env.example` is missing, create `.env` manually)*
-
-2.  **Set Spark Image Version**:
-    ```bash
-    # Content of .env
-    SPARK_IMAGE_VERSION=fix-v4
-    SPARK_IMAGE=subhodeep2022/spark-bigdata:spark-4.1.1-uc-0.3.1-v8-sedona-h3.0.1-uc-0.3.1-fix-v4
+    kubectl create namespace argocd
+    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
     ```
 
-## Deployment
+2.  **Connect the Repository**:
+    Create a new ArgoCD Application pointing to the `big-data-platform/` directory in this repository.
 
-1.  **Clone/Navigate to Project**:
+3.  **Sync**:
+    ArgoCD will automatically apply the resources in the correct order using **Sync Waves**.
+
+## 🌊 Sync Wave Hierarchy
+
+| Order | Chart | Description |
+| :--- | :--- | :--- |
+| **-3** | `persistence` | Sets up Namespaces, PVs, and PVCs. |
+| **-2** | `infra-core` | Deploys Postgres, Redis, MinIO, and Airflow Secrets. |
+| **-1** | `init-jobs` | Runs Airflow DB migrations and creates S3 buckets. |
+| **0** | `applications` | Deploys Airflow, JupyterHub, Superset, StarRocks, and Ingress. |
+
+## 🛠 Manual Directory Setup (AWS EC2)
+
+On fresh AWS nodes, the local storage paths for persistent volumes must be initialized:
+
+```bash
+# Automated via kubectl debug node (run for each node)
+kubectl debug node/<node-name> -it --image=alpine -- chroot /host mkdir -p /var/openebs/local/postgres-data /var/openebs/local/minio-data /var/openebs/local/airflow-scheduler-logs
+```
+
+## 🔍 Verification
+
+1.  **Network**: Verify IngressRoutes are correctly mapped:
     ```bash
-    cd kubernets-big-data-project
+    kubectl get ingressroute -A
     ```
 
-2.  **Build Custom Spark Image**:
-    The project requires a custom Spark image with proper Hadoop/AWS SDK dependencies.
-    *Ensure Docker is running and you are logged in (`docker login`).*
-
-    ```bash
-    ./docker/spark/build.sh
-    ```
-    *Note: Update `.env` with the new image tag if you change versions.*
-
-3.  **Run Deployment Script**:
-    This script will:
-    - Install Infrastructure (Traefik, Spark Operator).
-    - Deploy Hive Metastore (HMS) and MinIO.
-    - Generate Helm manifests for all components.
-    - Deploy the platform using `kubectl kustomize`.
-
-    ```bash
-    # Ensure .env variables are exported
-    set -a && source .env && set +a
-    
-    ./deploy-gke.sh
-    ```
-
-## Verification
-
-After the script completes, verify the deployment:
-
-1.  **Check Pods**:
+2.  **Health**: Ensure all application pods are `Running`:
     ```bash
     kubectl get pods -n default
     ```
-    Ensure `hive-metastore`, `spark-operator`, `superset`, `postgres`, `minio` pods are Running.
 
-2.  **Access Web UIs**:
-    Based on the output IP (e.g., `34.x.x.x`), access:
-    - **JupyterHub**: `http://jupyterhub.34.x.x.x.sslip.io`
-    - **Superset**: `http://superset.34.x.x.x.sslip.io`
-    - **Traefik Dashboard**: `http://traefik.34.x.x.x.sslip.io/dashboard/`
+## 🆘 Troubleshooting
 
-## Troubleshooting
-- **Run Deployment Again**: The script is idempotent. If a step fails (e.g., waiting for IP), just run `./deploy-v2.sh` again.
-
-## Maintenance & Updates
-
-### Force Reapply Configurations & Restart Services
-To force an update of all configurations (manifests) and restart only the JupyterHub and Spark components (leaving databases and other services infrastructure intact):
-
-1.  **Reapply Configurations**:
-    Run the deployment script again to regenerate and apply latest manifests:
-    ```bash
-    ./deploy-v2.sh
-    ```
-
-2.  **Restart JupyterHub and Spark**:
-    Delete the specific pods to force Kubernetes to recreate them with the new configurations:
-    ```bash
-    # Restart JupyterHub
-    kubectl delete pod -l app=jupyterhub
-
-    # Restart Spark Connect Server
-    kubectl delete pod -l app=spark-connect-server
-    
-    # Clean up Spark Executors (if stuck)
-    kubectl delete pod -l spark-role=executor
-    ```
-    *Note: Do not delete pods like `minio`, `postgres`, or `hive-metastore` unless you intend to reset those services.*
+- **CrashLoopBackOff**: Check logs (`kubectl logs -p pod-name`). Common causes include database unavailability or missing S3 buckets.
+- **Pending Pods**: Check for `FailedScheduling` or `FailedMount` events (`kubectl describe pod`). Verify that local storage directories exist on the node.

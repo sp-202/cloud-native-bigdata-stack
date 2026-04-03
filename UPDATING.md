@@ -1,46 +1,31 @@
 # 🔄 UPDATING.md
 
-This document tracks breaking changes and significant updates to the platform that require manual intervention or specific migration steps.
+This document tracks breaking changes and significant updates to the platform.
+
+## [2026-04-03] 🌐 v0.5.0: The Umbrella Chart Refactor
+
+### ⚠️ Breaking Changes
+- **Manifest Move**: All standalone YAML manifests in `k8s-platform-v2/` have been consolidated into the Helm Umbrella Chart `big-data-platform/`.
+- **Sync Wave Logic**: The platform now enforces strict ArgoCD Sync Waves. Resources in Wave 0 will stay in "Degraded" if Wave -1 jobs (migrations) fail.
+- **Ingress Consolidation**: All Ingress and IngressRoute definitions are now managed by the `ingress` sub-chart. Ad-hoc ingresses should be moved there.
+
+### 📝 Update Instructions
+1.  **Switch to Helm**: If you were using `kubectl apply -k`, delete those resources and redeploy using the `big-data-platform` Helm chart.
+2.  **Verify Values**: Copy your custom configurations from `.env` or legacy manifests into `big-data-platform/values.yaml`.
+
+---
+
+## [2026-03-26] 🚀 v0.4.0: Zero-Trust Ingress (Cloudflare)
+
+### ⚠️ Breaking Changes
+- **Traefik Public IP removed**: External access via MetalLB Elastic IP is deprecated. Access must now go through Cloudflare Tunnel.
+- **Port 80/443 closed**: You may now close inbound firewall ports on EC2 instances.
+
+### 📝 Update Instructions
+1. **Enable cloudflared**: Set `cloudflared.enabled: true` in `values.yaml`.
+2. **Configure Tunnel**: Add your `tunnel_token` to the cloudflared secret.
+
+---
 
 ## [2026-01-13] 🌟 v0.2.0: The HMS & StarRocks Lakehouse
-
-### ⚠️ Breaking Changes
-- **Unity Catalog Removed**: Replaced by **Hive Metastore (Standalone)** as the central catalog.
-- **Spark Image Upgrade**: Now requires `fix-v4` tag (`hadoop-aws-3.3.4` + `aws-java-sdk-bundle-2.20.160`).
-- **Config Updates**: `spark-defaults.conf` now enforces integer timeouts (e.g., `600000` instead of `600s`).
-
-### 📝 Update Instructions
-1.  **Update `.env`**:
-    ```bash
-    SPARK_IMAGE_VERSION=fix-v4
-    ```
-2.  **Re-deploy Configs**:
-    ```bash
-    ./deploy-gke.sh
-    ```
-    *(This updates the `spark-defaults` ConfigMap and `jupyterhub` deployment)*
-
----
-
-## [2026-01-11] 🚀 The "Golden Stack" Migration (V2)
-
-### ⚠️ Breaking Changes
-- **Zeppelin Retired**: The Apache Zeppelin deployment has been removed. All notebooks should be migrated to JupyterHub or Marimo.
-- **Python Alignment**: All Spark components (Driver and Executor) are now standardized on **Python 3.11**. If you have custom libraries, you must rebuild your images using the provided `docker/` build scripts.
-- **Spark 3.5.3**: Upgraded from earlier Spark 3.x versions. Check your `SparkApplication` manifests for version compatibility.
-
-### 📝 Update Instructions
-1. **Build New Images**:
-   ```bash
-   docker/spark/build.sh
-   docker/jupyterhub/build.sh
-   docker/marimo/build.sh
-   ```
-2. **Re-apply Configs**:
-   Run `./deploy-gke.sh` to update the ConfigMaps (specifically `spark-defaults.conf`).
-
----
-
-## [Future] Plan for Unity Catalog (UC) High Availability
-- **Upcoming**: Migration of UC from local storage to a persistent DB backend.
-- **Impact**: Will require a schema migration for the catalog metadata.
+... [rest of file] ...

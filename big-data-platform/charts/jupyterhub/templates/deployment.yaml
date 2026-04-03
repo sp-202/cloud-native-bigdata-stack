@@ -1,3 +1,14 @@
+# ------------------------------------------------------------------------------
+# JupyterHub - Deployment
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Multi-user notebook environment with interactive Spark support.
+# For configuration, see: big-data-platform/values.yaml
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:

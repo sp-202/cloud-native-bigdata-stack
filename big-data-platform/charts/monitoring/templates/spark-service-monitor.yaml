@@ -1,4 +1,15 @@
 {{- if .Values.enabled }}
+# ------------------------------------------------------------------------------
+# Monitoring - Spark ServiceMonitor
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Prometheus discovery for Spark drivers and executors metrics.
+# For configuration, see: big-data-platform/values.yaml
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
