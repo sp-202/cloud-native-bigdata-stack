@@ -4,6 +4,10 @@ metadata:
   name: postgres
   labels:
     app: postgres
+  annotations:
+    # Deploy Postgres before the airflow-db-migrate hook (wave -1) so that
+    # the migrate job's init container can reach Postgres immediately.
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   replicas: {{ .Values.replicas }}
   strategy:
@@ -61,6 +65,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   ports:
     - port: 5432
