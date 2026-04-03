@@ -367,30 +367,39 @@ unity-catalog:
 # =============================================================================
 starrocks:
   enabled: true
-  starrocksCluster:
-    name: starrocks-cluster
-    starrocksFeSpec:
-      image: "starrocks/fe-ubuntu:3.3-latest"
+  # kube-starrocks is itself an umbrella with two subcharts: operator + starrocks.
+  # FE/BE specs live under the "starrocks" subchart key, NOT under starrocksCluster.
+  starrocks:
+    starrocksCluster:
+      name: starrocks-cluster
+    starrocksFESpec:
+      image:
+        repository: starrocks/fe-ubuntu
+        tag: "3.3-latest"
       replicas: 1
-      requests:
-        cpu: "500m"
-        memory: "2Gi"
-      limits:
-        cpu: "2000m"
-        memory: "4Gi"
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "2Gi"
+        limits:
+          cpu: "2000m"
+          memory: "4Gi"
     starrocksBeSpec:
-      image: "starrocks/be-ubuntu:3.3-latest"
+      image:
+        repository: starrocks/be-ubuntu
+        tag: "3.3-latest"
       replicas: 1
-      requests:
-        cpu: "500m"
-        memory: "2Gi"
-      limits:
-        cpu: "2000m"
-        memory: "4Gi"
-      storageVolume:
-        name: be-storage
-        storageClassName: "openebs-hostpath"
-        storageSize: 20Gi
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "2Gi"
+        limits:
+          cpu: "2000m"
+          memory: "4Gi"
+      storageVolumes:
+        - name: be-storage
+          storageClassName: "openebs-hostpath"
+          storageSize: 20Gi
 
 # =============================================================================
 # JUPYTERHUB — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
