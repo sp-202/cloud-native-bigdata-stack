@@ -20,6 +20,7 @@ dependencies:
     condition: superset.enabled
 
   - name: kube-starrocks
+    alias: starrocks
     version: "1.9.8"
     repository: "https://starrocks.github.io/starrocks-kubernetes-operator"
     condition: starrocks.enabled
