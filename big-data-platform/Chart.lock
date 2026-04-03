@@ -62,5 +62,5 @@ dependencies:
 - name: ingress
   repository: file://./charts/ingress
   version: 1.0.0
-digest: sha256:b44f4d4369a38e64af35ff8c6bfe564ad61fe63c9f6ad30d96da13ab2b32000b
-generated: "2026-04-02T05:54:12.091729914Z"
+digest: sha256:f578025b187066776b451541ff97c363baf7c0a14481732a4e4d651a3a14a301
+generated: "2026-04-03T23:26:47.455274211+05:30"
