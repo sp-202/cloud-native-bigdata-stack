@@ -6,12 +6,14 @@ metadata:
   name: airflow-db-migrate
   namespace: default
   annotations:
-    # ArgoCD sync wave 5: runs after Postgres (wave 0) is healthy but before
-    # Airflow components attempt to check for completed migrations.
-    # Using Sync hook (not PostSync) so it runs within the sync operation,
-    # allowing ArgoCD to verify completion before marking the app healthy.
+    # ArgoCD sync wave -1: runs before all wave-0 resources (including Airflow
+    # StatefulSets) are health-checked. The job's own init container waits for
+    # Postgres to be ready, so no explicit ordering vs Postgres is needed.
+    # Must be wave -1 (not 5) to avoid deadlock: Airflow init containers block
+    # on wait-for-migrations, and ArgoCD won't advance past wave 0 until they
+    # are healthy — wave 5 would never be reached.
     argocd.argoproj.io/hook: Sync
-    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-wave: "-1"
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 3
