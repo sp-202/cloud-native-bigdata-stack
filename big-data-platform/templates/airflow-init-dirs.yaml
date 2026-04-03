@@ -30,16 +30,13 @@ spec:
             - sh
             - -c
             - |
-              mkdir -p {{ .Values.persistence.airflow.localPath }}
-              mkdir -p {{ .Values.persistence.airflowSchedulerLogs.localPath }}
-              mkdir -p {{ .Values.persistence.airflowTriggererLogs.localPath }}
-              echo "Airflow host directories ready:"
-              ls -la $(dirname {{ .Values.persistence.airflowSchedulerLogs.localPath }}) | grep airflow
-          securityContext:
-            privileged: true
+              mkdir -p /mnt/host{{ .Values.persistence.airflow.localPath }}
+              mkdir -p /mnt/host{{ .Values.persistence.airflowSchedulerLogs.localPath }}
+              mkdir -p /mnt/host{{ .Values.persistence.airflowTriggererLogs.localPath }}
+              echo "Airflow host directories ready."
           volumeMounts:
             - name: host-root
-              mountPath: /
+              mountPath: /mnt/host
       volumes:
         - name: host-root
           hostPath:
