@@ -3,6 +3,8 @@ kind: ConfigMap
 metadata:
   name: minio-scripts
   namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 data:
   create-buckets.sh: |
     #!/bin/bash

@@ -6,6 +6,8 @@ metadata:
   namespace: default
   labels:
     release: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   jobLabel: spark-role
   selector:

@@ -4,6 +4,8 @@ kind: IngressRoute
 metadata:
   name: traefik-dashboard-route
   namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   entryPoints:
     - web

@@ -4,6 +4,8 @@ kind: Service
 metadata:
   name: s3-redirect
   namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   type: ExternalName
   externalName: minio.default.svc.cluster.local

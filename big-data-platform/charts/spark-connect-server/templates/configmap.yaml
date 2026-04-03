@@ -4,6 +4,8 @@ metadata:
   name: spark-config
   labels:
     app: spark
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 data:
   spark-defaults.conf: |
     # =============================================================================

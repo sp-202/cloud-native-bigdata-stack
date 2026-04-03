@@ -11,6 +11,8 @@ kind: IngressRoute
 metadata:
   name: hubble-ui-route
   namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   # Defines which Traefik port/listener to use (Port 80 by default)
   entryPoints:
