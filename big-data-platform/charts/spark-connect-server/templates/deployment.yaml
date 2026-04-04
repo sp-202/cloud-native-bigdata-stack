@@ -58,7 +58,7 @@ spec:
               --conf spark.hadoop.fs.s3a.access.key={{ .Values.global.s3.accessKey }} \
               --conf spark.hadoop.fs.s3a.secret.key={{ .Values.global.s3.secretKey }} \
               --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
-              --conf spark.kryo.registrator=org.apache.sedona.spark.SedonaKryoRegistrator \
+              --conf spark.kryo.registrator=org.apache.sedona.core.serde.SedonaKryoRegistrator \
               --conf spark.sql.extensions=org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,io.delta.sql.DeltaSparkSessionExtension \
               --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
               --conf spark.sql.defaultCatalog=spark_catalog \
