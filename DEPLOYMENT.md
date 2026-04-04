@@ -111,6 +111,94 @@ kubectl exec deploy/big-data-platform-webserver -c webserver -- \
 
 ---
 
+## 🔑 Kubernetes Cluster Admin Access
+
+To access Kubernetes cluster administration interfaces (e.g., Headlamp, kubectl commands):
+
+### Step 1: Create Admin Service Account
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-user
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin-user-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: admin-user
+  namespace: default
+EOF
+```
+
+**Output**:
+```
+serviceaccount/admin-user created
+clusterrolebinding.rbac.authorization.k8s.io/admin-user-binding created
+```
+
+### Step 2: Generate Admin Token
+
+```bash
+kubectl create token admin-user -n default
+```
+
+**Copy the output token** — this is your Kubernetes cluster admin token. Use it to log in to:
+- **Headlamp UI** — Kubernetes cluster dashboard
+- **kubectl remote access** — For out-of-cluster administration
+- Any other Kubernetes API-based tools
+
+The token is valid for 1 hour by default. To create a longer-lived token (e.g., 7 days):
+
+```bash
+kubectl create token admin-user -n default --duration=168h
+```
+
+---
+
+## 🔐 ArgoCD Admin Password
+
+ArgoCD is installed with a default admin user. Retrieve the password:
+
+```bash
+# Get ArgoCD admin password
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d && echo
+```
+
+**Output**: Your ArgoCD admin password (e.g., `abc123xyz...`)
+
+### Access ArgoCD UI
+
+1. **Port-forward to ArgoCD**:
+   ```bash
+   kubectl port-forward -n argocd svc/argocd-server 8080:443
+   ```
+
+2. **Open browser**: `https://localhost:8080`
+
+3. **Login**:
+   - Username: `admin`
+   - Password: (from command above)
+
+### Change ArgoCD Admin Password (Optional)
+
+```bash
+argocd account update-password --account admin --new-password YOUR_NEW_PASSWORD
+```
+
+Or via the web UI: ArgoCD → User Settings → Change Password
+
+---
+
 ## 📊 Post-Deployment Verification
 
 ### 1. Check All Pods are Running
