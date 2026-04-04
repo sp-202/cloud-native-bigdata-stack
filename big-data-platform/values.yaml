@@ -221,6 +221,14 @@ airflow:
       maxFailures: 3
       subPath: ""
   webserver:
+    defaultUser:
+      enabled: true
+      role: Admin
+      username: admin
+      email: admin@airflow.com
+      firstName: Admin
+      lastName: User
+      password: admin
     replicas: 1
     resources:
       requests:
