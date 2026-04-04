@@ -10,7 +10,7 @@
 
 👉 **[View the v0.3.0 Changelog](CHANGELOG.md)** | **[Release Notes](RELEASES.md)**
 
-![Architecture Diagram](k8s_diagram.drawio.svg)
+
 
 ## 📖 Introduction
 This repository contains a **Data Platform as Code (DPaC)** implementation, designed to modernize distributed computing by enforcing a strict separation of compute and storage. Leveraging Kubernetes as the primary orchestration plane, the platform eliminates infrastructure silos, enabling teams to deploy and scale production-ready data ecosystems elastically.
