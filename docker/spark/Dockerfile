@@ -1,4 +1,4 @@
-# Builder Stage
+# Builder Stage spark
 FROM eclipse-temurin:17-jdk-jammy AS builder
 
 ENV SPARK_VERSION=4.0.1
