@@ -1,0 +1,55 @@
+# ------------------------------------------------------------------------------
+# Superset - DB Init Job
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Runs `superset db upgrade` and `superset init` after every sync
+# to ensure all DB tables (including user_attribute) exist and roles/perms are
+# current. The built-in chart init job only creates the admin user — it does not
+# reliably run `superset init`, causing 500 errors on first login.
+#
+# Managed via ArgoCD PostSync Hook (runs after all resources are healthy)
+# ------------------------------------------------------------------------------
+
+{{- if .Values.superset.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: superset-db-init
+  namespace: default
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+      containers:
+        - name: superset-init
+          image: {{ .Values.superset.image.repository }}:{{ .Values.superset.image.tag }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              superset db upgrade && \
+              superset init && \
+              echo "Superset DB init complete."
+          envFrom:
+            - secretRef:
+                name: big-data-platform-superset-env
+                optional: true
+          env:
+            - name: SQLALCHEMY_DATABASE_URI
+              value: "postgresql+psycopg2://{{ .Values.superset.supersetNode.connections.db_user }}:{{ .Values.superset.supersetNode.connections.db_pass }}@{{ .Values.superset.supersetNode.connections.db_host }}:{{ .Values.superset.supersetNode.connections.db_port }}/{{ .Values.superset.supersetNode.connections.db_name }}"
+          volumeMounts:
+            - name: superset-config
+              mountPath: /app/pythonpath
+      volumes:
+        - name: superset-config
+          configMap:
+            name: big-data-platform-superset-config
+{{- end }}
