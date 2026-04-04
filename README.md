@@ -1,6 +1,6 @@
 # 🚀 Cloud-Native Big Data Platform on Kubernetes (Raw K8s / AWS)
 
-[![Version](https://img.shields.io/badge/version-0.4.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.1-blue)](CHANGELOG.md)
 [![Status](https://img.shields.io/badge/status-production--beta-success)](README.md#🚦-project-status)
 [![Docker Build](https://github.com/subhodeep2022/k8s-bigdata-prod/actions/workflows/docker-build.yml/badge.svg)](https://github.com/subhodeep2022/k8s-bigdata-prod/actions/workflows/docker-build.yml)
 
@@ -87,7 +87,7 @@ helm install platform ./big-data-platform
 | :--- | :--- | :--- | :--- |
 | **Apache Airflow** | `2.10.x` | Orchestrator | Scheduling ETL pipelines |
 | **Spark / Delta** | `4.1.1 / 4.0.1` | Compute / Format | Distributed processing & ACID tables |
-| **Hadoop / AWS SDK** | `3.4.1 / 1.12.367` | Storage Access | S3A FileSystem optimizations |
+| **Hadoop / AWS SDK** | `3.4.1 / v2.29.52` | Storage Access | S3A FileSystem optimizations (AWS SDK v2) |
 | **JupyterHub** | `4.0.7` | Notebooks | Standard Data Engineering workflow |
 | **Marimo / Polynote** | `latest` | Notebooks | Reactive & Multi-language environments |
 | **Hive Metastore** | `4.1.0` | Catalog | Metadata persistence (arm64 native, JDK 17+) |
