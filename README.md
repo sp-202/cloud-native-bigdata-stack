@@ -1,8 +1,8 @@
-# 🚀 Cloud-Native Big Data Platform on Kubernetes (Raw K8s / AWS)
+# 🚀 Cloud-Native Big Data Platform on Kubernetes (Raw K8s / AWS EKS)
 
 [![Version](https://img.shields.io/badge/version-0.5.1-blue)](CHANGELOG.md)
-[![Status](https://img.shields.io/badge/status-production--beta-success)](README.md#🚦-project-status)
-[![Docker Build](https://github.com/subhodeep2022/k8s-bigdata-prod/actions/workflows/docker-build.yml/badge.svg)](https://github.com/subhodeep2022/k8s-bigdata-prod/actions/workflows/docker-build.yml)
+[![Status](https://img.shields.io/badge/status-production--beta-success)](README.md#-project-status)
+[![Docker Build](https://github.com/sp-202/cloud-native-bigdata-stack/actions/workflows/docker-build.yml/badge.svg)](https://github.com/sp-202/cloud-native-bigdata-stack/actions/workflows/docker-build.yml)
 
 > An enterprise-grade, cloud-native orchestration framework for distributed big data workloads. Built on self-managed Kubernetes (kubeadm) on AWS EC2 with **Cilium CNI**, this platform provides a decoupled, elastic environment for **Apache Spark**, **Delta Lake**, and **Airflow**, featuring a unified suite of modern interactive notebook environments.
 
