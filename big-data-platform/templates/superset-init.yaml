@@ -37,6 +37,12 @@ spec:
             - |
               superset db upgrade && \
               superset init && \
+              superset fab create-admin \
+                --username {{ .Values.superset.init.adminUser.username }} \
+                --firstname {{ .Values.superset.init.adminUser.firstname }} \
+                --lastname {{ .Values.superset.init.adminUser.lastname }} \
+                --email {{ .Values.superset.init.adminUser.email }} \
+                --password "{{ .Values.superset.init.adminUser.password }}" || true && \
               echo "Superset DB init complete."
           envFrom:
             - secretRef:
