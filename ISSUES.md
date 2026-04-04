@@ -1,5 +1,137 @@
 # Project Issues & Resolutions Log
 
+## 6. Hive Metastore Thrift Socket Closed on S3 Operations (AWS SDK v1 → v2)
+
+**Issue:**
+Creating Hive databases or performing S3 operations via the Hive Metastore failed with:
+```
+AnalysisException: org.apache.hadoop.hive.ql.metadata.HiveException: 
+  org.apache.thrift.transport.TTransportException: Socket is closed by peer
+```
+And server logs showed:
+```
+java.lang.ClassNotFoundException: software.amazon.awssdk.core.exception.SdkException
+```
+
+**Root Cause:**
+The HMS Dockerfile was using **AWS SDK v1** (`aws-java-sdk-bundle-1.12.367.jar`) but `hadoop-aws-3.4.1` was compiled against AWS SDK v2 (`software.amazon.awssdk.*` package). When Hive Metastore attempted to create database directories in MinIO/S3 (which triggers S3A filesystem operations), it called SDK v2 classes that did not exist in the classpath. The missing class caused an unhandled exception in the Thrift server thread, which closed the socket abruptly from HMS's perspective.
+
+**Resolution:**
+Updated `docker/hive/Dockerfile` to replace AWS SDK v1 with AWS SDK v2, matching Spark 4.0.1's versions:
+```dockerfile
+# OLD (incorrect)
+curl -o /opt/hive/lib/aws-java-sdk-bundle-1.12.367.jar ...
+
+# NEW (correct)
+curl -o /opt/hive/lib/bundle-2.29.52.jar ...
+curl -o /opt/hive/lib/url-connection-client-2.29.52.jar ...
+```
+
+Also bumped HMS image tag from `hive-4.1.0-custom-prod` to `hive-4.1.0-custom-prod-v2` so ArgoCD deployments pull the corrected image.
+
+**Key Insight:** Hadoop AWS 3.4.x dropped support for AWS SDK v1 entirely and now depends solely on SDK v2. The error message "Invalid method name: 'get_table'" seen in earlier errors was actually HMS failing to deserialize an exception thrown from an SDK v2 class that didn't exist.
+
+---
+
+## 7. Spark Sedona Kryo Serialization Error (`[FAILED_REGISTER_CLASS_WITH_KRYO]`)
+
+**Issue:**
+Spark SQL queries involving Sedona geospatial functions (ST_Point, ST_Contains, etc.) failed with:
+```
+[FAILED_REGISTER_CLASS_WITH_KRYO] java.lang.ClassNotFoundException: 
+  org.apache.sedona.spark.SedonaKryoRegistrator
+```
+
+**Root Cause:**
+The Kryo serializer configuration in Spark pointed to a non-existent class `org.apache.sedona.spark.SedonaKryoRegistrator`. The actual class shipped in the Sedona JAR is in the `org.apache.sedona.core.serde` package: `org.apache.sedona.core.serde.SedonaKryoRegistrator`.
+
+**Resolution:**
+Fixed the Kryo registrator class name in three places:
+1. **Dockerfile spark-defaults.conf** (baked config):
+   ```ini
+   spark.kryo.registrator org.apache.sedona.core.serde.SedonaKryoRegistrator
+   ```
+2. **spark-connect-server deployment.yaml** (--conf override):
+   ```yaml
+   --conf spark.kryo.registrator=org.apache.sedona.core.serde.SedonaKryoRegistrator
+   ```
+3. **ConfigMap spark-defaults.conf** (K8s runtime config):
+   ```ini
+   spark.kryo.registrator           org.apache.sedona.core.serde.SedonaKryoRegistrator
+   ```
+
+Commit: `3311cae fix: correct Sedona Kryo registrator package (core.serde not spark)`
+
+**Testing:**
+```python
+# This now works without KRYO errors
+from pyspark.sql.functions import st_point, st_contains
+df.createOrReplaceTempView("locations")
+spark.sql("SELECT ST_AsText(location) FROM locations WHERE ...").show()
+```
+
+---
+
+## 8. Superset 500 Error on Login & Admin User Not Created
+
+**Issue:**
+After Superset pod startup, attempting to log in with admin credentials resulted in:
+```
+Internal Server Error: 500
+Sorry, something went wrong. We are fixing the mistake now.
+```
+
+Root cause was actually two separate issues:
+
+**Root Cause #1: Missing Database Tables**
+The Superset chart's built-in init job did not reliably run `superset init`, leaving the `user_attribute` table and other tables missing. When a user logged in, the auth flow tried to access `ab_user_attribute`, which didn't exist, causing a 500.
+
+**Root Cause #2: Admin User Not Created**
+Even with a functioning database, the admin user was never created, so login failed with "Invalid login. Please try again."
+
+**Resolution:**
+1. **Enhanced `superset-init.yaml` PostSync Job**: Updated to run `fab create-admin` after `db upgrade` and `init`:
+   ```bash
+   superset db upgrade && \
+   superset init && \
+   superset fab create-admin \
+     --username {{ .Values.superset.init.adminUser.username }} \
+     --firstname {{ .Values.superset.init.adminUser.firstname }} \
+     --lastname {{ .Values.superset.init.adminUser.lastname }} \
+     --email {{ .Values.superset.init.adminUser.email }} \
+     --password "{{ .Values.superset.init.adminUser.password }}" || true && \
+   echo "Superset DB init complete."
+   ```
+   The `|| true` ensures idempotent re-runs (if the user already exists, the job doesn't fail).
+
+2. **Airflow Admin User Auto-Creation**: Added `webserver.defaultUser` to Airflow in values.yaml:
+   ```yaml
+   airflow:
+     webserver:
+       defaultUser:
+         enabled: true
+         role: Admin
+         username: admin
+         password: admin
+         email: admin@airflow.com
+         firstName: Admin
+         lastName: User
+   ```
+
+**Deployment Impact:**
+- On every ArgoCD sync, the `superset-init.yaml` PostSync job runs automatically, ensuring the database is fully initialized and the admin user exists.
+- Pods can restart freely; `imagePullPolicy: Always` with `defaultUser: enabled: true` ensures users are always present.
+- No more manual `kubectl exec` user creation needed.
+
+**Credentials After Deploy:**
+| Service | Username | Password |
+|---------|----------|----------|
+| Superset | admin | `CHANGE_ME_STRONG_PASSWORD` (from values.yaml) |
+| Airflow | admin | `admin` |
+| Grafana | admin | `admin` |
+
+---
+
 ## 1. Spark Auto-Initialization Failure (`NameError: name 'spark' is not defined`)
 
 **Issue:**

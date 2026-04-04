@@ -70,7 +70,190 @@ kubectl debug node/<node-name> -it --image=alpine -- chroot /host mkdir -p /var/
     kubectl get pods -n default
     ```
 
+## 🔐 Post-Deployment Configuration
+
+### Admin Credentials Setup
+
+After the first deployment, admin users are automatically created by ArgoCD PostSync hooks:
+
+| Service | Username | Default Password | Location |
+|---------|----------|------------------|----------|
+| **Superset** | `admin` | `CHANGE_ME_STRONG_PASSWORD` | values.yaml line 568 |
+| **Airflow** | `admin` | `admin` | Auto-created by webserver.defaultUser |
+| **Grafana** | `admin` | `admin` | values.yaml line 601 |
+
+**Important**: Change Superset's default password in values.yaml before production deployment:
+
+```yaml
+superset:
+  init:
+    createAdmin: true
+    adminUser:
+      username: admin
+      password: "YOUR_SECURE_PASSWORD_HERE"  # Change this!
+```
+
+Then commit and push to trigger ArgoCD sync.
+
+### Verifying Admin User Creation
+
+```bash
+# Superset
+kubectl exec deploy/big-data-platform-superset -c superset -- \
+  superset fab list-users
+
+# Airflow
+kubectl exec deploy/big-data-platform-webserver -c webserver -- \
+  airflow users list
+
+# Grafana (check login works via web interface)
+```
+
+---
+
+## 📊 Post-Deployment Verification
+
+### 1. Check All Pods are Running
+```bash
+kubectl get pods -n default -o wide
+```
+All pods should be in `Running` state. If any are stuck in `Pending` or `CrashLoopBackOff`, see Troubleshooting section.
+
+### 2. Verify Data Connectivity
+```bash
+# Test Spark to S3
+kubectl exec -it deploy/jupyterhub -c jupyterhub -- python3 << 'EOF'
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.remote("sc://spark-connect-server-driver-svc:15002").getOrCreate()
+spark.range(10).write.format("delta").mode("overwrite").save("s3a://warehouse/test")
+print("✅ Spark → S3 write successful")
+EOF
+```
+
+### 3. Verify Hive Metastore
+```bash
+# Create a Hive database
+kubectl exec deploy/spark-connect-server -- \
+  /opt/spark/bin/spark-sql -e "CREATE DATABASE IF NOT EXISTS test; SHOW DATABASES;"
+```
+
+### 4. Verify Ingress Routes
+```bash
+# All routes should resolve via cloudflared
+kubectl get ingressroute -A
+kubectl logs -n cloudflare deploy/cloudflared | tail -20
+```
+
+### 5. Check Storage Paths Exist
+```bash
+# From a node, verify OpenEBS directories were created
+ssh ec2-user@<node-ip>
+ls -la /var/openebs/local/ | grep -E "postgres|minio|airflow|spark"
+```
+
+---
+
 ## 🆘 Troubleshooting
 
-- **CrashLoopBackOff**: Check logs (`kubectl logs -p pod-name`). Common causes include database unavailability or missing S3 buckets.
-- **Pending Pods**: Check for `FailedScheduling` or `FailedMount` events (`kubectl describe pod`). Verify that local storage directories exist on the node.
+### CrashLoopBackOff
+**Cause:** Application crashed or failed to start.
+
+```bash
+# Check logs
+kubectl logs deploy/<app-name> --previous  # Previous container logs
+kubectl logs deploy/<app-name> -f          # Tail current logs
+
+# Common causes:
+# - Database connection failure: Check Postgres pod
+# - Missing S3 buckets: Check MinIO initialization job
+# - Configuration error: Check values.yaml syntax
+```
+
+### Pending Pods / FailedMount
+**Cause:** Local storage paths don't exist on node.
+
+```bash
+# Check pod events
+kubectl describe pod <pod-name>
+
+# Create missing directory on node
+ssh ec2-user@<node-ip>
+sudo mkdir -p /var/openebs/local/<missing-path>
+sudo chown -R 1000:1000 /var/openebs/local/<missing-path>
+```
+
+### 500 Errors on Superset Login
+**Cause:** Database not initialized.
+
+```bash
+# Check if superset-init job ran
+kubectl get jobs | grep superset
+kubectl logs job/superset-db-init
+
+# Manually trigger database init if needed
+kubectl exec deploy/big-data-platform-superset -c superset -- \
+  superset db upgrade && superset init
+```
+
+### Spark Kryo Serialization Error
+**Cause:** Incorrect Kryo registrator class name.
+
+See [DEBUG_GUIDE.md](DEBUG_GUIDE.md#error-failed_register_class_with_kryo)
+
+### Hive Metastore Socket Closed Error
+**Cause:** AWS SDK v1 vs v2 mismatch.
+
+See [DEBUG_GUIDE.md](DEBUG_GUIDE.md#error-ttransportexception-socket-is-closed-by-peer)
+
+---
+
+## 🔄 Updating the Platform
+
+All updates are managed via **GitOps**. To make changes:
+
+1. **Edit configuration** in `big-data-platform/values.yaml`
+2. **Commit and push** to the repository
+3. **ArgoCD automatically syncs** the changes (usually within 3 minutes)
+4. **Pods restart** with new configuration
+
+Example:
+```bash
+# Change Superset admin password
+vim big-data-platform/values.yaml
+# Edit: superset.init.adminUser.password
+
+git add big-data-platform/values.yaml
+git commit -m "chore: update Superset admin password"
+git push origin main
+
+# ArgoCD syncs automatically
+# Monitor via: argocd app get big-data-platform
+```
+
+### Manual Sync Trigger
+```bash
+kubectl -n argocd exec deploy/argocd-server -- \
+  argocd app sync big-data-platform --force --prune
+```
+
+---
+
+## 🐳 Rebuilding Docker Images
+
+If you modify a Dockerfile (e.g., `docker/spark/Dockerfile`), the image is automatically rebuilt and pushed by GitHub Actions on `git push`.
+
+Manual rebuild:
+```bash
+cd docker/spark
+./build.sh  # Multi-arch build + push
+```
+
+**Note:** Update the image tag in `big-data-platform/values.yaml` after the image is pushed, so ArgoCD knows to pull the new version.
+
+---
+
+## 📚 Documentation
+
+For detailed debugging steps, see [DEBUG_GUIDE.md](DEBUG_GUIDE.md).  
+For known issues and resolutions, see [ISSUES.md](ISSUES.md).  
+For architecture overview, see [ARCHITECTURE.md](ARCHITECTURE.md).

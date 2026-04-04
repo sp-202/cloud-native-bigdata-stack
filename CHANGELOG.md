@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.5.1] - 2026-04-04
+
+### 🐛 Fixed
+- **Spark Kryo Serialization Error** (`[FAILED_REGISTER_CLASS_WITH_KRYO]`): Fixed incorrect Kryo registrator class name `org.apache.sedona.spark.SedonaKryoRegistrator` → `org.apache.sedona.core.serde.SedonaKryoRegistrator`. Updated in Dockerfile, configmap.yaml, and deployment.yaml. Root cause: Spark was trying to register a non-existent class when initializing Sedona extensions.
+  
+- **Superset 500 Internal Server Error on First Login**: Fixed missing `user_attribute` database table that caused "Sorry, something went wrong" errors. Root cause: The chart's built-in init job did not reliably run `superset init`. Solution: Enhanced `superset-init.yaml` PostSync job to always run `db upgrade && init && fab create-admin` after each ArgoCD sync, ensuring full database initialization.
+
+- **Airflow Admin User Not Auto-Created**: Added `webserver.defaultUser` config to values.yaml so Airflow auto-creates the default admin user (`admin`/`admin`) on first pod startup. Prevents manual user creation via exec.
+
+- **Hive Metastore ClassNotFoundException on S3 Operations** (`SdkException: software.amazon.awssdk.core.exception.SdkException`): Fixed by replacing AWS SDK v1 (`aws-java-sdk-bundle-1.12.367.jar`) with AWS SDK v2 (`bundle-2.29.52.jar` + `url-connection-client-2.29.52.jar`) in HMS Dockerfile. Root cause: `hadoop-aws-3.4.1` requires AWS SDK v2 classes which were missing; when creating databases (which triggers S3 operations), HMS failed with a Thrift socket close error. Bumped HMS image tag to `hive-4.1.0-custom-prod-v2`.
+
+- **Spark `CREATE DATABASE` Command Failing**: Spark and Hive Metastore now properly synchronized with matching AWS SDK v2 versions. Previously, even creating a Hive database in Spark would fail with Thrift protocol mismatches.
+
+### 🔄 Changed
+- **Superset Admin User Creation**: Now uses `fab create-admin` via the PostSync job (idempotent via `|| true`), eliminating the need for manual `kubectl exec` user creation.
+
+---
+
 ## [v0.5.0] - 2026-04-03
 
 ### 🚀 Added
