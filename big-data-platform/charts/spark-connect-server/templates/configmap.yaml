@@ -88,27 +88,23 @@ data:
     spark.metrics.conf.*.source.jvm.class             org.apache.spark.metrics.source.JvmSource
     spark.metrics.staticSources.enabled               true
 
-    # --- SQL & Catalogs (Delta Lake + Hive Metastore) ---
-    spark.sql.extensions             org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,io.delta.sql.DeltaSparkSessionExtension
-    spark.sql.catalogImplementation  hive
-    spark.hadoop.hive.metastore.uris {{ .Values.global.hiveMetastore.uri }}
-    spark.sql.warehouse.dir          s3a://warehouse/managed/
-
-    # --- spark_catalog: Delta Lake over Hive Metastore (default catalog) ---
-    spark.sql.catalog.spark_catalog  org.apache.spark.sql.delta.catalog.DeltaCatalog
+    # --- SQL Extensions (Sedona + Iceberg) ---
+    spark.sql.extensions             org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
     spark.sql.defaultCatalog         spark_catalog
 
-    # --- Unity Catalog OSS (disabled — using Hive Metastore as default catalog) ---
-    # spark.sql.catalog.unity          io.unitycatalog.spark.UCSingleCatalog
-    # spark.sql.catalog.unity.uri      {{ .Values.global.unityCatalog.uri }}
-    # spark.sql.catalog.unity.token    {{ .Values.global.unityCatalog.token }}
-
-    # --- Delta Lake Features ---
-    spark.databricks.delta.catalog.enableServerSidePlanning true
-    spark.databricks.delta.allowArbitraryProperties.enabled true
-    spark.databricks.delta.universalFormat.enabledFormats iceberg
-    spark.databricks.delta.enableIcebergCompatV2 true
-    spark.databricks.delta.columnMapping.mode name
+    # --- spark_catalog: Iceberg via Gravitino REST Catalog (IRC) ---
+    # Gravitino 1.2.0 bundles Iceberg 1.10.1 — exact parity with Spark JARs.
+    # IRC exposes the standard Iceberg REST protocol on port 9001.
+    # S3FileIO credentials are picked up from the AWS_* env vars set on the pod.
+    spark.sql.catalog.spark_catalog                        org.apache.iceberg.spark.SparkCatalog
+    spark.sql.catalog.spark_catalog.type                   rest
+    spark.sql.catalog.spark_catalog.uri                    {{ .Values.global.gravitino.icebergRestUri }}
+    spark.sql.catalog.spark_catalog.io-impl                org.apache.iceberg.aws.s3.S3FileIO
+    spark.sql.catalog.spark_catalog.s3.endpoint            {{ .Values.global.s3.endpoint }}
+    spark.sql.catalog.spark_catalog.s3.path-style-access   {{ .Values.global.s3.pathStyleAccess }}
+    spark.sql.catalog.spark_catalog.s3.access-key-id       {{ .Values.global.s3.accessKey }}
+    spark.sql.catalog.spark_catalog.s3.secret-access-key   {{ .Values.global.s3.secretKey }}
+    spark.sql.warehouse.dir          s3a://warehouse/iceberg/
 
     # --- S3 / MinIO Configuration ---
     spark.hadoop.fs.s3a.impl                 org.apache.hadoop.fs.s3a.S3AFileSystem

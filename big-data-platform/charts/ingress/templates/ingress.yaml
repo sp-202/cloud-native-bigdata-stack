@@ -132,4 +132,18 @@ spec:
             port:
               name: ui
   {{- end }}
+  {{- if .Values.gravitino.enabled }}
+  # Gravitino — Web UI v2 + Main REST API (port 8090)
+  # The Iceberg REST port (9001) is internal-only; Spark uses it in-cluster.
+  - host: gravitino.{{ .Values.global.domain }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: gravitino
+            port:
+              name: api
+  {{- end }}
 {{- end }}

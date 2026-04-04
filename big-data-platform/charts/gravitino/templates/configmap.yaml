@@ -1,0 +1,71 @@
+# ------------------------------------------------------------------------------
+# Gravitino - Configuration
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Apache Gravitino 1.2.0 server config with Iceberg REST Catalog
+#              (IRC) auxiliary service. The IRC exposes an Iceberg REST API on
+#              port 9001 backed by a PostgreSQL JDBC catalog, allowing Spark and
+#              StarRocks to use standard Iceberg REST without a Hive Metastore.
+#
+#              Gravitino 1.2.0 bundles Iceberg 1.10.1 — exact version parity
+#              with iceberg-spark-runtime-4.0_2.13-1.10.1 in the Spark image.
+#
+# Managed via ArgoCD Sync Wave: -1 (before application-tier services)
+# ------------------------------------------------------------------------------
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gravitino-config
+  labels:
+    app: gravitino
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+data:
+  gravitino.conf: |
+    # -------------------------------------------------------------------------
+    # Gravitino Main Server
+    # -------------------------------------------------------------------------
+    gravitino.server.webserver.host = 0.0.0.0
+    gravitino.server.webserver.port = 8090
+    gravitino.server.shutdown.timeout = 3000
+
+    # -------------------------------------------------------------------------
+    # Entity Store — PostgreSQL relational backend for Gravitino metadata
+    # -------------------------------------------------------------------------
+    gravitino.entity.store = relational
+    gravitino.entity.store.relational.jdbcUrl = jdbc:postgresql://{{ .Values.global.postgres.host }}:{{ .Values.global.postgres.port }}/{{ .Values.db.name }}
+    gravitino.entity.store.relational.jdbcDriver = org.postgresql.Driver
+    gravitino.entity.store.relational.jdbcUser = {{ .Values.db.user }}
+    gravitino.entity.store.relational.jdbcPassword = {{ .Values.db.password }}
+
+    # -------------------------------------------------------------------------
+    # Auxiliary Services — enable the Iceberg REST Catalog server
+    # -------------------------------------------------------------------------
+    gravitino.auxService.names = iceberg-rest
+
+    # -------------------------------------------------------------------------
+    # Iceberg REST Catalog (IRC) — port 9001
+    # Backend: PostgreSQL JDBC Iceberg catalog (no Hive Metastore dependency)
+    # Storage: MinIO S3-compatible object store via Iceberg S3FileIO
+    # -------------------------------------------------------------------------
+    gravitino.iceberg-rest.host = 0.0.0.0
+    gravitino.iceberg-rest.port = 9001
+
+    # Catalog backend: JDBC (Iceberg JdbcCatalog backed by PostgreSQL)
+    gravitino.iceberg-rest.catalog.backend = jdbc
+    gravitino.iceberg-rest.catalog.uri = jdbc:postgresql://{{ .Values.global.postgres.host }}:{{ .Values.global.postgres.port }}/{{ .Values.icebergCatalog.db.name }}
+    gravitino.iceberg-rest.catalog.jdbc.user = {{ .Values.icebergCatalog.db.user }}
+    gravitino.iceberg-rest.catalog.jdbc.password = {{ .Values.icebergCatalog.db.password }}
+    gravitino.iceberg-rest.catalog.warehouse = {{ .Values.icebergCatalog.warehouse }}
+
+    # S3FileIO for catalog data file operations (MinIO)
+    gravitino.iceberg-rest.catalog.io-impl = org.apache.iceberg.aws.s3.S3FileIO
+    gravitino.iceberg-rest.catalog.s3.endpoint = {{ .Values.global.s3.endpoint }}
+    gravitino.iceberg-rest.catalog.s3.path-style-access = {{ .Values.global.s3.pathStyleAccess }}
+    gravitino.iceberg-rest.catalog.s3.access-key-id = {{ .Values.global.s3.accessKey }}
+    gravitino.iceberg-rest.catalog.s3.secret-access-key = {{ .Values.global.s3.secretKey }}
+
+    # Scan planning cache — reduces metadata I/O for repeated queries (1.2.0 feature)
+    gravitino.iceberg-rest.catalog.scan-planning-cache.enabled = true
