@@ -47,6 +47,9 @@ dependencies:
 - name: hive-metastore
   repository: file://./charts/hive-metastore
   version: 1.0.0
+- name: gravitino
+  repository: file://./charts/gravitino
+  version: 1.0.0
 - name: spark-history-server
   repository: file://./charts/spark-history-server
   version: 1.0.0
@@ -62,5 +65,5 @@ dependencies:
 - name: ingress
   repository: file://./charts/ingress
   version: 1.0.0
-digest: sha256:f578025b187066776b451541ff97c363baf7c0a14481732a4e4d651a3a14a301
-generated: "2026-04-03T23:26:47.455274211+05:30"
+digest: sha256:72437947565224dc8b8b07ff47db58776c90402c18480d8111db55acf994427d
+generated: "2026-04-05T02:18:09.624919357+05:30"

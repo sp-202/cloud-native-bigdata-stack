@@ -1,0 +1,136 @@
+# ------------------------------------------------------------------------------
+# Gravitino - Deployment
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Apache Gravitino 1.2.0 metadata lake server.
+#   - Port 8090: Main REST API (metalake, catalog, schema, table management)
+#   - Port 9001: Iceberg REST Catalog (IRC) — consumed by Spark & StarRocks
+#
+# Init containers:
+#   1. wait-for-postgres — ensures Postgres is accepting connections
+#   2. init-databases    — creates 'gravitino' and 'iceberg_catalog' DBs if absent
+#
+# Managed via ArgoCD Sync Wave: -1 (after infra-core, before applications)
+# ------------------------------------------------------------------------------
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gravitino
+  labels:
+    app: gravitino
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: gravitino
+  template:
+    metadata:
+      labels:
+        app: gravitino
+    spec:
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+      initContainers:
+        # Step 1: Wait for PostgreSQL to be ready
+        - name: wait-for-postgres
+          image: "postgres:13"
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} -U {{ .Values.global.postgres.user }}; do
+                echo "Waiting for PostgreSQL..."; sleep 3
+              done
+              echo "PostgreSQL is ready."
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+
+        # Step 2: Create Gravitino and Iceberg catalog databases if they don't exist
+        - name: init-databases
+          image: "postgres:13"
+          command:
+            - sh
+            - -c
+            - |
+              export PGPASSWORD="{{ .Values.db.password }}"
+              # Create Gravitino entity store DB
+              psql -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} -U {{ .Values.db.user }} \
+                -tc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.db.name }}'" \
+                | grep -q 1 || psql -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} \
+                -U {{ .Values.db.user }} -c "CREATE DATABASE {{ .Values.db.name }}"
+              # Create Iceberg catalog JDBC DB
+              psql -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} -U {{ .Values.icebergCatalog.db.user }} \
+                -tc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.icebergCatalog.db.name }}'" \
+                | grep -q 1 || psql -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} \
+                -U {{ .Values.icebergCatalog.db.user }} -c "CREATE DATABASE {{ .Values.icebergCatalog.db.name }}"
+              echo "Database initialization complete."
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+
+      containers:
+        - name: gravitino
+          image: {{ .Values.image }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8090
+              name: api
+            - containerPort: 9001
+              name: iceberg-rest
+          readinessProbe:
+            httpGet:
+              path: /api/version
+              port: 8090
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/version
+              port: 8090
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: gravitino-config
+              mountPath: /root/gravitino-current/conf/gravitino.conf
+              subPath: gravitino.conf
+      volumes:
+        - name: gravitino-config
+          configMap:
+            name: gravitino-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gravitino
+  labels:
+    app: gravitino
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  ports:
+    - name: api
+      port: 8090
+      targetPort: 8090
+    - name: iceberg-rest
+      port: 9001
+      targetPort: 9001
+  selector:
+    app: gravitino
+  type: ClusterIP

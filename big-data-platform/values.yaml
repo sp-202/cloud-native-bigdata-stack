@@ -23,7 +23,7 @@ global:
   cfTunnelId: "91e5be1d-3b51-4cac-aebf-d330aafda394"
 
   # --- Container Images ---
-  sparkImage: "subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.4.0-v10-sedona-h3"
+  sparkImage: "subhodeep2022/spark-bigdata:spark-4.0.1-v11-iceberg-gravitino"
   jupyterhubImage: "subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v2"
   hiveImage: "subhodeep2022/spark-bigdata:hive-3.1.3-arm64-v1"
   airflowImage: "apache/airflow:2.7.1"
@@ -64,11 +64,18 @@ global:
     password: "password"
     database: "postgres"
 
-  # --- Hive Metastore Connection (shared by Spark, StarRocks) ---
+  # --- Hive Metastore Connection (optional — kept for StarRocks HMS compatibility if needed) ---
   hiveMetastore:
     uri: "thrift://hive-metastore.default.svc.cluster.local:9083"
 
-  # --- Unity Catalog OSS (shared by Spark, JupyterHub) ---
+  # --- Apache Gravitino — Iceberg REST Catalog & unified metadata lake ---
+  gravitino:
+    # Iceberg REST Catalog endpoint consumed by Spark & StarRocks
+    icebergRestUri: "http://gravitino.default.svc.cluster.local:9001/iceberg/"
+    # Main API endpoint (metalake/catalog/schema/table management + Web UI)
+    apiUri: "http://gravitino.default.svc.cluster.local:8090"
+
+  # --- Unity Catalog OSS (disabled — replaced by Gravitino) ---
   unityCatalog:
     uri: "http://unity-catalog-server.default.svc.cluster.local:8080"
     token: ""
@@ -262,7 +269,7 @@ airflow:
 # HIVE METASTORE (+ HiveServer2) — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
 # =============================================================================
 hive-metastore:
-  enabled: true
+  enabled: false  # Replaced by Apache Gravitino IRC (Iceberg REST Catalog)
   replicas: 1
   db:
     user: "hive"
@@ -292,6 +299,38 @@ hive-metastore:
       limits:
         cpu: "250m"
         memory: "256Mi"
+
+# =============================================================================
+# APACHE GRAVITINO 1.2.0 — Unified Metadata Lake + Iceberg REST Catalog (IRC)
+# GP node — moderate CPU/memory; IRC handles Spark & StarRocks catalog traffic.
+#
+# Architecture:
+#   Port 8090 → Main REST API + Web UI v2 (metalake, catalog, table management)
+#   Port 9001 → Iceberg REST Catalog (consumed by Spark SparkCatalog + StarRocks)
+#
+# Gravitino 1.2.0 bundles Iceberg 1.10.1 — exact parity with Spark image JARs.
+# =============================================================================
+gravitino:
+  enabled: true
+  replicas: 1
+  image: "apache/gravitino:1.2.0"
+  db:
+    name: "gravitino"
+    user: "postgres"
+    password: "password"
+  icebergCatalog:
+    db:
+      name: "iceberg_catalog"
+      user: "postgres"
+      password: "password"
+    warehouse: "s3://warehouse/iceberg/"
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
 
 # =============================================================================
 # SPARK HISTORY SERVER — Spark node (i4g.8xlarge: 32 vCPU / 256 GB)

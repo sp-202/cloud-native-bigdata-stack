@@ -1,0 +1,9 @@
+apiVersion: v2
+name: gravitino
+description: >-
+  Apache Gravitino 1.2.0 — Unified AI & Data Metadata Lake with Iceberg REST Catalog (IRC).
+  Provides a single governance layer for Iceberg, Delta, and Hive tables.
+  IRC uses Iceberg 1.10.1 internally — exact version match with the platform's Spark JARs.
+type: application
+version: 1.0.0
+appVersion: "1.2.0"

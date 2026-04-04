@@ -90,6 +90,11 @@ dependencies:
     repository: "file://./charts/hive-metastore"
     condition: hive-metastore.enabled
 
+  - name: gravitino
+    version: "1.0.0"
+    repository: "file://./charts/gravitino"
+    condition: gravitino.enabled
+
   - name: spark-history-server
     version: "1.0.0"
     repository: "file://./charts/spark-history-server"
