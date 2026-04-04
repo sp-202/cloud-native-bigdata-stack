@@ -9,9 +9,11 @@ USER root
 # Download Postgres JDBC driver
 RUN curl -o /opt/hive/lib/postgresql-42.6.0.jar https://jdbc.postgresql.org/download/postgresql-42.6.0.jar
 
-# Download AWS JARs for S3 support (Hadoop 3.4.1 — matching Spark 4.0.1)
+# Download AWS JARs for S3 support (Hadoop 3.4.1 + AWS SDK v2 — matching Spark 4.0.1)
+# hadoop-aws 3.4.x requires AWS SDK v2; the old aws-java-sdk-bundle (SDK v1) is NOT sufficient
 RUN curl -o /opt/hive/lib/hadoop-aws-3.4.1.jar https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.4.1/hadoop-aws-3.4.1.jar && \
-    curl -o /opt/hive/lib/aws-java-sdk-bundle-1.12.367.jar https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.367/aws-java-sdk-bundle-1.12.367.jar
+    curl -o /opt/hive/lib/bundle-2.29.52.jar https://repo1.maven.org/maven2/software/amazon/awssdk/bundle/2.29.52/bundle-2.29.52.jar && \
+    curl -o /opt/hive/lib/url-connection-client-2.29.52.jar https://repo1.maven.org/maven2/software/amazon/awssdk/url-connection-client/2.29.52/url-connection-client-2.29.52.jar
 
 # Fix permissions
 RUN mkdir -p /home/hive/.beeline && \
