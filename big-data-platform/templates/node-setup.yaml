@@ -41,14 +41,14 @@ spec:
             - -c
             - |
               mkdir -p \
-                {{ .Values.postgres.localPath }} \
-                {{ .Values.minio.localPath }} \
-                {{ .Values.airflow.localPath }} \
-                {{ .Values.airflowSchedulerLogs.localPath }} \
-                {{ .Values.airflowTriggererLogs.localPath }} \
-                {{ .Values.redis.localPath }} \
-                {{ .Values.starrocksFe.localPath }} \
-                {{ .Values.starrocksBe.localPath }}
+                {{ .Values.persistence.postgres.localPath }} \
+                {{ .Values.persistence.minio.localPath }} \
+                {{ .Values.persistence.airflow.localPath }} \
+                {{ .Values.persistence.airflowSchedulerLogs.localPath }} \
+                {{ .Values.persistence.airflowTriggererLogs.localPath }} \
+                {{ .Values.persistence.redis.localPath }} \
+                {{ .Values.persistence.starrocksFe.localPath }} \
+                {{ .Values.persistence.starrocksBe.localPath }}
               echo "All host directories created."
           volumeMounts:
             - name: host-root
