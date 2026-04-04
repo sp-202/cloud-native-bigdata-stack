@@ -72,7 +72,8 @@
 ║  └───────────────┘   └──────────────────────┘   │  │  Drivers (in image):    │  │            ║
 ║                                                 │  │   postgresql-42.6.0.jar │  │            ║
 ║                                                 │  │   hadoop-aws-3.4.1.jar  │  │            ║
-║                                                 │  │   aws-sdk-1.12.367.jar  │  │            ║
+║                                                 │  │   bundle-2.29.52.jar    |  |            ║
+║                                                 |  |  url-client-2.29.52.jar |  │            ║
 ║                                                 │  └──────────┬──────────────┘  │            ║
 ║                                                 │             │ reads/writes    │            ║
 ║                                                 │             ▼                 │            ║
