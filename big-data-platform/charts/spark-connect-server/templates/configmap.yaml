@@ -88,20 +88,20 @@ data:
     spark.metrics.conf.*.source.jvm.class             org.apache.spark.metrics.source.JvmSource
     spark.metrics.staticSources.enabled               true
 
-    # --- SQL & Catalogs (Delta Lake, Hive & Unity Catalog) ---
+    # --- SQL & Catalogs (Delta Lake + Hive Metastore) ---
     spark.sql.extensions             org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,io.delta.sql.DeltaSparkSessionExtension
     spark.sql.catalogImplementation  hive
     spark.hadoop.hive.metastore.uris {{ .Values.global.hiveMetastore.uri }}
     spark.sql.warehouse.dir          s3a://warehouse/managed/
 
-    # --- spark_catalog (Delta Lake default) ---
+    # --- spark_catalog: Delta Lake over Hive Metastore (default catalog) ---
     spark.sql.catalog.spark_catalog  org.apache.spark.sql.delta.catalog.DeltaCatalog
+    spark.sql.defaultCatalog         spark_catalog
 
-    # --- Unity Catalog OSS ---
-    spark.sql.catalog.unity          io.unitycatalog.spark.UCSingleCatalog
-    spark.sql.catalog.unity.uri      {{ .Values.global.unityCatalog.uri }}
-    spark.sql.catalog.unity.token    {{ .Values.global.unityCatalog.token }}
-    spark.sql.defaultCatalog         unity
+    # --- Unity Catalog OSS (disabled — using Hive Metastore as default catalog) ---
+    # spark.sql.catalog.unity          io.unitycatalog.spark.UCSingleCatalog
+    # spark.sql.catalog.unity.uri      {{ .Values.global.unityCatalog.uri }}
+    # spark.sql.catalog.unity.token    {{ .Values.global.unityCatalog.token }}
 
     # --- Delta Lake Features ---
     spark.databricks.delta.catalog.enableServerSidePlanning true
