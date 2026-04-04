@@ -31,8 +31,9 @@ data:
         service: http://traefik.kube-system.svc.cluster.local:80
       - hostname: spark-history.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      - hostname: unity-catalog.dailyblogstudio.com
-        service: http://traefik.kube-system.svc.cluster.local:80
+      # unity-catalog disabled — using Hive Metastore as default catalog
+      # - hostname: unity-catalog.dailyblogstudio.com
+      #   service: http://traefik.kube-system.svc.cluster.local:80
       - hostname: grafana.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
       - hostname: headlamp.dailyblogstudio.com
