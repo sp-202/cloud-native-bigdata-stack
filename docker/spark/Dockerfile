@@ -5,7 +5,6 @@ ENV SPARK_VERSION=4.0.1
 ENV HADOOP_VERSION=3
 ENV SCALA_VERSION=2.13
 ENV DELTA_VERSION=4.1.0
-ENV UC_VERSION=0.4.0
 ENV ICEBERG_VERSION=1.10.1
 ENV HADOOP_AWS_VERSION=3.4.1
 ENV AWS_SDK_V2_VERSION=2.29.52
@@ -33,10 +32,7 @@ RUN wget https://jdbc.postgresql.org/download/postgresql-${POSTGRES_VERSION}.jar
     # UPDATED: Delta 4.1.0 now requires the _4.0 suffix in the artifact name
     wget https://repo1.maven.org/maven2/io/delta/delta-spark_4.0_2.13/${DELTA_VERSION}/delta-spark_4.0_2.13-${DELTA_VERSION}.jar -P $SPARK_HOME/jars/ && \
     wget https://repo1.maven.org/maven2/io/delta/delta-storage/${DELTA_VERSION}/delta-storage-${DELTA_VERSION}.jar -P $SPARK_HOME/jars/ && \
-    # UPDATED: Unity Catalog OSS artifacts
-    wget https://repo1.maven.org/maven2/io/unitycatalog/unitycatalog-spark_2.13/${UC_VERSION}/unitycatalog-spark_2.13-${UC_VERSION}.jar -P $SPARK_HOME/jars/ && \
-    wget https://repo1.maven.org/maven2/io/unitycatalog/unitycatalog-client/${UC_VERSION}/unitycatalog-client-${UC_VERSION}.jar -P $SPARK_HOME/jars/ && \
-    # ADDED: Iceberg runtime for Spark 4.0 (Crucial for UniForm metadata generation)
+    # Iceberg runtime for Spark 4.0 (UniForm metadata generation)
     wget https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-4.0_2.13/${ICEBERG_VERSION}/iceberg-spark-runtime-4.0_2.13-${ICEBERG_VERSION}.jar -P $SPARK_HOME/jars/ && \
     wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_AWS_VERSION}/hadoop-aws-${HADOOP_AWS_VERSION}.jar -P $SPARK_HOME/jars/ && \
     wget https://repo1.maven.org/maven2/software/amazon/awssdk/bundle/${AWS_SDK_V2_VERSION}/bundle-${AWS_SDK_V2_VERSION}.jar -P $SPARK_HOME/jars/ && \
@@ -79,7 +75,9 @@ WORKDIR $SPARK_HOME
 RUN cp $SPARK_HOME/kubernetes/dockerfiles/spark/entrypoint.sh /opt/entrypoint.sh && \
     chmod +x /opt/entrypoint.sh
 
-# Create baseline spark-defaults.conf with integer timeouts and UC/Delta configs
+# Baseline spark-defaults.conf — integer timeouts + Hive/Delta catalog
+# UC config intentionally omitted: UC JARs removed, Hive Metastore is default catalog
+# Full config is injected at runtime via the spark-config ConfigMap mounted by the Connect server
 RUN echo "spark.network.timeout 120\n\
     spark.files.fetchTimeout 60\n\
     spark.executor.heartbeatInterval 10\n\
@@ -92,11 +90,7 @@ RUN echo "spark.network.timeout 120\n\
     spark.kryo.registrator org.apache.sedona.spark.SedonaKryoRegistrator\n\
     spark.sql.extensions org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,io.delta.sql.DeltaSparkSessionExtension\n\
     spark.sql.catalog.spark_catalog org.apache.spark.sql.delta.catalog.DeltaCatalog\n\
-    spark.sql.catalog.unity io.unitycatalog.spark.UCSingleCatalog\n\
-    spark.sql.catalog.unity.uri http://unity-catalog.catalog.svc.cluster.local:8080\n\
-    spark.sql.catalog.unity.token \n\
-    spark.sql.defaultCatalog unity\n\
-    spark.databricks.delta.catalog.enableServerSidePlanning true\n\
+    spark.sql.defaultCatalog spark_catalog\n\
     spark.sql.catalogImplementation hive" > $SPARK_HOME/conf/spark-defaults.conf
 
 ENTRYPOINT ["/opt/entrypoint.sh"]
