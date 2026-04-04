@@ -8,7 +8,7 @@
 
 ---
 
-👉 **[View the v0.3.0 Changelog](CHANGELOG.md)** | **[Release Notes](RELEASES.md)**
+👉 **[View the v0.5.1 Changelog](CHANGELOG.md)** | **[Release Notes](RELEASES.md)**
 
 
 
@@ -100,99 +100,11 @@ helm install platform ./big-data-platform
 
 ---
 
-## ⚡ Deployment Guide
-
-### Prerequisites
-1.  **AWS EC2 Cluster**: Self-managed Kubernetes via `kubeadm` on EC2 instances (ARM64 Graviton recommended).
-2.  **Tools**: `kubectl`, `helm` installed locally.
-3.  **Permissions**: Admin access to the cluster (`KUBECONFIG` configured).
-
-### Step 1: Clone & Configure
-```bash
-git clone https://github.com/your-repo/k8s-big-data-platform.git
-cd k8s-big-data-platform
-```
-
-### Step 2: Build Custom Images (Crucial)
-The platform uses optimized images for notebooks and executors. Build and push them to your registry. If you want to customize these images (e.g. adding specific spark dependencies or Python libraries), explore and modify the Dockerfiles within the `docker/` folder before running these scripts:
-```bash
-# Hive Metastore (arm64-native, Hive 4.1.0)
-docker/hive/build.sh
-
-# Spark Executor & Driver Base
-docker/spark/build.sh
-
-# User Interfaces
-docker/jupyterhub/build.sh
-docker/marimo/build.sh
-```
-
-> [!TIP]
-> **CI/CD Auto-Build**: Any push to `main` that modifies a `docker/*/Dockerfile` will automatically trigger a multi-arch (`linux/amd64` + `linux/arm64`) build and push via GitHub Actions. You only need to run these scripts manually for local testing. See [`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml).
-
-### Step 3: Deploy Platform
-Run the main deployment script. This automation handles namespace creation, CRD installation, and Helm chart deployments.
-```bash
-chmod +x deploy-v2.sh
-./deploy-v2.sh
-```
-*Wait for the script to complete. It may take 5-10 minutes for the LoadBalancer IP to provision.*
-
-### Step 3: Access Services
-The script will output the dynamic URLs for your services. The base domain `$INGRESS_DOMAIN` is constructed automatically using the LoadBalancer IP (e.g., `44.203.26.241.sslip.io`).
-
-| Service | URL Pattern | Default Credentials |
-| :--- | :--- | :--- |
-| **Airflow** | `http://airflow.<INGRESS_DOMAIN>` | `admin` / `admin` |
-| **JupyterHub** | `http://jupyterhub.<INGRESS_DOMAIN>` | No token (Dev Mode) |
-| **Superset** | `http://superset.<INGRESS_DOMAIN>` | `admin` / `admin` |
-| **Minio** | `http://minio.<INGRESS_DOMAIN>` | `minioadmin` / `minioadmin` |
-| **Grafana** | `http://grafana.<INGRESS_DOMAIN>` | `admin` / `prom-operator` |
-| **Spark UI** | `http://spark.<INGRESS_DOMAIN>` | - |
-| **Spark History** | `http://spark-history.<INGRESS_DOMAIN>` | - |
-| **Hubble UI** | `http://hubble.<INGRESS_DOMAIN>` | - |
-| **Headlamp UI** | `http://headlamp.<INGRESS_DOMAIN>` | See token below |
-
-### Headlamp Cluster Admin Token
-
-Generate a token for Headlamp UI access:
-
-```bash
-# One-time setup: Create admin-user service account
-kubectl apply -f - <<EOF
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: admin-user
-  namespace: default
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: admin-user-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-subjects:
-- kind: ServiceAccount
-  name: admin-user
-  namespace: default
-EOF
-
-# Generate token (GKE limits to 48h max)
-kubectl create token admin-user -n default --duration=48h
-```
-
-Copy the output token and paste it into the Headlamp login page.
-
----
-
 ## 📊 Observability
 
 The platform comes with a pre-configured monitoring stack:
 *   **Prometheus Operator**: Automatically scrapes metrics from Spark applications and system components.
-*   **ServiceMonitors**: Defines <i>what</i> to monitor (Spark Driver/Executors, Airflow scheduler, Nodes).
+*   **ServiceMonitors**: Defines *what* to monitor (Spark Driver/Executors, Airflow scheduler, Nodes).
 *   **Grafana Dashboards**: Custom JSON dashboards are provided to visualize:
     *   JVM Heap usage
     *   Active Tasks / Executors
@@ -234,6 +146,7 @@ Superset is pre-connected to the internal Postgres and Hive Metastore.
 | :--- | :--- |
 | **[Changelog](CHANGELOG.md)** | Version history with detailed changes per release |
 | **[Issues & Resolutions](ISSUES.md)** | Troubleshooting log of known bugs and fixes |
+| **[Debug Guide](DEBUG_GUIDE.md)** | Step-by-step debugging procedures and diagnostics |
 | **[Deployment Guide](DEPLOYMENT.md)** | Step-by-step installation instructions |
 | **[JupyterHub Guide](JUPYTERHUB_GUIDE.md)** | PySpark jobs and executor configuration |
 | **[Monitoring Guide](MONITORING_GUIDE.md)** | Prometheus, Grafana, and Loki setup |
