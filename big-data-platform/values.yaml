@@ -23,7 +23,7 @@ global:
   cfTunnelId: "91e5be1d-3b51-4cac-aebf-d330aafda394"
 
   # --- Container Images ---
-  sparkImage: "subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.4.0-v9-sedona-h3"
+  sparkImage: "subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.4.0-v10-sedona-h3"
   jupyterhubImage: "subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v2"
   hiveImage: "subhodeep2022/spark-bigdata:hive-4.1.0-custom-prod"
   airflowImage: "apache/airflow:2.7.1"
