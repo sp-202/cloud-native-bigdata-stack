@@ -87,7 +87,7 @@ RUN echo "spark.network.timeout 120\n\
     spark.hadoop.fs.s3a.threads.keepalivetime 60\n\
     spark.hadoop.fs.s3a.multipart.purge.age 86400\n\
     spark.serializer org.apache.spark.serializer.KryoSerializer\n\
-    spark.kryo.registrator org.apache.sedona.spark.SedonaKryoRegistrator\n\
+    spark.kryo.registrator org.apache.sedona.core.serde.SedonaKryoRegistrator\n\
     spark.sql.extensions org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,io.delta.sql.DeltaSparkSessionExtension\n\
     spark.sql.catalog.spark_catalog org.apache.spark.sql.delta.catalog.DeltaCatalog\n\
     spark.sql.defaultCatalog spark_catalog\n\

@@ -36,7 +36,7 @@ data:
 
     # --- Serialization (Sedona + Kryo) ---
     spark.serializer                 org.apache.spark.serializer.KryoSerializer
-    spark.kryo.registrator           org.apache.sedona.spark.SedonaKryoRegistrator
+    spark.kryo.registrator           org.apache.sedona.core.serde.SedonaKryoRegistrator
 
     # --- SQL & ANSI Mode ---
     spark.sql.ansi.enabled           false
