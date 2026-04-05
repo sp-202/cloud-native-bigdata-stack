@@ -121,7 +121,7 @@ spec:
             name: spark-history-server
             port:
               number: 18080
-  {{- if (index .Values "unity-catalog").enabled }}
+  {{- if and .Values "unity-catalog" (index .Values "unity-catalog").enabled }}
   # Unity Catalog (API + UI) — only rendered when unity-catalog.enabled: true
   - host: unity-catalog.{{ .Values.global.domain }}
     http:
@@ -143,7 +143,7 @@ spec:
             port:
               name: ui
   {{- end }}
-  {{- if .Values.gravitino.enabled }}
+  {{- if and .Values.gravitino .Values.gravitino.enabled }}
   # Gravitino — Web UI v2 + Main REST API (port 8090)
   # The Iceberg REST port (9001) is internal-only; Spark uses it in-cluster.
   - host: gravitino.{{ .Values.global.domain }}
