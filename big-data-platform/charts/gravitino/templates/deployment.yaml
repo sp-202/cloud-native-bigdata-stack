@@ -67,12 +67,15 @@ spec:
             - |
               cp -a /root/gravitino/conf/. /conf-rw/
               cp /tmp/gravitino-config/gravitino.conf /conf-rw/gravitino.conf
+              cp /root/gravitino/scripts/postgresql/schema-1.2.0-postgresql.sql /schema/gravitino-schema.sql
           volumeMounts:
             - name: gravitino-config
               mountPath: /tmp/gravitino-config/gravitino.conf
               subPath: gravitino.conf
             - name: gravitino-conf-rw
               mountPath: /conf-rw
+            - name: gravitino-schema-sql
+              mountPath: /schema
           resources:
             requests:
               cpu: "50m"
@@ -81,7 +84,7 @@ spec:
               cpu: "100m"
               memory: "128Mi"
 
-        # Step 3: Create Gravitino and Iceberg catalog databases if they don't exist
+        # Step 3: Create Gravitino and Iceberg catalog databases, then apply Gravitino schema
         - name: init-databases
           image: "postgres:13"
           command:
@@ -94,12 +97,28 @@ spec:
                 -tc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.db.name }}'" \
                 | grep -q 1 || psql -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} \
                 -U {{ .Values.db.user }} -c "CREATE DATABASE {{ .Values.db.name }}"
+              # Apply Gravitino schema if tables don't exist (schema-1.2.0 uses CREATE TABLE IF NOT EXISTS)
+              TABLE_EXISTS=$(psql -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} \
+                -U {{ .Values.db.user }} -d {{ .Values.db.name }} -tAc \
+                "SELECT to_regclass('public.metalake_meta')" 2>/dev/null)
+              if [ -z "$TABLE_EXISTS" ]; then
+                echo "Applying Gravitino 1.2.0 PostgreSQL schema..."
+                psql -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} \
+                  -U {{ .Values.db.user }} -d {{ .Values.db.name }} -f /schema/gravitino-schema.sql
+                echo "Gravitino schema applied."
+              else
+                echo "Gravitino schema already exists, skipping."
+              fi
               # Create Iceberg catalog JDBC DB
+              export PGPASSWORD="{{ .Values.icebergCatalog.db.password }}"
               psql -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} -U {{ .Values.icebergCatalog.db.user }} \
                 -tc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.icebergCatalog.db.name }}'" \
                 | grep -q 1 || psql -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} \
                 -U {{ .Values.icebergCatalog.db.user }} -c "CREATE DATABASE {{ .Values.icebergCatalog.db.name }}"
               echo "Database initialization complete."
+          volumeMounts:
+            - name: gravitino-schema-sql
+              mountPath: /schema
           resources:
             requests:
               cpu: "50m"
@@ -159,6 +178,8 @@ spec:
           configMap:
             name: gravitino-config
         - name: gravitino-conf-rw
+          emptyDir: {}
+        - name: gravitino-schema-sql
           emptyDir: {}
 ---
 apiVersion: v1
