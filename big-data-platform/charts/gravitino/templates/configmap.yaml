@@ -49,23 +49,26 @@ data:
     # Iceberg REST Catalog (IRC) — port 9001
     # Backend: PostgreSQL JDBC Iceberg catalog (no Hive Metastore dependency)
     # Storage: MinIO S3-compatible object store via Iceberg S3FileIO
+    #
+    # NOTE: Gravitino 1.2.0 uses flat hyphenated keys under gravitino.iceberg-rest.*
+    # (NOT dot-notation with catalog. prefix — those are silently ignored).
     # -------------------------------------------------------------------------
     gravitino.iceberg-rest.host = 0.0.0.0
     gravitino.iceberg-rest.port = 9001
 
     # Catalog backend: JDBC (Iceberg JdbcCatalog backed by PostgreSQL)
-    gravitino.iceberg-rest.catalog.backend = jdbc
-    gravitino.iceberg-rest.catalog.uri = jdbc:postgresql://{{ .Values.global.postgres.host }}:{{ .Values.global.postgres.port }}/{{ .Values.icebergCatalog.db.name }}
-    gravitino.iceberg-rest.catalog.jdbc.user = {{ .Values.icebergCatalog.db.user }}
-    gravitino.iceberg-rest.catalog.jdbc.password = {{ .Values.icebergCatalog.db.password }}
-    gravitino.iceberg-rest.catalog.warehouse = {{ .Values.icebergCatalog.warehouse }}
+    gravitino.iceberg-rest.catalog-backend = jdbc
+    gravitino.iceberg-rest.uri = jdbc:postgresql://{{ .Values.global.postgres.host }}:{{ .Values.global.postgres.port }}/{{ .Values.icebergCatalog.db.name }}
+    gravitino.iceberg-rest.jdbc-user = {{ .Values.icebergCatalog.db.user }}
+    gravitino.iceberg-rest.jdbc-password = {{ .Values.icebergCatalog.db.password }}
+    gravitino.iceberg-rest.warehouse = {{ .Values.icebergCatalog.warehouse }}
 
     # S3FileIO for catalog data file operations (MinIO)
-    gravitino.iceberg-rest.catalog.io-impl = org.apache.iceberg.aws.s3.S3FileIO
-    gravitino.iceberg-rest.catalog.s3.endpoint = {{ .Values.global.s3.endpoint }}
-    gravitino.iceberg-rest.catalog.s3.path-style-access = {{ .Values.global.s3.pathStyleAccess }}
-    gravitino.iceberg-rest.catalog.s3.access-key-id = {{ .Values.global.s3.accessKey }}
-    gravitino.iceberg-rest.catalog.s3.secret-access-key = {{ .Values.global.s3.secretKey }}
+    gravitino.iceberg-rest.io-impl = org.apache.iceberg.aws.s3.S3FileIO
+    gravitino.iceberg-rest.s3-endpoint = {{ .Values.global.s3.endpoint }}
+    gravitino.iceberg-rest.s3-path-style-access = {{ .Values.global.s3.pathStyleAccess }}
+    gravitino.iceberg-rest.s3-access-key-id = {{ .Values.global.s3.accessKey }}
+    gravitino.iceberg-rest.s3-secret-access-key = {{ .Values.global.s3.secretKey }}
 
     # Scan planning cache — reduces metadata I/O for repeated queries (1.2.0 feature)
-    gravitino.iceberg-rest.catalog.scan-planning-cache.enabled = true
+    gravitino.iceberg-rest.scan-planning-cache.enabled = true
