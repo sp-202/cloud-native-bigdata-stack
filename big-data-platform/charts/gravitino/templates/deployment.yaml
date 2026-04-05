@@ -108,7 +108,7 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: gravitino-config
-              mountPath: /root/gravitino-current/conf/gravitino.conf
+              mountPath: /root/gravitino/conf/gravitino.conf
               subPath: gravitino.conf
       volumes:
         - name: gravitino-config
