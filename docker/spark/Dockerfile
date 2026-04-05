@@ -27,7 +27,7 @@ RUN wget https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SP
 # Remove unused Spark artifacts to reduce image size
 RUN rm -rf $SPARK_HOME/examples $SPARK_HOME/data $SPARK_HOME/tests $SPARK_HOME/licenses
 
-# Download JARs
+# Download JARs 
 # Iceberg-native setup: iceberg-spark-runtime (core) + iceberg-aws-bundle (S3FileIO with shaded AWS SDK v2)
 # hadoop-aws + bundle + url-connection-client: needed for Spark's S3A FileSystem (separate from Iceberg S3FileIO)
 # Both coexist cleanly: iceberg-aws-bundle shades its AWS SDK under org.apache.iceberg.shaded.*
