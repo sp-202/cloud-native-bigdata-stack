@@ -96,9 +96,9 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: {{ .Release.Name }}-prometheus
+            name: {{ .Release.Name }}-kube-pro-prometheus
             port:
-              name: web
+              name: http-web
   # Grafana
   - host: grafana.{{ .Values.global.domain }}
     http:
