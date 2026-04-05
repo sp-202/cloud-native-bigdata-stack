@@ -1,4 +1,4 @@
-# Builder Stage
+# Builder Stage 
 # Using eclipse-temurin:17-jdk-jammy as ARM64-compatible base (multi-arch manifest)
 FROM eclipse-temurin:17-jdk-jammy AS builder
 
