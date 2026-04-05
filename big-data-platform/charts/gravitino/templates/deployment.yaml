@@ -54,7 +54,34 @@ spec:
               cpu: "100m"
               memory: "128Mi"
 
-        # Step 2: Create Gravitino and Iceberg catalog databases if they don't exist
+        # Step 2: Populate writable conf dir from image defaults + ConfigMap override.
+        # /root/gravitino/conf is an emptyDir — the image conf files won't exist
+        # until this init container copies them in. We then overwrite gravitino.conf
+        # with our ConfigMap so rewrite_gravitino_server_config.py (which calls
+        # os.remove on the file) works on a real writable file, not a bind-mount.
+        - name: init-config
+          image: {{ .Values.image }}
+          command:
+            - sh
+            - -c
+            - |
+              cp -a /root/gravitino/conf/. /conf-rw/
+              cp /tmp/gravitino-config/gravitino.conf /conf-rw/gravitino.conf
+          volumeMounts:
+            - name: gravitino-config
+              mountPath: /tmp/gravitino-config/gravitino.conf
+              subPath: gravitino.conf
+            - name: gravitino-conf-rw
+              mountPath: /conf-rw
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+
+        # Step 3: Create Gravitino and Iceberg catalog databases if they don't exist
         - name: init-databases
           image: "postgres:13"
           command:
@@ -85,15 +112,6 @@ spec:
         - name: gravitino
           image: {{ .Values.image }}
           imagePullPolicy: Always
-          # Copy the ConfigMap-staged config to the real conf dir before starting.
-          # Gravitino's rewrite_gravitino_server_config.py calls os.remove() on
-          # gravitino.conf at startup — it cannot remove a ConfigMap bind-mount
-          # (EBUSY). Staging to /tmp and cp-ing produces a regular writable file.
-          command: ["/bin/bash", "-c"]
-          args:
-            - |
-              cp /tmp/gravitino-config/gravitino.conf /root/gravitino/conf/gravitino.conf
-              exec /root/gravitino/bin/start-gravitino.sh
           ports:
             - containerPort: 8090
               name: api
@@ -116,13 +134,14 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: gravitino-config
-              mountPath: /tmp/gravitino-config/gravitino.conf
-              subPath: gravitino.conf
+            - name: gravitino-conf-rw
+              mountPath: /root/gravitino/conf
       volumes:
         - name: gravitino-config
           configMap:
             name: gravitino-config
+        - name: gravitino-conf-rw
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
