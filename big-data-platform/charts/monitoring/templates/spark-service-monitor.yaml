@@ -23,11 +23,34 @@ spec:
   jobLabel: spark-role
   selector:
     matchLabels:
-      app: spark-ui-headless
+      app: spark-ui
   endpoints:
   - port: spark-ui
     path: /metrics/prometheus/
     interval: 10s
+    honorLabels: true
+  namespaceSelector:
+    matchNames:
+      - default
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: spark-executor-service-monitor
+  namespace: default
+  labels:
+    release: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  jobLabel: spark-executor
+  selector:
+    matchLabels:
+      spark-role: executor
+  endpoints:
+  - port: spark-blockmanager
+    path: /metrics/prometheus/
+    interval: 15s
     honorLabels: true
   namespaceSelector:
     matchNames:

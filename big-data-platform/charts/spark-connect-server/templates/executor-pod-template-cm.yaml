@@ -10,6 +10,9 @@ data:
   executor-pod-template.yaml: |
     apiVersion: v1
     kind: Pod
+    metadata:
+      labels:
+        monitoring: "true"
     spec:
       # nodeSelectorTerms uses OR logic — executor lands on whichever
       # spark pool (spark-node OR spark-worker) has available capacity.

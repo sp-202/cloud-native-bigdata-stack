@@ -86,7 +86,10 @@ data:
     spark.metrics.conf.*.sink.prometheusServlet.class org.apache.spark.metrics.sink.PrometheusServlet
     spark.metrics.conf.*.sink.prometheusServlet.path  /metrics/prometheus
     spark.metrics.conf.*.source.jvm.class             org.apache.spark.metrics.source.JvmSource
+    spark.metrics.conf.*.source.jvm.unit              milliseconds
+    spark.metrics.conf.executor.source.jvm.class      org.apache.spark.metrics.source.JvmSource
     spark.metrics.staticSources.enabled               true
+    spark.ui.port                                     4040
 
     # --- SQL Extensions (Sedona + Iceberg) ---
     spark.sql.extensions             org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
@@ -122,3 +125,53 @@ data:
     # --- Performance Tuning ---
     spark.sql.shuffle.partitions             200
     spark.sql.adaptive.enabled               true
+
+    # --- Logging Configuration (log4j2) ---
+    spark.driver.log.persistToDfs.enabled    false
+    spark.driver.log.dfsDir                  s3a://warehouse/spark-logs/
+    spark.eventLog.enabled                   true
+    spark.eventLog.dir                       s3a://warehouse/spark-events/
+
+  log4j2.properties: |
+    # =============================================================================
+    # Log4j2 Configuration — Spark Driver & Executors
+    # =============================================================================
+    # Console and file appenders with JSON formatting for structured logging.
+    # All output goes to stdout/stderr for container-native log collection.
+
+    status = warn
+
+    # =============================================================================
+    # Appenders
+    # =============================================================================
+    appender.console.type = Console
+    appender.console.name = ConsoleAppender
+    appender.console.target = SYSTEM_OUT
+    appender.console.layout.type = PatternLayout
+    appender.console.layout.pattern = %d{ISO8601} [%t] %-5p %c - %m%n
+
+    # =============================================================================
+    # Loggers
+    # =============================================================================
+    # Root logger — all logs at WARN level and above
+    rootLogger.level = warn
+    rootLogger.appenderRefs = stdout
+    rootLogger.appenderRef.stdout.ref = ConsoleAppender
+
+    # Spark — INFO level for general operations
+    logger.spark.name = org.apache.spark
+    logger.spark.level = info
+    logger.spark.appenderRefs = stdout
+    logger.spark.appenderRef.stdout.ref = ConsoleAppender
+
+    # Hadoop — WARN level (reduce noise from Hadoop internals)
+    logger.hadoop.name = org.apache.hadoop
+    logger.hadoop.level = warn
+
+    # Iceberg — INFO level for catalog operations
+    logger.iceberg.name = org.apache.iceberg
+    logger.iceberg.level = info
+
+    # Sedona — INFO level for geospatial operations
+    logger.sedona.name = org.apache.sedona
+    logger.sedona.level = info
