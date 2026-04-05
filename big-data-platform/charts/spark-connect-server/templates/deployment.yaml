@@ -27,6 +27,7 @@ spec:
       labels:
         app: spark-connect-server
         spark-role: driver
+        monitoring: "true"
     spec:
       serviceAccountName: spark-operator-spark
       nodeSelector:
@@ -101,11 +102,17 @@ spec:
             - name: spark-config-volume
               mountPath: /opt/spark/conf/spark-defaults.conf
               subPath: spark-defaults.conf
+            - name: spark-log4j-volume
+              mountPath: /opt/spark/conf/log4j2.properties
+              subPath: log4j2.properties
             - name: executor-pod-template
               mountPath: /opt/spark/conf/executor-pod-template.yaml
               subPath: executor-pod-template.yaml
       volumes:
         - name: spark-config-volume
+          configMap:
+            name: spark-config
+        - name: spark-log4j-volume
           configMap:
             name: spark-config
         - name: executor-pod-template

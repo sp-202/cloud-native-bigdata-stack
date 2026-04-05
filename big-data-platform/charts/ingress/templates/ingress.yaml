@@ -88,6 +88,17 @@ spec:
             name: spark-ui
             port:
               name: spark-ui
+  # Prometheus
+  - host: prometheus.{{ .Values.global.domain }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Release.Name }}-prometheus
+            port:
+              name: web
   # Grafana
   - host: grafana.{{ .Values.global.domain }}
     http:
