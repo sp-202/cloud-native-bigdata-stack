@@ -477,11 +477,11 @@ ingress:
   className: "traefik"
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web
-  # Sub-chart dependency flags
+  # Sub-chart dependency flags passed to ingress template
   gravitino:
     enabled: true
-  unity-catalog:
-    enabled: true
+  unityCatalog:
+    enabled: false
 
 # =============================================================================
 # SPARK OPERATOR (external dependency)
