@@ -14,18 +14,17 @@ if [ -f "$ENV_FILE" ]; then
 else
     echo "⚠️  Warning: $ENV_FILE not found, using default values"
     SPARK_VERSION="4.0.1"
-    UNITY_CATALOG_VERSION="0.4.0"
-    SPARK_IMAGE_VERSION="v4"
+    SPARK_IMAGE_VERSION="v11-iceberg-gravitino"
 fi
 
 # Construct image name from environment variables
-IMAGE_NAME="subhodeep2022/spark-bigdata:spark-${SPARK_VERSION}-uc-${UNITY_CATALOG_VERSION}-${SPARK_IMAGE_VERSION}"
+IMAGE_NAME="subhodeep2022/spark-bigdata:spark-${SPARK_VERSION}-${SPARK_IMAGE_VERSION}"
 DOCKERFILE_PATH="Dockerfile"
 
 echo "=============================================="
 echo "Building Spark image from directory: $(pwd)"
 echo "Spark Version: $SPARK_VERSION"
-echo "Unity Catalog Version: $UNITY_CATALOG_VERSION"
+echo "Gravitino Version: $GRAVITINO_VERSION"
 echo "Image Tag: $IMAGE_NAME"
 echo "=============================================="
 
