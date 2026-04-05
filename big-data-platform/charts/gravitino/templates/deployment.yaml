@@ -166,6 +166,8 @@ spec:
             # Iceberg REST — override memory/tmp defaults with jdbc/S3
             - name: GRAVITINO_ICEBERG_REST_CATALOG_BACKEND
               value: "jdbc"
+            - name: GRAVITINO_ICEBERG_REST_JDBC_DRIVER
+              value: "org.postgresql.Driver"
             - name: GRAVITINO_ICEBERG_REST_WAREHOUSE
               value: "{{ .Values.icebergCatalog.warehouse }}"
           resources:

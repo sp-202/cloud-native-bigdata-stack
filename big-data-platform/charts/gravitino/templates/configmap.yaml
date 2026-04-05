@@ -59,6 +59,7 @@ data:
     # Catalog backend: JDBC (Iceberg JdbcCatalog backed by PostgreSQL)
     gravitino.iceberg-rest.catalog-backend = jdbc
     gravitino.iceberg-rest.uri = jdbc:postgresql://{{ .Values.global.postgres.host }}:{{ .Values.global.postgres.port }}/{{ .Values.icebergCatalog.db.name }}
+    gravitino.iceberg-rest.jdbc-driver = org.postgresql.Driver
     gravitino.iceberg-rest.jdbc-user = {{ .Values.icebergCatalog.db.user }}
     gravitino.iceberg-rest.jdbc-password = {{ .Values.icebergCatalog.db.password }}
     gravitino.iceberg-rest.warehouse = {{ .Values.icebergCatalog.warehouse }}
