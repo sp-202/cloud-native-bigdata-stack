@@ -1,5 +1,191 @@
 # Project Issues & Resolutions Log
 
+---
+
+## 14. StarRocks 403 Forbidden from MinIO on Iceberg Catalog (Dual S3 Property Sets Required)
+
+**Issue:**
+After creating a StarRocks Iceberg REST external catalog pointing to Gravitino (port 9001) with standard `aws.s3.*` properties, all queries against Iceberg tables failed with:
+```
+ERROR 1064 (HY000): Forbidden (Service: S3, Status Code: 403, ...)
+```
+This persisted regardless of `aws.s3.endpoint` format, region, or path-style settings.
+
+**Root Cause:**
+StarRocks uses two separate S3 credential stacks:
+1. A **Java-layer** (Iceberg library) that reads `iceberg.catalog.s3.*` prefixed properties — used when resolving Iceberg metadata file locations.
+2. A **native C++ BE reader** that reads `aws.s3.*` prefixed properties — used when actually reading Parquet data files.
+
+Providing only `aws.s3.*` properties left the Iceberg Java layer using anonymous credentials, causing 403 on metadata reads before even reaching the data files.
+
+**Resolution:**
+Provide **both** property sets in `CREATE EXTERNAL CATALOG`:
+```sql
+CREATE EXTERNAL CATALOG iceberg_gravitino PROPERTIES (
+    'type'                                 = 'iceberg',
+    'iceberg.catalog.type'                 = 'rest',
+    'iceberg.catalog.uri'                  = 'http://gravitino.default.svc.cluster.local:9001/iceberg/',
+    'iceberg.catalog.io-impl'              = 'org.apache.iceberg.aws.s3.S3FileIO',
+    'iceberg.catalog.s3.endpoint'          = 'http://minio.default.svc.cluster.local:9000',
+    'iceberg.catalog.s3.path-style-access' = 'true',
+    'iceberg.catalog.s3.access-key-id'     = 'minioadmin',
+    'iceberg.catalog.s3.secret-access-key' = 'minioadmin',
+    'aws.s3.use_instance_profile'          = 'false',
+    'aws.s3.access_key'                    = 'minioadmin',
+    'aws.s3.secret_key'                    = 'minioadmin',
+    'aws.s3.region'                        = 'us-east-1',
+    'aws.s3.endpoint'                      = 'minio.default.svc.cluster.local:9000',
+    'aws.s3.enable_path_style_access'      = 'true',
+    'aws.s3.enable_ssl'                    = 'false'
+);
+```
+Note: `aws.s3.endpoint` must NOT include the `http://` prefix — the protocol is inferred from `aws.s3.enable_ssl`.
+
+---
+
+## 13. StarRocks Backend "Unmatched token" After FE Pod Restart
+
+**Issue:**
+After the StarRocks FE pod restarted (triggered by an ArgoCD sync), `SHOW BACKENDS` returned empty results. Manually adding the BE via `ALTER SYSTEM ADD BACKEND` succeeded but the backend showed `Alive: false` with error `Unmatched token`.
+
+**Root Cause:**
+The FE re-initialized with a new `clusterId` (stored in `/opt/starrocks/fe/meta/image/VERSION`), while the BE pod still held the old `clusterId` in `/opt/starrocks/be/storage/cluster_id`. On heartbeat, the FE rejected the BE's token because the cluster IDs did not match.
+
+**Resolution:**
+1. Drop the stale backend entry from FE:
+   ```sql
+   ALTER SYSTEM DROP BACKEND 'starrocks-cluster-be-0.starrocks-cluster-be-search.default.svc.cluster.local:9050';
+   ```
+2. Delete the BE's cluster ID file to force re-initialization:
+   ```bash
+   kubectl exec starrocks-cluster-be-0 -- rm /opt/starrocks/be/storage/cluster_id
+   kubectl delete pod starrocks-cluster-be-0
+   ```
+3. The BE pod restarts, connects to the FE, and auto-registers with the new cluster ID. Verify with:
+   ```bash
+   kubectl exec starrocks-cluster-fe-0 -- curl -s -u root: \
+     "http://localhost:8030/api/show_proc?path=/backends" | python3 -c \
+     "import sys,json; [print('Alive:', r['Alive']) for r in json.load(sys.stdin)]"
+   ```
+
+**Key Insight:** StarRocks FE and BE must share the same `clusterId`. If the FE loses or regenerates its metadata, all BE nodes need their `cluster_id` file deleted and pods restarted to re-register.
+
+---
+
+## 12. Gravitino Missing `jdbc-driver` for Iceberg REST JDBC Catalog
+
+**Issue:**
+Spark queries against `spark_catalog` (backed by Gravitino Iceberg REST on port 9001) failed at namespace/table creation with:
+```
+IllegalArgumentException: null in jdbc-driver is invalid. The value can't be blank
+```
+
+**Root Cause:**
+The Gravitino configmap had all other JDBC properties for the Iceberg REST catalog (`uri`, `jdbc-user`, `jdbc-password`) but was missing `gravitino.iceberg-rest.jdbc-driver`. Without it, Gravitino's JdbcCatalog backend cannot instantiate the JDBC connection pool.
+
+**Resolution:**
+Added the missing property to both the configmap and as an env var override (so `rewrite_gravitino_server_config.py` cannot reset it):
+
+In `configmap.yaml`:
+```ini
+gravitino.iceberg-rest.jdbc-driver = org.postgresql.Driver
+```
+
+In `deployment.yaml` env vars:
+```yaml
+- name: GRAVITINO_ICEBERG_REST_JDBC_DRIVER
+  value: "org.postgresql.Driver"
+```
+
+---
+
+## 11. Gravitino Startup Crashes — `rewrite_gravitino_server_config.py` Overwrites Config with H2/Memory Defaults
+
+**Issue:**
+Even with correct `gravitino.conf` mounted via ConfigMap, Gravitino started with `catalog-backend=memory` and `warehouse=/tmp/` instead of `jdbc`/`s3://warehouse/iceberg/`. The entity store reverted to H2 in-memory defaults, causing Gravitino to crash with `relation "metalake_meta" does not exist` after schema migration.
+
+**Root Cause:**
+Gravitino's startup script `/root/gravitino/bin/rewrite_gravitino_server_config.py` runs before the JVM and operates in three phases:
+1. Reads `gravitino.conf`
+2. **Overwrites** selected properties with hardcoded `init_config` defaults (H2 entity store, memory catalog backend, `/tmp/` warehouse)
+3. Applies env vars (highest priority — these win)
+
+The ConfigMap values were being overwritten in step 2 before the JVM even started.
+
+**Resolution:**
+Add env vars that override the `init_config` defaults in step 3:
+```yaml
+env:
+  - name: GRAVITINO_ENTITY_STORE_RELATIONAL_JDBC_URL
+    value: "jdbc:postgresql://postgres.default.svc.cluster.local:5432/gravitino"
+  - name: GRAVITINO_ENTITY_STORE_RELATIONAL_JDBC_DRIVER
+    value: "org.postgresql.Driver"
+  - name: GRAVITINO_ENTITY_STORE_RELATIONAL_JDBC_USER
+    value: "postgres"
+  - name: GRAVITINO_ENTITY_STORE_RELATIONAL_JDBC_PASSWORD
+    value: "password"
+  - name: GRAVITINO_ICEBERG_REST_CATALOG_BACKEND
+    value: "jdbc"
+  - name: GRAVITINO_ICEBERG_REST_JDBC_DRIVER
+    value: "org.postgresql.Driver"
+  - name: GRAVITINO_ICEBERG_REST_WAREHOUSE
+    value: "s3://warehouse/iceberg/"
+```
+
+---
+
+## 10. Gravitino Crashes — `OSError: [Errno 16] Device or resource busy` on ConfigMap Mount
+
+**Issue:**
+Gravitino's startup script called `os.remove('conf/gravitino.conf')` and crashed with:
+```
+OSError: [Errno 16] Device or resource busy: 'conf/gravitino.conf'
+```
+
+**Root Cause:**
+`rewrite_gravitino_server_config.py` calls `os.remove()` on the config file before rewriting it. When `gravitino.conf` is mounted directly as a ConfigMap `subPath` volume, it is a kernel bind-mount and cannot be unlinked. The attempt to `os.remove` it returns `EBUSY`.
+
+**Resolution:**
+Replace the direct ConfigMap bind-mount with an **emptyDir + init container** pattern:
+
+1. Mount an `emptyDir` at `/root/gravitino/conf` (shadowing the image's conf dir).
+2. Add an `init-config` init container that:
+   - Copies the image's bundled conf files into the emptyDir: `cp -a /root/gravitino/conf/. /conf-rw/`
+   - Overlays the ConfigMap's `gravitino.conf` on top: `cp /tmp/gravitino-config/gravitino.conf /conf-rw/gravitino.conf`
+3. The main container mounts the same emptyDir at `/root/gravitino/conf` — now a real writable directory, so `os.remove()` works.
+
+**Key Insight:** ConfigMap `subPath` mounts create kernel bind-mounts that cannot be unlinked with `os.remove()`. The emptyDir pattern gives the startup script a fully writable directory while still applying our config overrides.
+
+---
+
+## 9. Gravitino PostgreSQL Schema Not Auto-Created (`relation "metalake_meta" does not exist`)
+
+**Issue:**
+After switching Gravitino's entity store to PostgreSQL (from H2), the server crashed on startup:
+```
+ERROR: relation "metalake_meta" does not exist
+  Position: 266
+org.apache.ibatis.exceptions.PersistenceException: Error querying database.
+```
+
+**Root Cause:**
+Unlike H2 (which auto-creates schema), Gravitino does **not** auto-run PostgreSQL migrations on startup. The `gravitino` database existed (created by the init container) but had no tables. Gravitino's MyBatis layer immediately tried to `SELECT FROM metalake_meta` without checking or creating the schema first.
+
+**Resolution:**
+Added schema initialization to the `init-databases` init container:
+1. Extended `init-config` to copy `/root/gravitino/scripts/postgresql/schema-1.2.0-postgresql.sql` to a shared `emptyDir` (`gravitino-schema-sql`).
+2. `init-databases` (postgres:13 image) checks if `metalake_meta` exists and applies the schema if absent:
+   ```bash
+   TABLE_EXISTS=$(psql ... -tAc "SELECT to_regclass('public.metalake_meta')")
+   if [ -z "$TABLE_EXISTS" ]; then
+     psql ... -d gravitino -f /schema/gravitino-schema.sql
+   fi
+   ```
+
+The schema uses `CREATE TABLE IF NOT EXISTS` throughout, making it fully idempotent on re-runs.
+
+---
+
 ## 6. Hive Metastore Thrift Socket Closed on S3 Operations (AWS SDK v1 → v2)
 
 **Issue:**
