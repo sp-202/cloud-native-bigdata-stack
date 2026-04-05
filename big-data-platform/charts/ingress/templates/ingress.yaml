@@ -121,7 +121,7 @@ spec:
             name: spark-history-server
             port:
               number: 18080
-  {{- if and .Values "unity-catalog" (index .Values "unity-catalog").enabled }}
+  {{- if and .Values.unityCatalog .Values.unityCatalog.enabled }}
   # Unity Catalog (API + UI) — only rendered when unity-catalog.enabled: true
   - host: unity-catalog.{{ .Values.global.domain }}
     http:
