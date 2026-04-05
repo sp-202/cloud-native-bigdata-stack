@@ -340,7 +340,7 @@ spark-history-server:
   enabled: true
   replicas: 1
   daemonMemory: "2g"
-  logDirectory: "s3a://spark-logs/"
+  logDirectory: "s3a://spark-logs/spark-events/"
   resources:
     requests:
       cpu: "500m"
