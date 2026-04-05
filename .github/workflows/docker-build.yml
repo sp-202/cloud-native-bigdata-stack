@@ -121,7 +121,6 @@ jobs:
         run: |
           source docker/spark/.env.spark
           echo "SPARK_VERSION=${SPARK_VERSION}" >> $GITHUB_OUTPUT
-          echo "UNITY_CATALOG_VERSION=${UNITY_CATALOG_VERSION}" >> $GITHUB_OUTPUT
           echo "SPARK_IMAGE_VERSION=${SPARK_IMAGE_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU (arm64 emulation)
@@ -143,7 +142,7 @@ jobs:
           file: docker/spark/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: subhodeep2022/spark-bigdata:spark-${{ steps.spark-config.outputs.SPARK_VERSION }}-uc-${{ steps.spark-config.outputs.UNITY_CATALOG_VERSION }}-${{ steps.spark-config.outputs.SPARK_IMAGE_VERSION }}
+          tags: subhodeep2022/spark-bigdata:spark-${{ steps.spark-config.outputs.SPARK_VERSION }}-${{ steps.spark-config.outputs.SPARK_IMAGE_VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
