@@ -185,8 +185,42 @@ Apache Spark has no `CREATE CATALOG` SQL (that is Databricks/Unity Catalog DDL).
 below replicate that experience by combining a Gravitino REST call (persistent — stored in
 PostgreSQL) with `spark.conf.set` (session-scoped — lost on Spark Connect restart).
 
-For a catalog to survive restarts it must also be added to the Spark ConfigMap
-(`big-data-platform/charts/spark-connect-server/templates/configmap.yaml`).
+### Making a catalog permanent (survives Spark Connect restarts)
+
+The Spark ConfigMap is driven by `global.gravitino.catalogs` in `values.yaml`.
+Adding a catalog there generates a full `spark.sql.catalog.<name>.*` block automatically.
+
+**Two-step process:**
+
+**Step 1 — Register in Gravitino** (one-time, stored in PostgreSQL — permanent):
+```python
+create_catalog("marketing", bucket="s3://warehouse/iceberg/marketing/", use=False)
+```
+
+**Step 2 — Add to `values.yaml`** (makes it permanent in Spark across restarts):
+```yaml
+# big-data-platform/values.yaml
+global:
+  gravitino:
+    catalogs:
+      - name: sales_catalog
+        defaultWarehouse: "s3://warehouse/iceberg/sales_catalog/"
+      - name: marketing                              # ← add this line
+        defaultWarehouse: "s3://warehouse/iceberg/marketing/"
+```
+Then commit + push — ArgoCD syncs the ConfigMap and restarts the Spark Connect pod automatically.
+
+After the sync, the catalog is available to every session with no Python code needed:
+```python
+spark.sql("SHOW NAMESPACES IN marketing")   # works immediately after restart
+```
+
+> The first catalog in the list is also set as `spark.sql.defaultCatalog`.
+
+---
+
+For a catalog to survive restarts it must be in `values.yaml` as described above.
+The `create_catalog()` helper handles the session-scoped Spark wiring for the current session only.
 
 ### Helper: `create_catalog`
 
