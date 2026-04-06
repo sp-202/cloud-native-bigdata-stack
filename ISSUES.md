@@ -2,6 +2,106 @@
 
 ---
 
+## 18. Gravitino Web UI: S3FileIO NoClassDefFoundError (PENDING FIX)
+
+**Issue:**
+Browsing `sales_catalog` in Gravitino Web UI (port 8090) fails with:
+```
+Cannot initialize FileIO implementation org.apache.iceberg.aws.s3.S3FileIO:
+Cannot find constructor for interface org.apache.iceberg.io.FileIO
+Missing org.apache.iceberg.aws.s3.S3FileIO
+[java.lang.NoClassDefFoundError: software/amazon/awssdk/services/s3/model/S3Exception]
+```
+The catalog is created and queryable via Spark/StarRocks (port 9001 IRC works fine).
+
+**Root Cause:**
+Gravitino uses classloader isolation per catalog plugin. The `lakehouse-iceberg` catalog classloader (`/root/gravitino/catalogs/lakehouse-iceberg/libs/`) contains `iceberg-aws-1.10.1.jar` (has the S3FileIO class definition) but is missing the AWS SDK v2 runtime bundle. The `gravitino-iceberg-aws-bundle-1.2.0.jar` (contains `software.amazon.awssdk:s3` and all transitive deps) lives only in `/root/gravitino/iceberg-rest-server/libs/` — a separate classloader used by the Iceberg REST Catalog (IRC, port 9001). The main Gravitino server (port 8090, which powers the Web UI catalog browser) loads catalogs through their isolated `libs/` dirs and does not have access to the IRC libs.
+
+**Fix:**
+Add init container to Gravitino pod to copy the AWS bundle jar into the lakehouse-iceberg catalog libs:
+```yaml
+initContainers:
+  - name: copy-aws-bundle
+    image: busybox:latest
+    command: ['sh', '-c']
+    args:
+      - |
+        cp /root/gravitino/iceberg-rest-server/libs/gravitino-iceberg-aws-bundle-1.2.0.jar \
+           /root/gravitino/catalogs/lakehouse-iceberg/libs/
+    volumeMounts:
+      - name: gravitino-home
+        mountPath: /root/gravitino
+```
+
+Or build custom Gravitino image with the bundle pre-copied.
+
+**Status:** Pending — needs code change to chart.
+
+---
+
+## 17. Airflow Resources Named `big-data-platform-*` Instead of `airflow-*` (PARTIALLY FIXED)
+
+**Issue:**
+Airflow webserver, scheduler, triggerer, statsd pods/services named `big-data-platform-<component>` not `airflow-<component>`. Ingress hardcoded to `airflow-webserver` (404 error).
+
+**Root Cause:**
+Apache Airflow Helm chart names resources as `{{ .Release.Name }}-<component>`. The `fullnameOverride: "airflow"` in values.yaml is a no-op for component names — it only affects the chart's `airflow.fullname` helper (label selectors). ArgoCD Application name is `big-data-platform`, so that becomes the Helm release name.
+
+**Fix Applied:**
+Ingress updated to use `{{ .Release.Name }}-webserver` (commit 9c41d59). Push to main complete.
+
+**Still TODO:**
+Audit chart templates for any other hardcoded `airflow-scheduler`, `airflow-triggerer`, `airflow-statsd` service references and replace with `{{ .Release.Name }}-<component>`.
+
+**Status:** Ingress fixed; full audit pending.
+
+---
+
+## 16. Superset Admin User Not Created on Fresh Deploy (NEEDS CODE FIX)
+
+**Issue:**
+Cannot log in to Superset on first ArgoCD sync. Admin user does not exist.
+
+**Root Cause (two-part):**
+1. First sync failed entirely due to Airflow `createUserJob.enabled` schema error (now fixed in commit 2b2f350). Because of the render error, no jobs ran, including Superset init jobs.
+2. **Redundancy:** We have a custom `big-data-platform/templates/superset-init.yaml` job (`argocd.argoproj.io/hook: PostSync`) AND the Superset Helm chart's own `superset-init-db` job (`helm.sh/hook: post-install,post-upgrade`). Both attempt to create the admin user. On second sync, both try to run with unclear ordering/race conditions. The Superset chart's job should be the source of truth.
+
+**Fix:**
+Delete `big-data-platform/templates/superset-init.yaml` entirely. Rely solely on the Superset Helm chart's built-in init job. If the `bootstrapScript` pip install is flaky, fix that separately — do not duplicate admin user creation logic.
+
+**Why:** ArgoCD should not fight the Helm chart's own lifecycle hooks. Single source of truth reduces maintenance.
+
+**Status:** Pending — needs code change (file deletion).
+
+---
+
+## 15. Spark Operator CRDs Not Applied by ArgoCD (NEEDS CODE FIX)
+
+**Issue:**
+`spark-operator-controller` and `spark-operator-webhook` crash on startup:
+```
+ERROR controller/start.go:248 failed to create manager
+"failed to determine if *v1beta2.ScheduledSparkApplication is namespaced:
+failed to get restmapping: unable to retrieve the complete list of server APIs:
+sparkoperator.k8s.io/v1beta2: no matches for sparkoperator.k8s.io/v1beta2"
+```
+Only `sparkconnects` CRD gets applied; `sparkapplications` and `scheduledsparkapplications` are missing.
+
+**Root Cause:**
+ArgoCD with `ServerSideApply=true` applies Helm subchart CRDs as regular resources. The Spark operator CRDs are very large (>262KB), exceeding Kubernetes' annotation size limit. The standard `last-applied-configuration` annotation write fails silently, and the CRDs are skipped. Only the smaller `sparkconnects` CRD makes it through.
+
+**Workaround Applied (Session 2026-04-06):**
+Manually ran `kubectl apply --server-side` on the two missing CRDs from `archive/k8s-platform-v2/03-apps/charts/spark-operator-2.4.0/spark-operator/crds/`. Operator recovered.
+
+**Permanent Fix:**
+Copy both CRD files into `big-data-platform/templates/crds/` and annotate with `argocd.argoproj.io/sync-wave: "-10"` so they're applied server-side before anything else, every sync:
+- `archive/.../crds/sparkoperator.k8s.io_sparkapplications.yaml` → `big-data-platform/templates/crds/`
+- `archive/.../crds/sparkoperator.k8s.io_scheduledsparkapplications.yaml` → `big-data-platform/templates/crds/`
+
+**Status:** Pending — needs code change (file addition + annotation).
+
+---
+
 ## 14. StarRocks 403 Forbidden from MinIO on Iceberg Catalog (Dual S3 Property Sets Required)
 
 **Issue:**
