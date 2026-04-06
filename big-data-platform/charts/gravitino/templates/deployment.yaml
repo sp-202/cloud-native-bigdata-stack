@@ -150,13 +150,16 @@ spec:
             initialDelaySeconds: 60
             periodSeconds: 20
             failureThreshold: 3
-          # Env vars override gravitino.conf values at startup — entity store
-          # must be set here because rewrite_gravitino_server_config.py resets
-          # it to H2 defaults before reading the conf file.
-          # IMPORTANT: Do NOT add GRAVITINO_ICEBERG_REST_* vars here — they
-          # would override the dynamic-config-provider set in gravitino.conf.
+          # rewrite_gravitino_server_config.py runs before the JVM in 3 phases:
+          #   1. Reads gravitino.conf
+          #   2. Overwrites specific keys with hardcoded init_config defaults
+          #      (H2 entity store, catalog-backend=memory, warehouse=/tmp/)
+          #   3. Applies container env vars — these WIN and cannot be overwritten
+          # All critical settings must be set as env vars so phase 3 wins.
+          # Do NOT add GRAVITINO_ICEBERG_REST_CATALOG_BACKEND here — that is the
+          # static-mode key and would conflict with dynamic-config-provider.
           env:
-            # Entity store — override H2 defaults with PostgreSQL
+            # Entity store — override H2 defaults with PostgreSQL (phase 3 win)
             - name: GRAVITINO_ENTITY_STORE_RELATIONAL_JDBC_URL
               value: "jdbc:postgresql://{{ .Values.global.postgres.host }}:{{ .Values.global.postgres.port }}/{{ .Values.db.name }}"
             - name: GRAVITINO_ENTITY_STORE_RELATIONAL_JDBC_DRIVER
@@ -165,6 +168,14 @@ spec:
               value: "{{ .Values.db.user }}"
             - name: GRAVITINO_ENTITY_STORE_RELATIONAL_JDBC_PASSWORD
               value: "{{ .Values.db.password }}"
+            # Iceberg REST — dynamic-config-provider (phase 3 win over script defaults)
+            # These 3 vars ensure dynamic mode survives rewrite_gravitino_server_config.py
+            - name: GRAVITINO_ICEBERG_REST_CATALOG_CONFIG_PROVIDER
+              value: "dynamic-config-provider"
+            - name: GRAVITINO_ICEBERG_REST_GRAVITINO_URI
+              value: "http://localhost:8090"
+            - name: GRAVITINO_ICEBERG_REST_GRAVITINO_METALAKE
+              value: "enterprise_metalake"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
