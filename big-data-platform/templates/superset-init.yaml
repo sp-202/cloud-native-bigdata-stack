@@ -35,18 +35,19 @@ spec:
             - /bin/sh
             - -c
             - |
-              superset db upgrade && \
-              superset init && \
+              set -e
+              superset db upgrade
+              superset init
               superset fab create-admin \
                 --username {{ .Values.superset.init.adminUser.username }} \
                 --firstname {{ .Values.superset.init.adminUser.firstname }} \
                 --lastname {{ .Values.superset.init.adminUser.lastname }} \
                 --email {{ .Values.superset.init.adminUser.email }} \
-                --password "{{ .Values.superset.init.adminUser.password }}" || true && \
+                --password "{{ .Values.superset.init.adminUser.password }}" || true
               echo "Superset DB init complete."
           envFrom:
             - secretRef:
-                name: big-data-platform-superset-env
+                name: superset-env
                 optional: true
           env:
             - name: SQLALCHEMY_DATABASE_URI
@@ -56,6 +57,6 @@ spec:
               mountPath: /app/pythonpath
       volumes:
         - name: superset-config
-          configMap:
-            name: big-data-platform-superset-config
+          secret:
+            secretName: superset-config
 {{- end }}
