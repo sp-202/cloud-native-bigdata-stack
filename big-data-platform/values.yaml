@@ -215,6 +215,8 @@ airflow:
   # Running both concurrently can cause race conditions under ArgoCD.
   migrateDatabaseJob:
     enabled: false
+  createUserJob:
+    enabled: false
   images:
     airflow:
       repository: apache/airflow
@@ -559,7 +561,7 @@ superset:
       sasl \
       thrift-sasl
     if [ ! -f ~/bootstrap ]; then
-      echo "Running Superset with uid {{ .Values.runAsUser }}" > ~/bootstrap
+      touch ~/bootstrap
     fi
   ingress:
     enabled: false
