@@ -7,7 +7,7 @@ End-to-end smoke tests to verify the lakehouse stack is working correctly after 
 ## Prerequisites
 
 - Spark Connect Server is `1/1 Running`
-- Gravitino pod is `1/1 Running` (entity store: PostgreSQL, catalog backend: jdbc, warehouse: `s3://warehouse/iceberg/`)
+- Gravitino pod is `1/1 Running` (Iceberg REST dynamic-config-provider, metalake: `enterprise_metalake`, catalog: `sales_catalog`)
 - MinIO is reachable at `http://minio.default.svc.cluster.local:9000`
 - A Jupyter/PySpark session connected to `sc://spark-connect-server:15002`
 

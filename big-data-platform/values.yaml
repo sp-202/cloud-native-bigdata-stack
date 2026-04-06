@@ -71,10 +71,10 @@ global:
   # --- Apache Gravitino — Iceberg REST Catalog & unified metadata lake ---
   gravitino:
     # Iceberg REST Catalog endpoint consumed by Spark & StarRocks.
-    # In dynamic-config-provider mode each catalog is served at:
-    #   http://gravitino:9001/iceberg/{catalog-name}
-    # Must match the catalog name registered in the Gravitino Web UI (enterprise_metalake/sales_catalog).
-    icebergRestUri: "http://gravitino.default.svc.cluster.local:9001/iceberg/sales_catalog"
+    # In dynamic-config-provider mode the catalog name is NOT in the URL path —
+    # it is passed as the `warehouse` param by the Iceberg REST client.
+    # Correct URL is the bare /iceberg/ base; catalog resolved via `warehouse=sales_catalog`.
+    icebergRestUri: "http://gravitino.default.svc.cluster.local:9001/iceberg/"
     # Main API endpoint (metalake/catalog/schema/table management + Web UI)
     apiUri: "http://gravitino.default.svc.cluster.local:8090"
 
