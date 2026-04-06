@@ -96,14 +96,15 @@ data:
     spark.sql.defaultCatalog         sales_catalog
 
     # --- sales_catalog: Iceberg via Gravitino Dynamic IRC (port 9001) ---
-    # Gravitino 1.2.0 dynamic-config-provider serves each catalog at:
-    #   http://gravitino:9001/iceberg/{catalog-name}
-    # The catalog "sales_catalog" must be registered in the Gravitino Web UI
-    # under metalake "enterprise_metalake" before any Spark query runs.
+    # Gravitino 1.2.0 dynamic-config-provider does NOT put the catalog name in the
+    # URL path. The base URI is /iceberg/ and the catalog is selected by setting
+    # `warehouse` to the catalog name registered in enterprise_metalake.
+    # The catalog "sales_catalog" must exist in Gravitino before any Spark query runs.
     # S3FileIO credentials remain here so executors can physically access MinIO.
     spark.sql.catalog.sales_catalog                        org.apache.iceberg.spark.SparkCatalog
     spark.sql.catalog.sales_catalog.type                   rest
     spark.sql.catalog.sales_catalog.uri                    {{ .Values.global.gravitino.icebergRestUri }}
+    spark.sql.catalog.sales_catalog.warehouse              sales_catalog
     spark.sql.catalog.sales_catalog.io-impl                org.apache.iceberg.aws.s3.S3FileIO
     spark.sql.catalog.sales_catalog.s3.endpoint            {{ .Values.global.s3.endpoint }}
     spark.sql.catalog.sales_catalog.s3.path-style-access   {{ .Values.global.s3.pathStyleAccess }}
