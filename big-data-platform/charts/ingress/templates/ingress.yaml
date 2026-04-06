@@ -30,7 +30,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: airflow-webserver
+            name: {{ .Release.Name }}-webserver
             port:
               name: airflow-ui
   # MinIO Console
