@@ -150,9 +150,11 @@ spec:
             initialDelaySeconds: 60
             periodSeconds: 20
             failureThreshold: 3
-          # rewrite_gravitino_server_config.py applies init_config defaults
-          # AFTER reading gravitino.conf, overwriting catalog-backend, warehouse,
-          # and entity store props. Env vars are applied last and win.
+          # Env vars override gravitino.conf values at startup — entity store
+          # must be set here because rewrite_gravitino_server_config.py resets
+          # it to H2 defaults before reading the conf file.
+          # IMPORTANT: Do NOT add GRAVITINO_ICEBERG_REST_* vars here — they
+          # would override the dynamic-config-provider set in gravitino.conf.
           env:
             # Entity store — override H2 defaults with PostgreSQL
             - name: GRAVITINO_ENTITY_STORE_RELATIONAL_JDBC_URL
@@ -163,13 +165,6 @@ spec:
               value: "{{ .Values.db.user }}"
             - name: GRAVITINO_ENTITY_STORE_RELATIONAL_JDBC_PASSWORD
               value: "{{ .Values.db.password }}"
-            # Iceberg REST — override memory/tmp defaults with jdbc/S3
-            - name: GRAVITINO_ICEBERG_REST_CATALOG_BACKEND
-              value: "jdbc"
-            - name: GRAVITINO_ICEBERG_REST_JDBC_DRIVER
-              value: "org.postgresql.Driver"
-            - name: GRAVITINO_ICEBERG_REST_WAREHOUSE
-              value: "{{ .Values.icebergCatalog.warehouse }}"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
