@@ -93,20 +93,22 @@ data:
 
     # --- SQL Extensions (Sedona + Iceberg) ---
     spark.sql.extensions             org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
-    spark.sql.defaultCatalog         spark_catalog
+    spark.sql.defaultCatalog         sales_catalog
 
-    # --- spark_catalog: Iceberg via Gravitino REST Catalog (IRC) ---
-    # Gravitino 1.2.0 bundles Iceberg 1.10.1 — exact parity with Spark JARs.
-    # IRC exposes the standard Iceberg REST protocol on port 9001.
-    # S3FileIO credentials are picked up from the AWS_* env vars set on the pod.
-    spark.sql.catalog.spark_catalog                        org.apache.iceberg.spark.SparkCatalog
-    spark.sql.catalog.spark_catalog.type                   rest
-    spark.sql.catalog.spark_catalog.uri                    {{ .Values.global.gravitino.icebergRestUri }}
-    spark.sql.catalog.spark_catalog.io-impl                org.apache.iceberg.aws.s3.S3FileIO
-    spark.sql.catalog.spark_catalog.s3.endpoint            {{ .Values.global.s3.endpoint }}
-    spark.sql.catalog.spark_catalog.s3.path-style-access   {{ .Values.global.s3.pathStyleAccess }}
-    spark.sql.catalog.spark_catalog.s3.access-key-id       {{ .Values.global.s3.accessKey }}
-    spark.sql.catalog.spark_catalog.s3.secret-access-key   {{ .Values.global.s3.secretKey }}
+    # --- sales_catalog: Iceberg via Gravitino Dynamic IRC (port 9001) ---
+    # Gravitino 1.2.0 dynamic-config-provider serves each catalog at:
+    #   http://gravitino:9001/iceberg/{catalog-name}
+    # The catalog "sales_catalog" must be registered in the Gravitino Web UI
+    # under metalake "enterprise_metalake" before any Spark query runs.
+    # S3FileIO credentials remain here so executors can physically access MinIO.
+    spark.sql.catalog.sales_catalog                        org.apache.iceberg.spark.SparkCatalog
+    spark.sql.catalog.sales_catalog.type                   rest
+    spark.sql.catalog.sales_catalog.uri                    {{ .Values.global.gravitino.icebergRestUri }}
+    spark.sql.catalog.sales_catalog.io-impl                org.apache.iceberg.aws.s3.S3FileIO
+    spark.sql.catalog.sales_catalog.s3.endpoint            {{ .Values.global.s3.endpoint }}
+    spark.sql.catalog.sales_catalog.s3.path-style-access   {{ .Values.global.s3.pathStyleAccess }}
+    spark.sql.catalog.sales_catalog.s3.access-key-id       {{ .Values.global.s3.accessKey }}
+    spark.sql.catalog.sales_catalog.s3.secret-access-key   {{ .Values.global.s3.secretKey }}
     spark.sql.warehouse.dir          s3a://warehouse/iceberg/
 
     # --- S3 / MinIO Configuration ---
