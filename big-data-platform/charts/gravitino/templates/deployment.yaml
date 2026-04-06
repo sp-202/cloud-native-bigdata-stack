@@ -9,7 +9,8 @@
 #
 # Init containers:
 #   1. wait-for-postgres — ensures Postgres is accepting connections
-#   2. init-databases    — creates 'gravitino' and 'iceberg_catalog' DBs if absent
+#   2. init-config       — copies image conf into emptyDir, overlays ConfigMap
+#   3. init-databases    — creates 'gravitino' and 'iceberg_catalog' DBs, applies schema
 #
 # Managed via ArgoCD Sync Wave: -1 (after infra-core, before applications)
 # ------------------------------------------------------------------------------

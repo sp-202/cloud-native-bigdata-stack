@@ -4,9 +4,10 @@
 # Part of the Cloud-Native Big Data Platform (Umbrella Chart)
 #
 # Description: Apache Gravitino 1.2.0 server config with Iceberg REST Catalog
-#              (IRC) auxiliary service. The IRC exposes an Iceberg REST API on
-#              port 9001 backed by a PostgreSQL JDBC catalog, allowing Spark and
-#              StarRocks to use standard Iceberg REST without a Hive Metastore.
+#              (IRC) auxiliary service in dynamic-config-provider mode.
+#              The IRC (port 9001) delegates catalog config to the Gravitino Core
+#              Server (port 8090), making all catalogs/tables visible in the
+#              Gravitino Web UI. Catalogs are registered via gravitino-init.yaml.
 #
 #              Gravitino 1.2.0 bundles Iceberg 1.10.1 — exact version parity
 #              with iceberg-spark-runtime-4.0_2.13-1.10.1 in the Spark image.
