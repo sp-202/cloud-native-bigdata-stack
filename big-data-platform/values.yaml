@@ -652,7 +652,6 @@ metrics-server:
 # =============================================================================
 kube-prometheus-stack:
   enabled: true
-  fullnameOverride: "prometheus-stack"
   grafana:
     enabled: true
     fullnameOverride: "grafana"

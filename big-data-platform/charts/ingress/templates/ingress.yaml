@@ -96,7 +96,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: prometheus-stack-prometheus
+            name: {{ .Release.Name }}-kube-pro-prometheus
             port:
               name: http-web
   # Grafana
