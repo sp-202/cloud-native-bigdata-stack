@@ -85,7 +85,33 @@ spec:
               cpu: "100m"
               memory: "128Mi"
 
-        # Step 3: Create Gravitino and Iceberg catalog databases, then apply Gravitino schema
+        # Step 3: Copy lakehouse-iceberg catalog libs into emptyDir and add the
+        # gravitino-iceberg-aws-bundle jar so the main server (port 8090) can
+        # initialize S3FileIO when browsing catalogs in the Web UI.
+        # Root cause: Gravitino uses classloader isolation per catalog plugin.
+        # The AWS SDK bundle lives only in iceberg-rest-server/libs (IRC classpath)
+        # but the lakehouse-iceberg plugin classloader is separate and missing it.
+        - name: copy-aws-bundle
+          image: {{ .Values.image }}
+          command:
+            - sh
+            - -c
+            - |
+              cp -a /root/gravitino/catalogs/lakehouse-iceberg/libs/. /iceberg-libs/
+              cp /root/gravitino/iceberg-rest-server/libs/gravitino-iceberg-aws-bundle-1.2.0.jar /iceberg-libs/
+              echo "Copied lakehouse-iceberg libs + AWS bundle: $(ls /iceberg-libs/ | wc -l) jars total"
+          volumeMounts:
+            - name: lakehouse-iceberg-libs
+              mountPath: /iceberg-libs
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+
+        # Step 4: Create Gravitino and Iceberg catalog databases, then apply Gravitino schema
         - name: init-databases
           image: "postgres:13"
           command:
@@ -182,6 +208,8 @@ spec:
           volumeMounts:
             - name: gravitino-conf-rw
               mountPath: /root/gravitino/conf
+            - name: lakehouse-iceberg-libs
+              mountPath: /root/gravitino/catalogs/lakehouse-iceberg/libs
       volumes:
         - name: gravitino-config
           configMap:
@@ -189,6 +217,8 @@ spec:
         - name: gravitino-conf-rw
           emptyDir: {}
         - name: gravitino-schema-sql
+          emptyDir: {}
+        - name: lakehouse-iceberg-libs
           emptyDir: {}
 ---
 apiVersion: v1
