@@ -201,6 +201,7 @@ airflowSecrets:
 # =============================================================================
 airflow:
   enabled: true
+  fullnameOverride: "airflow"
   executor: "LocalExecutor"
   # Reference pre-created secrets from templates/airflow-secrets.yaml
   fernetKeySecretName: "big-data-platform-fernet-key"
@@ -488,6 +489,7 @@ ingress:
 # =============================================================================
 spark-operator:
   enabled: true
+  fullnameOverride: "spark-operator"
   nodeSelector:
     node-role.kubernetes.io/k8s-gp-node: ""
   controller:
@@ -530,6 +532,7 @@ spark-operator:
 # =============================================================================
 superset:
   enabled: true
+  fullnameOverride: "superset"
   postgresql:
     enabled: false
   redis:
@@ -631,6 +634,7 @@ superset:
 # =============================================================================
 metrics-server:
   enabled: true
+  fullnameOverride: "metrics-server"
   args:
     - --kubelet-insecure-tls
     - --kubelet-preferred-address-types=InternalIP
@@ -648,8 +652,10 @@ metrics-server:
 # =============================================================================
 kube-prometheus-stack:
   enabled: true
+  fullnameOverride: "prometheus-stack"
   grafana:
     enabled: true
+    fullnameOverride: "grafana"
     adminPassword: "admin"
     ingress:
       enabled: false  # Using centralized ingress instead
@@ -679,6 +685,7 @@ kube-prometheus-stack:
           cpu: "2000m"
           memory: "4Gi"
   prometheus-node-exporter:
+    fullnameOverride: "node-exporter"
     livenessProbe:
       timeoutSeconds: 10
       failureThreshold: 20
@@ -695,6 +702,7 @@ kube-prometheus-stack:
         cpu: "200m"
         memory: "128Mi"
   kube-state-metrics:
+    fullnameOverride: "kube-state-metrics"
     livenessProbe:
       timeoutSeconds: 10
       failureThreshold: 20
@@ -717,6 +725,7 @@ kube-prometheus-stack:
 loki-stack:
   enabled: true
   loki:
+    fullnameOverride: "loki"
     isDefault: false
     image:
       repository: grafana/loki
@@ -755,6 +764,7 @@ loki-stack:
           directory: /data/loki/chunks
   promtail:
     enabled: true
+    fullnameOverride: "promtail"
     livenessProbe:
       httpGet:
         path: /ready

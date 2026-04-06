@@ -30,7 +30,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: {{ .Release.Name }}-webserver
+            name: airflow-webserver
             port:
               name: airflow-ui
   # MinIO Console
@@ -63,7 +63,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: {{ .Release.Name }}-superset
+            name: superset
             port:
               name: http
   # JupyterHub
@@ -96,7 +96,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: {{ .Release.Name }}-kube-pro-prometheus
+            name: prometheus-stack-prometheus
             port:
               name: http-web
   # Grafana
@@ -107,7 +107,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: {{ .Release.Name }}-grafana
+            name: grafana
             port:
               name: http-web
   # Spark History
