@@ -73,22 +73,10 @@ global:
     # Iceberg REST Catalog endpoint consumed by Spark & StarRocks.
     # In dynamic-config-provider mode the catalog name is NOT in the URL path —
     # it is passed as the `warehouse` param by the Iceberg REST client.
-    # Correct URL is the bare /iceberg/ base; catalog resolved via `warehouse=<name>`.
+    # Correct URL is the bare /iceberg/ base; catalog resolved via `warehouse=sales_catalog`.
     icebergRestUri: "http://gravitino.default.svc.cluster.local:9001/iceberg/"
     # Main API endpoint (metalake/catalog/schema/table management + Web UI)
     apiUri: "http://gravitino.default.svc.cluster.local:8090"
-    # Metalake that owns all catalogs below
-    metalake: "enterprise_metalake"
-    # ── Persistent catalogs ────────────────────────────────────────────────────
-    # Each entry generates a full spark.sql.catalog.<name>.* block in the Spark
-    # ConfigMap and survives pod restarts.  To add a new catalog:
-    #   1. Register it in Gravitino once (use create_catalog() helper in Jupyter)
-    #   2. Add an entry here, commit + push → ArgoCD syncs automatically
-    catalogs:
-      - name: sales_catalog
-        defaultWarehouse: "s3://warehouse/iceberg/sales_catalog/"
-      # - name: marketing
-      #   defaultWarehouse: "s3://warehouse/iceberg/marketing/"
 
   # --- Unity Catalog OSS (disabled — replaced by Gravitino) ---
   unityCatalog:
