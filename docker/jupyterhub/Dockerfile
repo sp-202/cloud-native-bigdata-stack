@@ -18,9 +18,9 @@ USER ${NB_UID}
 # For Spark Connect (remote execution), only the pyspark Python client version matters.
 RUN pip install --no-cache-dir pyspark==3.5.8
 
-# Install Python packages for SQL magic, Scala support, and S3 persistence
+# Install Python packages for S3 persistence and Scala kernel support
+# Note: sparkmagic is for Livy connections, NOT needed for Spark Connect
 RUN pip install --no-cache-dir \
-    sparkmagic \
     toree \
     s3contents \
     s3fs
