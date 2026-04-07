@@ -58,12 +58,19 @@ data:
     # (NOT dot-notation with catalog. prefix — those are silently ignored).
     # -------------------------------------------------------------------------
     gravitino.iceberg-rest.host = 0.0.0.0
-    gravitino.iceberg-rest.port = 9001
+    gravitino.iceberg-rest.httpPort = 9001
 
     # Dynamic config provider — IRC fetches catalog config from Gravitino Core
+    # Running as auxiliary service: gravitino-uri is NOT required (uses internal interfaces)
     gravitino.iceberg-rest.catalog-config-provider = dynamic-config-provider
-    gravitino.iceberg-rest.gravitino-uri = http://localhost:8090
     gravitino.iceberg-rest.gravitino-metalake = enterprise_metalake
 
     # Cache eviction for catalog configs fetched from Core Server (ms)
     gravitino.iceberg-rest.catalog-cache-eviction-interval-ms = 300000
+
+    # -------------------------------------------------------------------------
+    # S3/MinIO FileIO — required for IRC to read/write Iceberg metadata on S3
+    # -------------------------------------------------------------------------
+    gravitino.iceberg-rest.io-impl = org.apache.iceberg.aws.s3.S3FileIO
+    gravitino.iceberg-rest.s3-endpoint = {{ .Values.global.s3.endpoint }}
+    gravitino.iceberg-rest.s3-path-style-access = true

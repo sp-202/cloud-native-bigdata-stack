@@ -64,6 +64,7 @@ spec:
               --conf spark.plugins=org.apache.gravitino.spark.connector.plugin.GravitinoSparkPlugin \
               --conf "spark.sql.gravitino.metalake={{ .Values.global.gravitino.metalake }}" \
               --conf "spark.sql.gravitino.uri={{ .Values.global.gravitino.apiUri }}" \
+              --conf spark.sql.gravitino.enableIcebergSupport=true \
               --conf spark.sql.warehouse.dir=s3a://warehouse/iceberg/ \
               --conf spark.kubernetes.executor.podTemplateFile=local:///opt/spark/conf/executor-pod-template.yaml \
               --conf spark.kubernetes.executor.volumes.hostPath.spark-local-dir.mount.path={{ .Values.executor.localDir }} \
