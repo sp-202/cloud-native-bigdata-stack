@@ -1,5 +1,5 @@
-# Use official Jupyter PySpark image as base
-FROM jupyter/pyspark-notebook:spark-3.5.0
+# Use official Jupyter PySpark image as base (Spark 3.5.x series)
+FROM jupyter/pyspark-notebook:spark-3.5.4
 
 USER root
 
@@ -9,6 +9,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 USER ${NB_UID}
+
+# Pin PySpark to exactly match Spark Connect server version (3.5.8).
+# The base image ships with Spark 3.5.4 binaries but for Spark Connect (remote)
+# only the pyspark Python client version matters — no local Spark JVM needed.
+RUN pip install --no-cache-dir pyspark==3.5.8
 
 # Install Python packages for SQL magic, Scala support, and S3 persistence
 RUN pip install --no-cache-dir \

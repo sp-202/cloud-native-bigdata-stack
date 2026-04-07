@@ -93,23 +93,15 @@ data:
 
     # --- SQL Extensions (Sedona + Iceberg) ---
     spark.sql.extensions             org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
-    spark.sql.defaultCatalog         sales_catalog
 
-    # --- sales_catalog: Iceberg via Gravitino Dynamic IRC (port 9001) ---
-    # Gravitino 1.2.0 dynamic-config-provider does NOT put the catalog name in the
-    # URL path. The base URI is /iceberg/ and the catalog is selected by setting
-    # `warehouse` to the catalog name registered in enterprise_metalake.
-    # The catalog "sales_catalog" must exist in Gravitino before any Spark query runs.
-    # S3FileIO credentials remain here so executors can physically access MinIO.
-    spark.sql.catalog.sales_catalog                        org.apache.iceberg.spark.SparkCatalog
-    spark.sql.catalog.sales_catalog.type                   rest
-    spark.sql.catalog.sales_catalog.uri                    {{ .Values.global.gravitino.icebergRestUri }}
-    spark.sql.catalog.sales_catalog.warehouse              sales_catalog
-    spark.sql.catalog.sales_catalog.io-impl                org.apache.iceberg.aws.s3.S3FileIO
-    spark.sql.catalog.sales_catalog.s3.endpoint            {{ .Values.global.s3.endpoint }}
-    spark.sql.catalog.sales_catalog.s3.path-style-access   {{ .Values.global.s3.pathStyleAccess }}
-    spark.sql.catalog.sales_catalog.s3.access-key-id       {{ .Values.global.s3.accessKey }}
-    spark.sql.catalog.sales_catalog.s3.secret-access-key   {{ .Values.global.s3.secretKey }}
+    # --- Gravitino Spark Plugin — Dynamic Multi-Catalog Discovery ---
+    # GravitinoSparkPlugin queries enterprise_metalake at Spark startup and
+    # auto-registers ALL catalogs (present and future) without ConfigMap changes.
+    # Any catalog created in Gravitino Web UI is immediately available to Spark
+    # on the next session without pod restarts or config updates.
+    spark.plugins                    org.apache.gravitino.spark.connector.plugin.GravitinoSparkPlugin
+    spark.sql.gravitino.metalake     {{ .Values.global.gravitino.metalake }}
+    spark.sql.gravitino.uri          {{ .Values.global.gravitino.apiUri }}
     spark.sql.warehouse.dir          s3a://warehouse/iceberg/
 
     # --- S3 / MinIO Configuration ---
@@ -172,6 +164,10 @@ data:
     # Iceberg — INFO level for catalog operations
     logger.iceberg.name = org.apache.iceberg
     logger.iceberg.level = info
+
+    # Gravitino — INFO level for plugin catalog discovery
+    logger.gravitino.name = org.apache.gravitino
+    logger.gravitino.level = info
 
     # Sedona — INFO level for geospatial operations
     logger.sedona.name = org.apache.sedona

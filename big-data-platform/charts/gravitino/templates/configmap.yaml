@@ -10,7 +10,7 @@
 #              Gravitino Web UI. Catalogs are registered via gravitino-init.yaml.
 #
 #              Gravitino 1.2.0 bundles Iceberg 1.10.1 — exact version parity
-#              with iceberg-spark-runtime-4.0_2.13-1.10.1 in the Spark image.
+#              with iceberg-spark-runtime-3.5_2.13-1.10.1 in the Spark image.
 #
 # Managed via ArgoCD Sync Wave: -1 (before application-tier services)
 # ------------------------------------------------------------------------------
@@ -36,7 +36,8 @@ data:
     # Entity Store — PostgreSQL relational backend for Gravitino metadata
     # -------------------------------------------------------------------------
     gravitino.entity.store = relational
-    gravitino.entity.store.relational.jdbcUrl = jdbc:postgresql://{{ .Values.global.postgres.host }}:{{ .Values.global.postgres.port }}/{{ .Values.db.name }}
+    gravitino.entity.store.relational = JDBCBackend
+    gravitino.entity.store.relational.jdbcUrl = jdbc:postgresql://{{ .Values.global.postgres.host }}:{{ .Values.global.postgres.port }}/{{ .Values.db.name }}?currentSchema=public
     gravitino.entity.store.relational.jdbcDriver = org.postgresql.Driver
     gravitino.entity.store.relational.jdbcUser = {{ .Values.db.user }}
     gravitino.entity.store.relational.jdbcPassword = {{ .Values.db.password }}

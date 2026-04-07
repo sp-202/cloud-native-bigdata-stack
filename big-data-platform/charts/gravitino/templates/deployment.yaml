@@ -186,9 +186,12 @@ spec:
           # Do NOT add GRAVITINO_ICEBERG_REST_CATALOG_BACKEND here — that is the
           # static-mode key and would conflict with dynamic-config-provider.
           env:
+            # Aux service name — explicit env var so phase 3 wins if script resets auxService.names
+            - name: GRAVITINO_AUX_SERVICE_NAMES
+              value: "iceberg-rest"
             # Entity store — override H2 defaults with PostgreSQL (phase 3 win)
             - name: GRAVITINO_ENTITY_STORE_RELATIONAL_JDBC_URL
-              value: "jdbc:postgresql://{{ .Values.global.postgres.host }}:{{ .Values.global.postgres.port }}/{{ .Values.db.name }}"
+              value: "jdbc:postgresql://{{ .Values.global.postgres.host }}:{{ .Values.global.postgres.port }}/{{ .Values.db.name }}?currentSchema=public"
             - name: GRAVITINO_ENTITY_STORE_RELATIONAL_JDBC_DRIVER
               value: "org.postgresql.Driver"
             - name: GRAVITINO_ENTITY_STORE_RELATIONAL_JDBC_USER
