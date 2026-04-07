@@ -14,7 +14,7 @@ if [ -f "$ENV_FILE" ]; then
 else
     echo "⚠️  Warning: $ENV_FILE not found, using default values"
     JUPYTERHUB_VERSION_TAG="4.0.7"
-    JUPYTERHUB_IMAGE_VERSION_TAG="prod-v2"
+    JUPYTERHUB_IMAGE_VERSION_TAG="prod-v3"
 fi
 
 # Construct image name from environment variables
@@ -23,7 +23,7 @@ DOCKERFILE_PATH="Dockerfile"
 
 echo "=============================================="
 echo "Building Custom JupyterHub image"
-echo "Base Image: jupyter/pyspark-notebook:spark-3.5.0"
+echo "Base Image: jupyter/base-notebook:python-3.11"
 echo "Target Image: $JUPYTERHUB_CUSTOM_IMAGE"
 echo "=============================================="
 
