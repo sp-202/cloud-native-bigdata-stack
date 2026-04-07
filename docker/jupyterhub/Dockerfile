@@ -1,4 +1,4 @@
-# Use multi-architecture base image (supports AMD64 and ARM64)
+# Use multi-architecture base image (supports AMD64 and ARM64) 
 FROM jupyter/base-notebook:python-3.11
 
 USER root

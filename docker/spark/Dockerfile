@@ -96,7 +96,8 @@ spark.kryo.registrator org.apache.sedona.core.serde.SedonaKryoRegistrator\n\
 spark.sql.extensions org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions\n\
 spark.plugins org.apache.gravitino.spark.connector.plugin.GravitinoSparkPlugin\n\
 spark.sql.gravitino.metalake enterprise_metalake\n\
-spark.sql.gravitino.uri http://gravitino.default.svc.cluster.local:8090" > $SPARK_HOME/conf/spark-defaults.conf
+spark.sql.gravitino.uri http://gravitino.default.svc.cluster.local:8090\n\
+spark.sql.gravitino.enableIcebergSupport true" > $SPARK_HOME/conf/spark-defaults.conf
 
 ENTRYPOINT ["/opt/entrypoint.sh"]
 CMD ["bash"]
