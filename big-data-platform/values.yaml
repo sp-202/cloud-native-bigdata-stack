@@ -23,7 +23,7 @@ global:
   cfTunnelId: "91e5be1d-3b51-4cac-aebf-d330aafda394"
 
   # --- Container Images ---
-  sparkImage: "subhodeep2022/spark-bigdata:spark-4.0.1-v11-iceberg-gravitino"
+  sparkImage: "subhodeep2022/spark-bigdata:spark-3.5.8-v12-iceberg-gravitino"
   jupyterhubImage: "subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v2"
   hiveImage: "subhodeep2022/spark-bigdata:hive-3.1.3-arm64-v1"
   airflowImage: "apache/airflow:2.7.1"
@@ -70,12 +70,10 @@ global:
 
   # --- Apache Gravitino — Iceberg REST Catalog & unified metadata lake ---
   gravitino:
-    # Iceberg REST Catalog endpoint consumed by Spark & StarRocks.
-    # In dynamic-config-provider mode the catalog name is NOT in the URL path —
-    # it is passed as the `warehouse` param by the Iceberg REST client.
-    # Correct URL is the bare /iceberg/ base; catalog resolved via `warehouse=sales_catalog`.
+    metalake: "enterprise_metalake"
+    # Iceberg REST Catalog endpoint consumed by StarRocks (direct IRC access).
     icebergRestUri: "http://gravitino.default.svc.cluster.local:9001/iceberg/"
-    # Main API endpoint (metalake/catalog/schema/table management + Web UI)
+    # Main API endpoint — used by GravitinoSparkPlugin for catalog discovery
     apiUri: "http://gravitino.default.svc.cluster.local:8090"
 
   # --- Unity Catalog OSS (disabled — replaced by Gravitino) ---
