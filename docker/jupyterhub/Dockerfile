@@ -1,18 +1,21 @@
-# Use official Jupyter PySpark image as base (Spark 3.5.x series)
-FROM jupyter/pyspark-notebook:spark-3.5.4
+# Use multi-architecture base image (supports AMD64 and ARM64)
+FROM jupyter/base-notebook:python-3.11
 
 USER root
 
-# Install system dependencies if any
+# Install system dependencies (Java required for Spark/Scala kernel)
 RUN apt-get update && apt-get install -y \
+    openjdk-17-jre-headless \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Set SPARK_HOME
+ENV SPARK_HOME=/opt/spark
+
 USER ${NB_UID}
 
-# Pin PySpark to exactly match Spark Connect server version (3.5.8).
-# The base image ships with Spark 3.5.4 binaries but for Spark Connect (remote)
-# only the pyspark Python client version matters — no local Spark JVM needed.
+# Install PySpark pinned to exactly match Spark Connect server version (3.5.8).
+# For Spark Connect (remote execution), only the pyspark Python client version matters.
 RUN pip install --no-cache-dir pyspark==3.5.8
 
 # Install Python packages for SQL magic, Scala support, and S3 persistence
@@ -22,8 +25,12 @@ RUN pip install --no-cache-dir \
     s3contents \
     s3fs
 
-# Install Toree Scala kernel
-RUN jupyter toree install --user --spark_home=${SPARK_HOME} --kernel_name="Scala" --interpreters=Scala
+# Install Toree Scala kernel (uses Spark from PySpark installation)
+RUN PYSPARK_DIST_PATH=$(python -c "import pyspark; print(pyspark.__path__[0])") && \
+    jupyter toree install --user \
+    --spark_home=${PYSPARK_DIST_PATH}/spark \
+    --kernel_name="Scala" \
+    --interpreters=Scala
 
 # Create IPython profile and startup directory
 RUN mkdir -p /home/jovyan/.ipython/profile_default/startup/
