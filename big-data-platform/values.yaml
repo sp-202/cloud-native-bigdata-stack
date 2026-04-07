@@ -24,7 +24,7 @@ global:
 
   # --- Container Images ---
   sparkImage: "subhodeep2022/spark-bigdata:spark-3.5.8-v12-iceberg-gravitino"
-  jupyterhubImage: "subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v2"
+  jupyterhubImage: "subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v3"
   hiveImage: "subhodeep2022/spark-bigdata:hive-3.1.3-arm64-v1"
   airflowImage: "apache/airflow:2.7.1"
   gitSyncImage: "subhodeep2022/k8s-git-sync:v2-prod"
