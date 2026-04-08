@@ -2,6 +2,62 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.1] - 2026-04-08 ✨ **Complete Gravitino Migration**
+
+### 🚀 Major Milestone: Full Migration from Hive Metastore to Apache Gravitino
+
+This release marks the **completion of the platform-wide migration** from Hive Metastore (HMS) to **Apache Gravitino 1.2.0** as the primary unified metadata catalog.
+
+### ✨ What's New
+
+#### 🏰 Gravitino as Primary Catalog
+- **Replaced**: Hive Metastore is no longer the default catalog for new tables
+- **Unified Metadata**: Single catalog interface for Iceberg, Delta, and Hive-format tables
+- **Iceberg REST Catalog**: Gravitino IRC (port 9001) serves table metadata to downstream systems (StarRocks, Spark)
+- **Spark Plugin**: All Spark applications now use `GravitinoSparkPlugin` for automatic catalog discovery
+
+#### ⚡ Technical Improvements
+- **Spark Version**: Downgrade from 4.0.1 → **3.5.8** for better stability and broader ecosystem compatibility
+- **Iceberg Integration**: Upgraded to **Iceberg 1.10.1** for advanced table features (Z-ordering, partition evolution)
+- **Gravitino Plugin**: Integrated `gravitino-spark-connector-runtime` for seamless Spark-Gravitino integration
+- **Multi-Catalog Support**: Spark can now access multiple catalogs dynamically (lakehouse-iceberg, sales_catalog, etc.)
+
+#### 🔄 StarRocks Catalog Access
+- **Iceberg REST Integration**: StarRocks now accesses Iceberg tables directly through Gravitino IRC
+- **No HMS Dependency**: Removed direct HMS dependency for StarRocks OLAP queries
+- **Performance**: Sub-second queries on Delta/Iceberg tables via native catalog support
+
+#### 📚 Documentation
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Updated with Gravitino architecture, data flows, and catalog topology
+- **[README.md](README.md)** — Updated component status and tech stack to reflect Gravitino
+- **[big-data-platform/README.md](big-data-platform/README.md)** — Added Gravitino sub-chart documentation
+
+### 🔧 Breaking Changes
+
+- **Hive Metastore as Primary**: HMS is now a secondary/backward-compatibility catalog only
+- **Spark Configuration**: Default catalog changed from `spark_catalog` (HMS) to Gravitino catalogs
+- **StarRocks DSN**: Must use Gravitino IRC endpoint instead of direct HMS connection
+
+### 🎯 Migration Path
+
+If you have existing Hive tables:
+
+1. **Read-Only Compatibility**: Legacy Hive tables remain queryable through HMS (backward compatible)
+2. **Recommended**: Create new tables using Gravitino catalogs (Iceberg format preferred)
+3. **Optional**: Migrate Hive tables to Iceberg using `CALL iceberg.system.migrate_hive_table()` if needed
+
+### 🐛 Fixes
+- Resolved Gravitino S3FileIO NoClassDefFoundError by adding AWS SDK bundle to catalog libs
+- Fixed JDBC driver configuration for Gravitino's iceberg-rest catalog backend
+- Enhanced Gravitino deployment with dynamic config provider for Web UI visibility
+
+### 📋 Known Limitations (Resolved)
+- ✅ CRD annotation limits (Spark Operator CRDs now copied locally)
+- ✅ Airflow resource naming (`big-data-platform-*` prefix aligned with Ingress)
+- ✅ Superset admin user creation (removed duplicate init jobs)
+
+---
+
 ## [v1.0.0] - 2026-04-04 🎉
 
 ### 🚀 Production Release

@@ -22,6 +22,7 @@ Each major component is managed as a local sub-chart in the `charts/` directory:
 | **[airflow](charts/airflow)** | Workflow orchestration |
 | **[minio](charts/minio)** | S3-compatible data lake |
 | **[postgres](charts/postgres)** | Metadata relational database |
+| **[gravitino](charts/gravitino)** | Unified metadata lake with Iceberg REST (primary catalog) |
 | **[monitoring](charts/monitoring)** | Prometheus, Grafana, Loki |
 | **[ingress](charts/ingress)** | Traefik routing rules |
 | **[persistence](charts/persistence)** | PV/PVC & Storage orchestration |
