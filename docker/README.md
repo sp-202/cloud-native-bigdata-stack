@@ -7,7 +7,7 @@ This directory contains the source code and build scripts for the custom Docker 
 We provide a convenient build script for each component.
 
 ### 1. **Spark Base Image** (`docker/spark`)
-The golden image containing Spark 4.0.1, Hadoop 3.3.4, AWS SDK v2, and Delta Lake 4.0.0.
+The golden image containing Spark 3.5.8, Hadoop 3.4.1, AWS SDK v2, Delta Lake 4.0.1, Apache Iceberg 1.10.1, and Gravitino Spark Connector for dynamic catalog support.
 ```bash
 ./docker/spark/build.sh
 ```

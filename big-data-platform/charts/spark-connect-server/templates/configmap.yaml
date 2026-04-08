@@ -104,6 +104,8 @@ data:
     spark.sql.gravitino.uri          {{ .Values.global.gravitino.apiUri }}
     spark.sql.gravitino.enableIcebergSupport true
     spark.sql.warehouse.dir          s3a://warehouse/iceberg/
+    # Add this to ConfigMap to make it feel "instant"
+    spark.sql.gravitino.metadata.refresh.interval 5000
 
     # --- S3 / MinIO Configuration ---
     spark.hadoop.fs.s3a.impl                 org.apache.hadoop.fs.s3a.S3AFileSystem

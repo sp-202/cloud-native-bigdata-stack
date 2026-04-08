@@ -13,10 +13,11 @@
 
 
 ## 📖 Introduction
-This repository contains a **Data Platform as Code (DPaC)** implementation, designed to modernize distributed computing by enforcing a strict separation of compute and storage. Leveraging Kubernetes as the primary orchestration plane, the platform eliminates infrastructure silos, enabling teams to deploy and scale production-ready data ecosystems elastically.
+This repository contains a **Data Platform as Code (DPaC)** implementation, designed to modernize distributed computing by enforcing a strict separation of compute and storage. Built on **Apache Iceberg** as the primary table format and **Apache Gravitino** for unified metadata governance, the platform leverages Kubernetes as the primary orchestration plane, eliminating infrastructure silos and enabling teams to deploy and scale production-ready data ecosystems elastically.
 
 ### Architectural Core Principles:
-*   **Decoupled Compute/Storage**: Persistence is offloaded to S3-compatible object storage (MinIO), allowing compute resources (Spark Executors) to remain ephemeral and cost-efficient.
+*   **Decoupled Compute/Storage**: Persistence is offloaded to S3-compatible object storage (MinIO) using Apache Iceberg as the primary table format, allowing compute resources (Spark Executors) to remain ephemeral and cost-efficient.
+*   **Unified Metadata via Gravitino**: Apache Gravitino serves as the primary metadata lake with native Iceberg REST Catalog, enabling seamless table discovery and governance across the platform.
 *   **GitOps-Centric Design**: Every component, from networking routes to database schemas, is defined as declarative Kubernetes manifests for reproducible deployments. Docker images are built and pushed automatically via GitHub Actions CI/CD on every Dockerfile change.
 *   **Zero-Trust Ingress**: External access is routed through Cloudflare Tunnel (`cloudflared`) — no inbound firewall ports needed. Traefik runs as a pure internal `ClusterIP` service.
 *   **High Observability**: Integrated telemetry across the stack provides deep visibility into job performance, resource utilization, and system health.
@@ -29,10 +30,10 @@ This repository contains a **Data Platform as Code (DPaC)** implementation, desi
 | :-------------------- | :----------- | :---------------------------------------------- |
 | **JupyterHub / Spark** | ✅ Stable    | Core interactive environment                   |
 | **Spark Connect**      | ✅ Stable    | Shared Spark gateway for all clients           |
-| **Delta Lake**         | ✅ Stable    | ACID transactions and Time Travel on S3        |
-| **Hive Metastore**     | ✅ Stable    | Centralized metadata management (Thrift) — Hive 4.1.0 |
+| **Apache Iceberg**     | ✅ Stable    | Primary table format with ACID & Time Travel   |
+| **Gravitino Catalog**  | ✅ Stable    | Unified metadata lake with Iceberg REST (primary) — v1.2.0 |
 | **Cilium CNI**         | ✅ Stable    | AWS ENI IPAM mode for native VPC networking    |
-| **StarRocks**          | ✅ Stable      | Verified with Native Delta Catalog (OLAP)      |
+| **StarRocks**          | ✅ Stable      | Native Iceberg catalog via Gravitino IRC       |
 | **Airflow + Git-Sync** | ✅ Stable      | DAGs auto-synced from Git repository           |
 | **Umbrella Chart**     | ✅ Stable      | Unified Helm-based GitOps deployment           |
 | **ArgoCD Sync Waves**  | ✅ Stable      | Controlled infrastructure orchestration        |
@@ -52,8 +53,8 @@ The platform is managed as a unified **Helm Umbrella Chart** in `big-data-platfo
 ### 2️⃣ Big Data Sub-charts
 *   **airflow**: Managed workflow orchestration with KubernetesExecutor.
 *   **spark-connect**: Shared gateway for all interactive clients.
-*   **hive-metastore**: Central metadata catalog (Hive 4.1.0).
-*   **starrocks**: High-performance OLAP engine.
+*   **gravitino**: Unified metadata lake with Iceberg REST Catalog (IRC) — replaces Hive Metastore as primary catalog.
+*   **starrocks**: High-performance OLAP engine with native Iceberg/Delta support.
 
 ### 3️⃣ Infrastructure & Persistence
 *   **persistence**: Manages dynamic OpenEBS hostpath storage and static PV/PVCs.
@@ -86,12 +87,13 @@ helm install platform ./big-data-platform
 | Component | Version | Role | Usage |
 | :--- | :--- | :--- | :--- |
 | **Apache Airflow** | `2.10.x` | Orchestrator | Scheduling ETL pipelines |
-| **Spark / Delta** | `4.1.1 / 4.0.1` | Compute / Format | Distributed processing & ACID tables |
+| **Spark / Delta** | `3.5.8 / 4.0.1` | Compute / Format | Distributed processing & ACID tables |
+| **Apache Iceberg** | `1.10.1` | Format | High-performance open table format |
 | **Hadoop / AWS SDK** | `3.4.1 / v2.29.52` | Storage Access | S3A FileSystem optimizations (AWS SDK v2) |
 | **JupyterHub** | `4.0.7` | Notebooks | Standard Data Engineering workflow |
 | **Marimo / Polynote** | `latest` | Notebooks | Reactive & Multi-language environments |
-| **Hive Metastore** | `4.1.0` | Catalog | Metadata persistence (arm64 native, JDK 17+) |
-| **StarRocks** | `v3.x` | OLAP Database | Sub-second queries on large datasets |
+| **Apache Gravitino** | `1.2.0` | Metadata Catalog | Unified metadata lake with Iceberg REST (primary) |
+| **StarRocks** | `v3.x` | OLAP Database | Sub-second queries via Gravitino IRC |
 | **Apache Superset** | `4.0.x` | BI / Viz | Dashboards & Analytics |
 | **MinIO** | `RELEASE.2024` | Object Store | Data Lake (S3 API) |
 | **Traefik / Kong** | `v2.10 / v3.x` | Ingress/API Gateway | Load Balancing & Service Routing |
