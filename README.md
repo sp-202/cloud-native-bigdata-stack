@@ -4,7 +4,7 @@
 [![Status](https://img.shields.io/badge/status-production-success)](README.md#-project-status)
 [![Docker Build](https://github.com/sp-202/cloud-native-bigdata-stack/actions/workflows/docker-build.yml/badge.svg)](https://github.com/sp-202/cloud-native-bigdata-stack/actions/workflows/docker-build.yml)
 
-> An enterprise-grade, cloud-native orchestration framework for distributed big data workloads. Built on self-managed Kubernetes (kubeadm) on AWS EC2 with **Cilium CNI**, this platform provides a decoupled, elastic environment for **Apache Spark**, **Apache Iceberg**, and **Airflow**, powered by **Apache Gravitino** as the unified metadata catalog.
+> An enterprise-grade, cloud-native orchestration framework for distributed big data workloads. Built on **Amazon EKS** utilizing **self-managed node groups** with **AWS Auto Scaling Groups (ASG)** and **Cilium CNI**, this platform provides a decoupled, elastic environment for **Apache Spark**, **Apache Iceberg**, and **Airflow**, powered by **Apache Gravitino** as the unified metadata catalog.
 
 ---
 
