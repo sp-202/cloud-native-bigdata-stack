@@ -145,7 +145,7 @@ Superset is pre-connected to **Gravitino** and **PostgreSQL**:
 │   ├── values.yaml           # Centralized configuration for all components
 │   └── README.md             # Sub-chart documentation index
 ├── docker/                   # Custom image Dockerfiles (Spark, JupyterHub, etc.)
-├── deploy-v2.sh              # Cluster bootstrap script (kubeadm setup)
+├── deploy-v2.sh              # Cluster bootstrap script (AWS EKS self-managed setup)
 ├── ARCHITECTURE.md           # Technical deep-dive with data flow diagrams
 ├── CHANGELOG.md              # Version history with detailed changes
 ├── ISSUES.md                 # Troubleshooting & known issues
@@ -248,7 +248,7 @@ All Spark jobs automatically use:
 - Cloudflare Tunnel for external access (no inbound ports)
 - Cilium CNI with AWS ENI IPAM for native VPC integration
 - Pod-to-pod encryption and network policies
-- No LoadBalancer or MetalLB exposure
+- No LoadBalancer exposure
 
 ### 🚀 Complete CI/CD Integration
 - GitHub Actions for automated multi-arch Docker builds
