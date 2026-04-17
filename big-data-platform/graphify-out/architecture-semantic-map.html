@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Big Data Platform - Architecture Semantic Map</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2563eb;
+            --secondary: #7c3aed;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --dark: #1f2937;
+            --light: #f9fafb;
+            --border: #e5e7eb;
+            --text: #374151;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--light);
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 3rem 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.95;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .search-bar {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .search-bar input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .search-bar input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .section {
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .section-header {
+            background: var(--primary);
+            color: white;
+            padding: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            transition: background 0.3s;
+        }
+
+        .section-header:hover {
+            background: #1d4ed8;
+        }
+
+        .section-header h2 {
+            font-size: 1.5rem;
+        }
+
+        .toggle-icon {
+            font-size: 1.5rem;
+            transition: transform 0.3s;
+        }
+
+        .section.collapsed .toggle-icon {
+            transform: rotate(-90deg);
+        }
+
+        .section-content {
+            padding: 2rem;
+            max-height: 5000px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+
+        .section.collapsed .section-content {
+            max-height: 0;
+            padding: 0 2rem;
+        }
+
+        .component-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .component-card {
+            background: var(--light);
+            border-left: 4px solid var(--primary);
+            padding: 1.5rem;
+            border-radius: 6px;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .component-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .component-card.tier0 {
+            border-left-color: var(--danger);
+        }
+
+        .component-card.tier1 {
+            border-left-color: var(--warning);
+        }
+
+        .component-card.tier2 {
+            border-left-color: var(--primary);
+        }
+
+        .component-card.tier3 {
+            border-left-color: var(--secondary);
+        }
+
+        .component-card.tier4 {
+            border-left-color: var(--success);
+        }
+
+        .component-card h3 {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            color: var(--dark);
+        }
+
+        .component-card .role {
+            font-size: 0.9rem;
+            color: #6b7280;
+            margin-bottom: 1rem;
+            font-style: italic;
+        }
+
+        .component-card .type {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .component-card .endpoint {
+            background: white;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            margin: 0.5rem 0;
+            word-break: break-all;
+        }
+
+        .diagram {
+            background: var(--light);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 2rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+        }
+
+        .diagram pre {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: var(--dark);
+        }
+
+        .dependency-list {
+            background: var(--light);
+            padding: 1rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+            border-left: 4px solid var(--secondary);
+        }
+
+        .dependency-list ul {
+            list-style: none;
+            padding-left: 1rem;
+        }
+
+        .dependency-list li {
+            padding: 0.3rem 0;
+        }
+
+        .dependency-list li:before {
+            content: "→ ";
+            color: var(--secondary);
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+
+        .tier-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin: 0.25rem;
+        }
+
+        .tier-badge.tier0 {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .tier-badge.tier1 {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .tier-badge.tier2 {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .tier-badge.tier3 {
+            background: #e9d5ff;
+            color: #5b21b6;
+        }
+
+        .tier-badge.tier4 {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .tier-badge.tier5 {
+            background: #f3e8ff;
+            color: #6b21a8;
+        }
+
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 1rem 0;
+            flex-wrap: wrap;
+        }
+
+        .flow-item {
+            background: var(--primary);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 500;
+            min-width: 120px;
+            text-align: center;
+        }
+
+        .flow-arrow {
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+        }
+
+        th {
+            background: var(--primary);
+            color: white;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tr:hover {
+            background: var(--light);
+        }
+
+        .metric {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            margin: 0.25rem;
+            font-weight: 500;
+        }
+
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+
+        .checklist li {
+            padding: 0.75rem 0;
+            padding-left: 2rem;
+            position: relative;
+        }
+
+        .checklist li:before {
+            content: "☐";
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+            font-size: 1.2rem;
+        }
+
+        .info-box {
+            background: #eff6ff;
+            border-left: 4px solid var(--primary);
+            padding: 1.5rem;
+            border-radius: 6px;
+            margin: 1.5rem 0;
+        }
+
+        .warning-box {
+            background: #fef3c7;
+            border-left: 4px solid var(--warning);
+            padding: 1.5rem;
+            border-radius: 6px;
+            margin: 1.5rem 0;
+        }
+
+        .success-box {
+            background: #d1fae5;
+            border-left: 4px solid var(--success);
+            padding: 1.5rem;
+            border-radius: 6px;
+            margin: 1.5rem 0;
+        }
+
+        .footer {
+            background: var(--dark);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+            margin-top: 3rem;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.8rem;
+            }
+
+            .component-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .flow-diagram {
+                flex-direction: column;
+            }
+
+            .flow-arrow {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🏗️ Big Data Platform - Architecture Semantic Map</h1>
+        <p>Graphify Knowledge Graph • Generated 2026-04-17</p>
+    </header>
+
+    <div class="container">
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Search components, relationships, or topics...">
+        </div>
+
+        <!-- Overview Section -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h2>📊 Overview & Metrics</h2>
+                <span class="toggle-icon">▶</span>
+            </div>
+            <div class="section-content">
+                <div class="info-box">
+                    <h3>Knowledge Graph Status</h3>
+                    <p>
+                        <span class="metric">19 Components</span>
+                        <span class="metric">34 Edges</span>
+                        <span class="metric">4 Communities</span>
+                        <span class="metric">5 Tiers</span>
+                    </p>
+                </div>
+
+                <h3>Platform Type</h3>
+                <p><strong>Helm Umbrella Chart (v1.0.0)</strong> on AWS EC2 (ARM64/Graviton)</p>
+                <p><strong>Root Domain:</strong> dailyblogstudio.com | <strong>Storage:</strong> OpenEBS (openebs-hostpath)</p>
+
+                <h3>Scan Results</h3>
+                <ul>
+                    <li><strong>Files Analyzed:</strong> 93+ YAML configs, 15 sub-charts, Python, documentation</li>
+                    <li><strong>Components Identified:</strong> 19 core services across 5 architectural layers</li>
+                    <li><strong>Relationships Mapped:</strong> 34 semantic edges (dependencies + data flows)</li>
+                    <li><strong>Quality:</strong> Rich, explicitly documented node metadata</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Core Components Section -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h2>🔧 Core Components (19 Nodes)</h2>
+                <span class="toggle-icon">▶</span>
+            </div>
+            <div class="section-content">
+                <h3>Metadata & Catalog Layer</h3>
+                <div class="component-grid">
+                    <div class="component-card tier2">
+                        <h3>🗂️ Gravitino</h3>
+                        <div class="role">Unified Iceberg REST Catalog (IRC)</div>
+                        <span class="component-card type">metadata-catalog</span>
+                        <div class="endpoint">API: :8090</div>
+                        <div class="endpoint">Iceberg REST: :9001</div>
+                        <span class="tier-badge tier2">TIER-2</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Apache Gravitino 1.2.0 — unified metadata governance with Iceberg 1.10.1</p>
+                    </div>
+
+                    <div class="component-card tier1">
+                        <h3>📚 Hive Metastore</h3>
+                        <div class="role">Legacy HMS + compatibility fallback</div>
+                        <span class="component-card type">metadata-store</span>
+                        <div class="endpoint">thrift://hive-metastore:9083</div>
+                        <span class="tier-badge tier1">TIER-1</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Apache Hive 3.1.3 — secondary metadata source</p>
+                    </div>
+
+                    <div class="component-card tier0">
+                        <h3>🗃️ PostgreSQL</h3>
+                        <div class="role">ACID-compliant relational metadata store</div>
+                        <span class="component-card type">relational-database</span>
+                        <div class="endpoint">postgres.default:5432</div>
+                        <span class="tier-badge tier0">TIER-0</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">PostgreSQL 15+ — foundational blocker for all services</p>
+                    </div>
+                </div>
+
+                <h3>Compute & Processing Layer</h3>
+                <div class="component-grid">
+                    <div class="component-card tier2">
+                        <h3>⚡ Spark</h3>
+                        <div class="role">Distributed compute engine</div>
+                        <span class="component-card type">compute-engine</span>
+                        <span class="tier-badge tier2">TIER-2</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Spark 3.5.8 with Iceberg, Gravitino, Spark Connect plugins</p>
+                    </div>
+
+                    <div class="component-card tier2">
+                        <h3>⚙️ Spark Operator</h3>
+                        <div class="role">SparkApplication CRD controller</div>
+                        <span class="component-card type">kubernetes-operator</span>
+                        <span class="tier-badge tier2">TIER-2</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">v2.4.0 — job submission + Pod lifecycle management</p>
+                    </div>
+
+                    <div class="component-card tier3">
+                        <h3>🔄 Airflow</h3>
+                        <div class="role">Workflow orchestration & DAG scheduling</div>
+                        <span class="component-card type">orchestration</span>
+                        <span class="tier-badge tier3">TIER-3</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Apache Airflow 2.7.1 — KubernetesExecutor for job triggers</p>
+                    </div>
+                </div>
+
+                <h3>Storage & Caching Layer</h3>
+                <div class="component-grid">
+                    <div class="component-card tier1">
+                        <h3>🪣 MinIO</h3>
+                        <div class="role">S3-compatible object storage root</div>
+                        <span class="component-card type">object-storage</span>
+                        <div class="endpoint">minio.default:9000</div>
+                        <span class="tier-badge tier1">TIER-1</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Data lake foundation — consumed by all compute</p>
+                    </div>
+
+                    <div class="component-card tier2">
+                        <h3>⚡ Redis</h3>
+                        <div class="role">Cache + task queuing (optional)</div>
+                        <span class="component-card type">cache</span>
+                        <span class="tier-badge tier2">TIER-2</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Session storage + Celery queueing</p>
+                    </div>
+                </div>
+
+                <h3>Analytics & BI Layer</h3>
+                <div class="component-grid">
+                    <div class="component-card tier4">
+                        <h3>📊 StarRocks</h3>
+                        <div class="role">OLAP vectorized MPP database</div>
+                        <span class="component-card type">analytics-engine</span>
+                        <span class="tier-badge tier4">TIER-4</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Native Iceberg integration, real-time analytics</p>
+                    </div>
+
+                    <div class="component-card tier4">
+                        <h3>📓 JupyterHub</h3>
+                        <div class="role">Multi-user collaborative notebooks</div>
+                        <span class="component-card type">interactive-compute</span>
+                        <span class="tier-badge tier4">TIER-4</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">PySpark + Scala kernels with auto-discovery</p>
+                    </div>
+
+                    <div class="component-card tier4">
+                        <h3>📈 Superset</h3>
+                        <div class="role">Visual analytics + dashboard creation</div>
+                        <span class="component-card type">bi-dashboard</span>
+                        <span class="tier-badge tier4">TIER-4</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Apache Superset 0.12.0 — BI frontend</p>
+                    </div>
+                </div>
+
+                <h3>Observability & Infrastructure Layer</h3>
+                <div class="component-grid">
+                    <div class="component-card tier5">
+                        <h3>📡 Prometheus</h3>
+                        <div class="role">Time-series metrics collection</div>
+                        <span class="component-card type">metrics</span>
+                        <span class="tier-badge tier5">TIER-5</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">15+ service monitors scraping cluster</p>
+                    </div>
+
+                    <div class="component-card tier5">
+                        <h3>📊 Grafana</h3>
+                        <div class="role">Metrics visualization + alerting</div>
+                        <span class="component-card type">observability-ui</span>
+                        <span class="tier-badge tier5">TIER-5</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Dashboards for Kubernetes, Spark, Airflow</p>
+                    </div>
+
+                    <div class="component-card tier5">
+                        <h3>📝 Loki</h3>
+                        <div class="role">Log aggregation (Prometheus-style)</div>
+                        <span class="component-card type">logging</span>
+                        <span class="tier-badge tier5">TIER-5</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">v2.10.2 — pod log collection + search</p>
+                    </div>
+
+                    <div class="component-card tier5">
+                        <h3>🌐 Cloudflared</h3>
+                        <div class="role">Secure tunnel to dailyblogstudio.com</div>
+                        <span class="component-card type">networking-tunnel</span>
+                        <span class="tier-badge tier5">TIER-5</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Tunnel ID: 91e5be1d-3b51-4cac-aebf-d330aafda394</p>
+                    </div>
+
+                    <div class="component-card tier5">
+                        <h3>🎛️ Headlamp</h3>
+                        <div class="role">Web-based Kubernetes dashboard</div>
+                        <span class="component-card type">k8s-ui</span>
+                        <span class="tier-badge tier5">TIER-5</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Pod introspection + resource browser</p>
+                    </div>
+
+                    <div class="component-card tier5">
+                        <h3>🔀 Ingress</h3>
+                        <div class="role">Path-based routing + TLS termination</div>
+                        <span class="component-card type">networking</span>
+                        <span class="tier-badge tier5">TIER-5</span>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem;">Routes all web UIs</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Relationships Section -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h2>🔗 Component Relationships (34 Edges)</h2>
+                <span class="toggle-icon">▶</span>
+            </div>
+            <div class="section-content">
+                <h3>God Nodes (Most Connected)</h3>
+
+                <div style="margin: 2rem 0;">
+                    <h4>1. 🌟 Spark (10 connections) — Compute Hub</h4>
+                    <div class="dependency-list">
+                        <strong>Depends On:</strong>
+                        <ul>
+                            <li>Gravitino (catalog discovery)</li>
+                            <li>Hive Metastore (fallback)</li>
+                            <li>MinIO (data read/write)</li>
+                            <li>PostgreSQL (metadata)</li>
+                            <li>Airflow (orchestration)</li>
+                        </ul>
+                    </div>
+                    <div class="dependency-list">
+                        <strong>Consumed By:</strong>
+                        <ul>
+                            <li>Airflow (DAG execution)</li>
+                            <li>JupyterHub (notebooks)</li>
+                            <li>Spark Connect Server (remote execution)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div style="margin: 2rem 0;">
+                    <h4>2. 🗂️ Gravitino (7 connections) — Catalog Hub</h4>
+                    <div class="dependency-list">
+                        <strong>Depends On:</strong>
+                        <ul>
+                            <li>PostgreSQL (metadata persistence)</li>
+                            <li>MinIO (table file storage)</li>
+                            <li>Spark (catalog plugins)</li>
+                        </ul>
+                    </div>
+                    <div class="dependency-list">
+                        <strong>Consumed By:</strong>
+                        <ul>
+                            <li>Spark (GravitinoSparkPlugin)</li>
+                            <li>StarRocks (Iceberg native)</li>
+                            <li>JupyterHub (catalog discovery)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div style="margin: 2rem 0;">
+                    <h4>3. 🪣 MinIO (6 connections) — Storage Hub</h4>
+                    <div class="dependency-list">
+                        <strong>No Dependencies (Foundational)</strong>
+                        <ul>
+                            <li>TIER-1 — all higher tiers depend on it</li>
+                        </ul>
+                    </div>
+                    <div class="dependency-list">
+                        <strong>Consumed By:</strong>
+                        <ul>
+                            <li>Spark (compute + shuffle)</li>
+                            <li>Gravitino (Iceberg files)</li>
+                            <li>Hive Metastore (table locations)</li>
+                            <li>StarRocks (data ingestion)</li>
+                            <li>JupyterHub (notebook data)</li>
+                            <li>Airflow (job artifacts)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div style="margin: 2rem 0;">
+                    <h4>4. 🗃️ PostgreSQL (7 connections) — Database Hub</h4>
+                    <div class="dependency-list">
+                        <strong>No Dependencies (Foundational)</strong>
+                        <ul>
+                            <li>TIER-0 — BLOCKING all higher tiers</li>
+                        </ul>
+                    </div>
+                    <div class="dependency-list">
+                        <strong>Consumed By:</strong>
+                        <ul>
+                            <li>Hive Metastore (schema storage)</li>
+                            <li>Airflow (DAG state + logs)</li>
+                            <li>Superset (dashboards + datasets)</li>
+                            <li>Gravitino (metadata lake)</li>
+                            <li>JupyterHub (user sessions)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div style="margin: 2rem 0;">
+                    <h4>5. 🔄 Airflow (4 connections) — Orchestration Hub</h4>
+                    <div class="dependency-list">
+                        <strong>Depends On:</strong>
+                        <ul>
+                            <li>PostgreSQL (DAG state)</li>
+                            <li>Spark Operator (CRD)</li>
+                        </ul>
+                    </div>
+                    <div class="dependency-list">
+                        <strong>Triggers:</strong>
+                        <ul>
+                            <li>Spark jobs (via SparkApplication)</li>
+                            <li>Data quality checks</li>
+                            <li>Metadata sync tasks</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Flow Patterns -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h2>🔀 Data Flow Patterns (3 Primary Flows)</h2>
+                <span class="toggle-icon">▶</span>
+            </div>
+            <div class="section-content">
+                <h3>Flow 1: Spark ETL with Gravitino Catalog</h3>
+                <div class="diagram">
+                    <pre>External Data Source
+         ↓
+   Spark Job (KubernetesExecutor or SparkApplication)
+         ↓
+   GravitinoSparkPlugin (catalog discovery @ :8090)
+         ↓
+   Iceberg Tables via IRC @ :9001
+         ↓
+   MinIO S3 Storage (/iceberg/ bucket)
+         ↓
+   [Optional] StarRocks Ingestion (real-time OLAP)
+         ↓
+   Superset Dashboard / JupyterHub Analysis</pre>
+                </div>
+                <p><strong>Components:</strong> spark → gravitino → minio → starrocks → superset/jupyterhub</p>
+
+                <h3 style="margin-top: 2rem;">Flow 2: Airflow-Orchestrated Spark Workflows</h3>
+                <div class="diagram">
+                    <pre>Airflow Scheduler (2.7.1)
+         ↓
+  DAG Trigger → SparkApplication CRD
+         ↓
+  Spark Operator (2.4.0) creates Pod
+         ↓
+  Spark Driver reads from Gravitino → Compute on Workers
+         ↓
+  Results written to MinIO (or Iceberg catalog)
+         ↓
+  Task log persisted: PostgreSQL (airflow_db) + MinIO
+         ↓
+  [Optional] Metadata sync → Gravitino metastore</pre>
+                </div>
+                <p><strong>Components:</strong> airflow → spark-operator → spark → gravitino → minio → postgresql</p>
+
+                <h3 style="margin-top: 2rem;">Flow 3: Interactive Analysis via JupyterHub</h3>
+                <div class="diagram">
+                    <pre>User Login → Headlamp (K8s dashboard)
+                ↓
+         JupyterHub Session (KubeSpawner)
+                ↓
+    [PySpark Kernel] ← → Spark Cluster (7077)
+                ↓
+         GravitinoSparkPlugin (catalog)
+                ↓
+  Query Iceberg tables in Gravitino
+                ↓
+  [Optional] Push aggregates → StarRocks for BI</pre>
+                </div>
+                <p><strong>Components:</strong> jupyterhub → spark → gravitino → minio → starrocks</p>
+            </div>
+        </div>
+
+        <!-- Critical Dependencies -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h2>📋 Critical Dependencies & Startup Order</h2>
+                <span class="toggle-icon">▶</span>
+            </div>
+            <div class="section-content">
+                <div class="success-box">
+                    <h3>Startup Tier Hierarchy (TIER-0 → TIER-5)</h3>
+                    <p>Services must be deployed in order; higher tiers are blocked by lower tiers.</p>
+                </div>
+
+                <div style="margin: 2rem 0;">
+                    <h4>🔴 TIER-0: Foundational (0 min) — BLOCKING ALL</h4>
+                    <div class="component-grid">
+                        <div class="component-card tier0">
+                            <h3>Persistence</h3>
+                            <p>OpenEBS local directories + node provisioning</p>
+                        </div>
+                        <div class="component-card tier0">
+                            <h3>Namespaces</h3>
+                            <p>Network policies + RBAC configuration</p>
+                        </div>
+                        <div class="component-card tier0">
+                            <h3>PostgreSQL</h3>
+                            <p>10Gi PVC, openebs-hostpath, k8s-gp-node affinity</p>
+                            <span style="color: var(--danger); font-weight: bold;">⚠️ SINGLE POINT OF FAILURE</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin: 2rem 0;">
+                    <h4>🟠 TIER-1: Core Data Layer (5-10 min)</h4>
+                    <div class="component-grid">
+                        <div class="component-card tier1">
+                            <h3>MinIO</h3>
+                            <p>10Gi minio-worker affinity</p>
+                        </div>
+                        <div class="component-card tier1">
+                            <h3>Hive Metastore</h3>
+                            <p>depends: PostgreSQL, MinIO</p>
+                        </div>
+                        <div class="component-card tier1">
+                            <h3>Redis (optional)</h3>
+                            <p>No dependencies</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin: 2rem 0;">
+                    <h4>🔵 TIER-2: Catalog & Compute (10-15 min)</h4>
+                    <div class="component-grid">
+                        <div class="component-card tier2">
+                            <h3>Gravitino</h3>
+                            <p>depends: PostgreSQL, MinIO</p>
+                            <p style="font-size: 0.9rem;">init-job creates metastore DB</p>
+                        </div>
+                        <div class="component-card tier2">
+                            <h3>Spark Operator</h3>
+                            <p>CRD registration (no service)</p>
+                        </div>
+                        <div class="component-card tier2">
+                            <h3>Spark History Server</h3>
+                            <p>depends: MinIO</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin: 2rem 0;">
+                    <h4>🟣 TIER-3: Orchestration (15-20 min)</h4>
+                    <div class="component-grid">
+                        <div class="component-card tier3">
+                            <h3>Airflow</h3>
+                            <p>depends: PostgreSQL, Spark Operator</p>
+                            <p style="font-size: 0.9rem;">airflow-db-migrate + airflow-user-init</p>
+                        </div>
+                        <div class="component-card tier3">
+                            <h3>Spark Connect Server (opt)</h3>
+                            <p>Remote execution interface</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin: 2rem 0;">
+                    <h4>🟢 TIER-4: Analytics & Access (20-30 min)</h4>
+                    <div class="component-grid">
+                        <div class="component-card tier4">
+                            <h3>StarRocks</h3>
+                            <p>depends: Spark, Gravitino, PostgreSQL</p>
+                        </div>
+                        <div class="component-card tier4">
+                            <h3>JupyterHub</h3>
+                            <p>depends: PostgreSQL, Spark, MinIO</p>
+                        </div>
+                        <div class="component-card tier4">
+                            <h3>Superset</h3>
+                            <p>depends: PostgreSQL</p>
+                            <p style="font-size: 0.9rem;">init-job sets up DB connections</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin: 2rem 0;">
+                    <h4>⚪ TIER-5: Monitoring & Extras (30-40 min)</h4>
+                    <div class="component-grid">
+                        <div class="component-card tier5">
+                            <h3>kube-prometheus-stack</h3>
+                            <p>Metrics + Grafana</p>
+                        </div>
+                        <div class="component-card tier5">
+                            <h3>loki-stack</h3>
+                            <p>Log aggregation</p>
+                        </div>
+                        <div class="component-card tier5">
+                            <h3>Cloudflared</h3>
+                            <p>External tunnel</p>
+                        </div>
+                        <div class="component-card tier5">
+                            <h3>Ingress</h3>
+                            <p>Path-based routing</p>
+                        </div>
+                        <div class="component-card tier5">
+                            <h3>Headlamp</h3>
+                            <p>K8s UI dashboard</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Known Issues -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h2>⚠️ Known Issues & Recommendations</h2>
+                <span class="toggle-icon">▶</span>
+            </div>
+            <div class="section-content">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Component</th>
+                            <th>Issue</th>
+                            <th>Status</th>
+                            <th>Priority</th>
+                            <th>Recommendation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>PostgreSQL</strong></td>
+                            <td>Single instance (10Gi PVC)</td>
+                            <td>Critical</td>
+                            <td>🔴 Blocker</td>
+                            <td>Implement Patroni HA cluster + RPO=0 replication</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Spark</strong></td>
+                            <td>CRD version mismatch</td>
+                            <td>Pending</td>
+                            <td>🔴 Blocker</td>
+                            <td>Verify SparkApplication CRD versions; update operator if needed</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Superset</strong></td>
+                            <td>Init job fails</td>
+                            <td>Pending</td>
+                            <td>🔴 Blocker</td>
+                            <td>Debug init logs; verify PostgreSQL connectivity</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Gravitino</strong></td>
+                            <td>S3FileIO path-style config missing</td>
+                            <td>Pending</td>
+                            <td>🔴 Blocker</td>
+                            <td>Add s3.use-path-style-access=true to catalog config</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Airflow</strong></td>
+                            <td>Release name conflicts with subchart</td>
+                            <td>Pending</td>
+                            <td>🟡 High</td>
+                            <td>Review Helm release naming conventions; fix RBAC/Service conflicts</td>
+                        </tr>
+                        <tr>
+                            <td><strong>MinIO</strong></td>
+                            <td>Single node, no replication</td>
+                            <td>Design</td>
+                            <td>🟡 High</td>
+                            <td>Deploy in HA mode (4+ replicas, erasure coding)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Hive-Gravitino</strong></td>
+                            <td>Dual metadata sources can diverge</td>
+                            <td>Design</td>
+                            <td>🟡 High</td>
+                            <td>Add daily reconciliation job; document fallback policy</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Cloudflared</strong></td>
+                            <td>Single tunnel = external access SPOF</td>
+                            <td>Design</td>
+                            <td>🟡 Medium</td>
+                            <td>Monitor tunnel health; add alerting for disconnections</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="warning-box" style="margin-top: 2rem;">
+                    <h3>🚨 Critical Path Items (Must Fix Before Production)</h3>
+                    <ul style="margin-top: 1rem;">
+                        <li>✅ Implement PostgreSQL HA (Patroni + 3-node quorum)</li>
+                        <li>✅ Resolve Superset init job failure</li>
+                        <li>✅ Configure Gravitino S3FileIO path-style access</li>
+                        <li>✅ Verify Spark CRD versions match operator version</li>
+                        <li>✅ Deploy MinIO in HA mode (4-node minimum)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Node Affinity -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h2>🎯 Node Affinity & Topology</h2>
+                <span class="toggle-icon">▶</span>
+            </div>
+            <div class="section-content">
+                <div class="diagram">
+                    <pre>┌─────────────────────────────────────────┐
+│  k8s-gp-node (general purpose)          │
+│  ├─ PostgreSQL (10Gi)                   │
+│  ├─ Airflow (5Gi + 15Gi DAG store)      │
+│  ├─ StarRocks FE/BE (10Gi each)         │
+│  ├─ Gravitino (persistent)              │
+│  ├─ Redis (optional)                    │
+│  ├─ Prometheus (50Gi)                   │
+│  └─ Grafana + Loki                      │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│  spark-node (primary executors)         │
+│  ├─ Spark Executors (KubernetesExecutor)│
+│  ├─ JupyterHub spawned pods             │
+│  └─ Shuffle map tasks                   │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│  spark-worker (secondary executors)     │
+│  ├─ Spark Executors (overflow)          │
+│  └─ Long-running service pods           │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│  minio-worker (dedicated S3 backend)    │
+│  └─ MinIO (high I/O workload)           │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│  control-plane (cluster management)     │
+│  ├─ API Server, etcd, Controller        │
+│  ├─ Spark Operator                      │
+│  ├─ Airflow Webserver (control)         │
+│  └─ Cloudflared tunnel agent            │
+└─────────────────────────────────────────┘</pre>
+                </div>
+
+                <table style="margin-top: 2rem;">
+                    <thead>
+                        <tr>
+                            <th>Node Label</th>
+                            <th>Components</th>
+                            <th>Count</th>
+                            <th>Purpose</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>k8s-gp-node</code></td>
+                            <td>PostgreSQL, Airflow, StarRocks, Gravitino, Redis, Prometheus, Grafana</td>
+                            <td>7</td>
+                            <td>General purpose compute</td>
+                        </tr>
+                        <tr>
+                            <td><code>spark-node</code></td>
+                            <td>Spark Executors (primary)</td>
+                            <td>1</td>
+                            <td>High-volume compute</td>
+                        </tr>
+                        <tr>
+                            <td><code>spark-worker</code></td>
+                            <td>Spark Executors (secondary)</td>
+                            <td>1</td>
+                            <td>Overflow/secondary compute</td>
+                        </tr>
+                        <tr>
+                            <td><code>minio-worker</code></td>
+                            <td>MinIO</td>
+                            <td>1</td>
+                            <td>I/O-intensive isolation</td>
+                        </tr>
+                        <tr>
+                            <td><code>control-plane</code></td>
+                            <td>Spark Operator, Cloudflared, Airflow Webserver</td>
+                            <td>3</td>
+                            <td>Cluster control functions</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Integration Checklist -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h2>✅ Integration Health Checklist</h2>
+                <span class="toggle-icon">▶</span>
+            </div>
+            <div class="section-content">
+                <ul class="checklist">
+                    <li>PostgreSQL healthy: <code>select version;</code> from each service</li>
+                    <li>MinIO accessible: <code>aws s3 ls --endpoint-url http://minio:9000</code></li>
+                    <li>Hive Metastore reachable: JDBC connectivity test</li>
+                    <li>Gravitino API responds: <code>curl http://gravitino:8090/api/version</code></li>
+                    <li>Spark catalog discovery: <code>spark.sql("SELECT * FROM system.information_schema.tables")</code></li>
+                    <li>Spark History Server: <code>localhost:18080</code> shows recent jobs</li>
+                    <li>Airflow DAGs parse: <code>airflow dags list</code> (no errors)</li>
+                    <li>JupyterHub notebook: Can import <code>pyspark</code></li>
+                    <li>Superset connectivity: Connects to StarRocks JDBC</li>
+                    <li>Prometheus scrape targets: 15+ service monitors active</li>
+                    <li>Loki log ingestion: Pod logs visible (verify volume mount)</li>
+                    <li>Cloudflared tunnel: Active and routing traffic</li>
+                </ul>
+
+                <div class="success-box" style="margin-top: 2rem;">
+                    <h3>✨ All checks passing?</h3>
+                    <p>Congratulations! Your big-data-platform is fully operational and ready for production workloads.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Semantic Tags -->
+        <div class="section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h2>🏷️ Semantic Tags for Search & Reference</h2>
+                <span class="toggle-icon">▶</span>
+            </div>
+            <div class="section-content">
+                <h3>Architectural Layers</h3>
+                <p>
+                    <span class="metric">Metadata Catalog</span>
+                    <span class="metric">Compute Engine</span>
+                    <span class="metric">Object Storage</span>
+                    <span class="metric">Relational DB</span>
+                    <span class="metric">Orchestration</span>
+                    <span class="metric">Analytics Engine</span>
+                    <span class="metric">Interactive Compute</span>
+                    <span class="metric">BI Dashboard</span>
+                    <span class="metric">Metrics</span>
+                    <span class="metric">Logging</span>
+                    <span class="metric">Networking Tunnel</span>
+                    <span class="metric">Kubernetes Operator</span>
+                </p>
+
+                <h3 style="margin-top: 2rem;">Data Formats & Protocols</h3>
+                <p>
+                    <span class="metric">Iceberg</span>
+                    <span class="metric">Hive</span>
+                    <span class="metric">Parquet</span>
+                    <span class="metric">Avro</span>
+                    <span class="metric">Delta</span>
+                </p>
+                <p>
+                    <span class="metric">Thrift (HMS)</span>
+                    <span class="metric">JDBC</span>
+                    <span class="metric">REST (Gravitino)</span>
+                    <span class="metric">gRPC (Spark)</span>
+                    <span class="metric">S3 (MinIO)</span>
+                    <span class="metric">HTTP</span>
+                </p>
+
+                <h3 style="margin-top: 2rem;">Common Patterns</h3>
+                <p>
+                    <span class="metric">ETL</span>
+                    <span class="metric">OLAP</span>
+                    <span class="metric">BI</span>
+                    <span class="metric">Interactive Analysis</span>
+                    <span class="metric">Workflow Orchestration</span>
+                    <span class="metric">Metadata Governance</span>
+                    <span class="metric">Log Aggregation</span>
+                    <span class="metric">Metrics Collection</span>
+                </p>
+
+                <h3 style="margin-top: 2rem;">Criticality Levels</h3>
+                <p>
+                    <span class="tier-badge tier0">TIER-0 Foundational</span>
+                    <span class="tier-badge tier1">TIER-1 Core Data</span>
+                    <span class="tier-badge tier2">TIER-2 Catalog</span>
+                    <span class="tier-badge tier3">TIER-3 Orchestration</span>
+                    <span class="tier-badge tier4">TIER-4 Analytics</span>
+                    <span class="tier-badge tier5">TIER-5 Observability</span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p><strong>Big Data Platform — Architecture Semantic Map</strong></p>
+        <p>Generated by Graphify Deep Semantic Scan on 2026-04-17</p>
+        <p>19 Components · 34 Relationships · 4 Communities</p>
+        <p style="margin-top: 1rem; font-size: 0.9rem; opacity: 0.8;">
+            For detailed analysis, see: ARCHITECTURE_SEMANTIC_MAP.md | GRAPH_REPORT.md | graphify-out/graph.json
+        </p>
+    </footer>
+
+    <script>
+        function toggleSection(header) {
+            const section = header.closest('.section');
+            section.classList.toggle('collapsed');
+        }
+
+        document.getElementById('searchInput').addEventListener('keyup', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const sections = document.querySelectorAll('.section');
+
+            sections.forEach(section => {
+                const text = section.textContent.toLowerCase();
+                if (text.includes(searchTerm)) {
+                    section.style.display = 'block';
+                    if (searchTerm) {
+                        section.classList.remove('collapsed');
+                    }
+                } else {
+                    section.style.display = 'none';
+                }
+            });
+
+            // Show all sections if search is empty
+            if (!searchTerm) {
+                sections.forEach(section => {
+                    section.style.display = 'block';
+                });
+            }
+        });
+
+        // Collapse all sections by default except overview
+        window.addEventListener('load', function() {
+            const sections = document.querySelectorAll('.section');
+            sections.forEach((section, index) => {
+                if (index > 0) {
+                    section.classList.add('collapsed');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
