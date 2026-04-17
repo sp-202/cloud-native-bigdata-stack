@@ -4,7 +4,7 @@
 [![Status](https://img.shields.io/badge/status-production-success)](README.md#-project-status)
 [![Docker Build](https://github.com/sp-202/cloud-native-bigdata-stack/actions/workflows/docker-build.yml/badge.svg)](https://github.com/sp-202/cloud-native-bigdata-stack/actions/workflows/docker-build.yml)
 
-> An enterprise-grade, cloud-native orchestration framework for distributed big data workloads. Built on self-managed Kubernetes (kubeadm) on AWS EC2 with **Cilium CNI**, this platform provides a decoupled, elastic environment for **Apache Spark**, **Apache Iceberg**, and **Airflow**, powered by **Apache Gravitino** as the unified metadata catalog.
+> An enterprise-grade, cloud-native orchestration framework for distributed big data workloads. Built on **Amazon EKS** utilizing **self-managed node groups** with **AWS Auto Scaling Groups (ASG)** and **Cilium CNI**, this platform provides a decoupled, elastic environment for **Apache Spark**, **Apache Iceberg**, and **Airflow**, powered by **Apache Gravitino** as the unified metadata catalog.
 
 ---
 
@@ -145,7 +145,7 @@ Superset is pre-connected to **Gravitino** and **PostgreSQL**:
 │   ├── values.yaml           # Centralized configuration for all components
 │   └── README.md             # Sub-chart documentation index
 ├── docker/                   # Custom image Dockerfiles (Spark, JupyterHub, etc.)
-├── deploy-v2.sh              # Cluster bootstrap script (kubeadm setup)
+├── deploy-v2.sh              # Cluster bootstrap script (AWS EKS self-managed setup)
 ├── ARCHITECTURE.md           # Technical deep-dive with data flow diagrams
 ├── CHANGELOG.md              # Version history with detailed changes
 ├── ISSUES.md                 # Troubleshooting & known issues
@@ -248,7 +248,7 @@ All Spark jobs automatically use:
 - Cloudflare Tunnel for external access (no inbound ports)
 - Cilium CNI with AWS ENI IPAM for native VPC integration
 - Pod-to-pod encryption and network policies
-- No LoadBalancer or MetalLB exposure
+- No LoadBalancer exposure
 
 ### 🚀 Complete CI/CD Integration
 - GitHub Actions for automated multi-arch Docker builds

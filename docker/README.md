@@ -24,6 +24,18 @@ A lightweight, reactive notebook environment optimised for Python.
 ./docker/marimo/build.sh
 ```
 
+### 4. **Hive Image** (`docker/hive`)
+Provides Hive Metastore and HiveServer2 for legacy compatibility.
+```bash
+./docker/hive/build.sh
+```
+
+### 5. **k8s-git-sync Image** (`docker/k8s-git-sync`)
+Git synchronization sidecar with MinIO client integration for Airflow DAG deployment.
+```bash
+./docker/k8s-git-sync/build.sh
+```
+
 ## 🏷️ Versioning
 Images are tagged based on the `SPARK_IMAGE_VERSION` defined in the root `.env` file.
 
