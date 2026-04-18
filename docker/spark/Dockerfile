@@ -17,7 +17,7 @@ ENV GEOTOOLS_WRAPPER_VERSION=1.8.1-33.1
 ENV H3_VERSION=4.0.1
 ENV SPARK_HOME=/opt/spark
 
-# Install build dependencies
+# Install build dependencies.
 RUN apt-get update && apt-get install -y wget curl
 
 # Download and install Spark
