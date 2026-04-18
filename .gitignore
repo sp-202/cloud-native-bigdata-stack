@@ -1,4 +1,5 @@
 # Secrets (local overrides, never commit)
+.env
 .env.local
 
 # global-config.env is now committed to Git (needed by ArgoCD/Kustomize)
