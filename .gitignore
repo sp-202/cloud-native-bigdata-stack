@@ -43,3 +43,10 @@ helm
 linux-amd64/
 logs-from-spark*
 generated-manifests.yaml
+
+# Claude Code — ignore personal/ephemeral, keep shared config
+.claude/
+!.claude/settings.json
+
+# graphify generated output (regenerate with 'graphify update .')
+big-data-platform/graphify-out/
