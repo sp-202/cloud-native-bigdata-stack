@@ -32,8 +32,8 @@ spec:
               --conf spark.driver.bindAddress=0.0.0.0 \
               --conf spark.dynamicAllocation.enabled=true \
               --conf spark.dynamicAllocation.minExecutors=1 \
-              --conf spark.dynamicAllocation.maxExecutors=5 \
-              --conf spark.dynamicAllocation.maxExecutors=5 \
+              --conf spark.dynamicAllocation.maxExecutors=2 \
+              --conf spark.dynamicAllocation.maxExecutors=2 \
               --conf spark.kubernetes.container.image=$(SPARK_IMAGE) \
               --conf spark.kubernetes.driver.pod.name=$POD_NAME \
               --conf spark.kubernetes.driver.pod.name=$POD_NAME \
@@ -68,6 +68,13 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "1"
+              memory: "2200Mi"  # This is your ~2.2GB
           volumeMounts:
             # --- UPDATED SECTION ---
             - name: spark-config-volume
