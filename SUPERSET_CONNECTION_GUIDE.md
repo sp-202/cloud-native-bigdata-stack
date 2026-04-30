@@ -72,6 +72,23 @@ StarRocks provides high-performance real-time analytics. It is MySQL-compatible.
 
 4.  Test and Connect.
 
+### Setting Up the `iceberg_gravitino` Catalog in StarRocks
+
+If the catalog is missing (e.g. after a StarRocks FE restart), recreate it with:
+
+```sql
+CREATE EXTERNAL CATALOG delta_test
+PROPERTIES (
+    "type" = "deltalake",
+    "hive.metastore.uris" = "thrift://hive-metastore:9083",
+    "aws.s3.use_instance_profile" = "false",
+    "aws.s3.access_key" = "minioadmin",
+    "aws.s3.secret_key" = "minioadmin",
+    "aws.s3.endpoint" = "http://minio:9000",
+    "aws.s3.enable_path_style_access" = "true"
+);
+```
+
 ### Accessing External Catalog Tables (Iceberg/Unity Catalog)
 
 StarRocks connects to external data lakes via **External Catalogs**. These tables (e.g., Iceberg tables created by Spark) are NOT visible in the default database browser.
