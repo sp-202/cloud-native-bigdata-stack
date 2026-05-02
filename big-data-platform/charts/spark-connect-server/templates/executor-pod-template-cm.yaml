@@ -37,5 +37,13 @@ data:
           operator: "Exists"
           effect: "NoExecute"
           tolerationSeconds: 30
+      volumes:
+        - name: spark-shuffle
+          hostPath:
+            path: {{ .Values.executor.hostPath }}
+            type: DirectoryOrCreate
       containers:
         - name: spark-kubernetes-executor
+          volumeMounts:
+            - name: spark-shuffle
+              mountPath: {{ .Values.executor.localDir }}

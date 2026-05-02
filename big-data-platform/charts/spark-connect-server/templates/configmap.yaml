@@ -120,6 +120,12 @@ data:
     spark.ui.port                            4040
     spark.driver.bindAddress                 0.0.0.0
 
+    # --- Local NVMe Shuffle Storage ---
+    # Executors land on spark-node/spark-worker which have NVMe at /mnt/spark-nvme.
+    # Terraform pre-creates /mnt/spark-nvme/spark-shuffle on those nodes.
+    # hostPath volume in executor-pod-template mounts it into the container.
+    spark.local.dir                          {{ .Values.executor.localDir }}
+
     # --- Performance Tuning ---
     spark.sql.shuffle.partitions             200
     spark.sql.adaptive.enabled               true
