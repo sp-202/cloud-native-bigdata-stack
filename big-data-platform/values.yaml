@@ -136,7 +136,7 @@ persistence:
 postgres:
   enabled: true
   replicas: 1
-  image: "postgres:13"
+  image: "postgres:16"
   resources:
     requests:
       cpu: "500m"

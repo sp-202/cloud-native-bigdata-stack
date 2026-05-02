@@ -38,7 +38,7 @@ spec:
       initContainers:
         # Step 1: Wait for PostgreSQL to be ready
         - name: wait-for-postgres
-          image: "postgres:13"
+          image: "postgres:16"
           command:
             - sh
             - -c
@@ -113,7 +113,7 @@ spec:
 
         # Step 4: Create Gravitino and Iceberg catalog databases, then apply Gravitino schema
         - name: init-databases
-          image: "postgres:13"
+          image: "postgres:16"
           command:
             - sh
             - -c
