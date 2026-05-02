@@ -26,7 +26,7 @@ global:
   sparkImage: "subhodeep2022/spark-bigdata:spark-3.5.8-v12-iceberg-gravitino"
   jupyterhubImage: "subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v3"
   hiveImage: "subhodeep2022/spark-bigdata:hive-3.1.3-arm64-v1"
-  airflowImage: "apache/airflow:2.7.1"
+  airflowImage: "apache/airflow:3.2.0"
   gitSyncImage: "subhodeep2022/k8s-git-sync:v2-prod"
 
   # --- S3/MinIO Credentials & Endpoints ---
@@ -219,7 +219,7 @@ airflow:
   images:
     airflow:
       repository: apache/airflow
-      tag: 2.7.1
+      tag: "3.2.0"
   dags:
     gitSync:
       enabled: true
@@ -229,6 +229,14 @@ airflow:
       depth: 1
       maxFailures: 0
       subPath: ""
+  # Airflow 3.x: DAG processor is a separate component that parses DAGs.
+  # LocalDagBundle reads from the same folder git-sync mounts to ($AIRFLOW_HOME/dags).
+  dagProcessor:
+    enabled: true
+    dagBundleConfigList:
+      - name: airflow-dags
+        classpath: "airflow.dag_processing.bundles.local.LocalDagBundle"
+        kwargs: {}
   webserver:
     defaultUser:
       enabled: true
