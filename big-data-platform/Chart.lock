@@ -10,7 +10,7 @@ dependencies:
   version: 1.9.8
 - name: airflow
   repository: https://airflow.apache.org
-  version: 1.15.0
+  version: 1.21.0
 - name: metrics-server
   repository: https://kubernetes-sigs.github.io/metrics-server/
   version: 3.12.1
@@ -65,5 +65,5 @@ dependencies:
 - name: ingress
   repository: file://./charts/ingress
   version: 1.0.0
-digest: sha256:72437947565224dc8b8b07ff47db58776c90402c18480d8111db55acf994427d
-generated: "2026-04-05T02:18:09.624919357+05:30"
+digest: sha256:fdcb46cc9c046fd625de16db712d5cb422ecbb6358ec6a9398b491b491a0dd99
+generated: "2026-05-03T00:58:45.018689594+05:30"
