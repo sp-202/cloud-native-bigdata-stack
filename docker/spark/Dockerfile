@@ -52,18 +52,14 @@ ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
 RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     tini \
-    software-properties-common \
     curl \
-    && add-apt-repository ppa:deadsnakes/ppa -y \
-    && apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 \
-    python3.11-dev \
-    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 \
-    && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
-    && ln -sf /usr/bin/python3.11 /usr/bin/python \
+    python3 \
+    python3-pip \
+    python3-dev \
+    && ln -sf /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python3.11 -m pip install --no-cache-dir pandas pyarrow numpy
+RUN python3 -m pip install --no-cache-dir pandas pyarrow numpy
 
 COPY --from=builder /opt/spark /opt/spark
 
