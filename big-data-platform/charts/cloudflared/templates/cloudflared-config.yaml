@@ -52,6 +52,11 @@ data:
           noTLSVerify: true
       - hostname: argocd.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
+      # Spark Connect — gRPC (HTTP/2 cleartext). Bypasses Traefik directly to
+      # the service. Cloudflare terminates TLS at the edge; h2c carries gRPC
+      # in-cluster. Enable gRPC toggle in Cloudflare dashboard (Network tab).
+      - hostname: spark-connect.dailyblogstudio.com
+        service: h2c://spark-connect-server-driver-svc.default.svc.cluster.local:15002
       # Catch-all rule (required by cloudflared)
       - service: http_status:404
 {{- end }}
