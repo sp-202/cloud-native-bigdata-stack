@@ -203,6 +203,7 @@ airflowSecrets:
 airflow:
   enabled: true
   fullnameOverride: "airflow"
+  useStandardNaming: true
   executor: "LocalExecutor"
   # Reference pre-created secrets from templates/airflow-secrets.yaml
   fernetKeySecretName: "big-data-platform-fernet-key"
