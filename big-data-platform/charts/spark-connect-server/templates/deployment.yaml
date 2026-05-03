@@ -135,6 +135,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: spark-ui
+  labels:
+    app: spark-ui
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
