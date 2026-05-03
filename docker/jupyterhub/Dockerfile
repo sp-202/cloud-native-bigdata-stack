@@ -32,12 +32,6 @@ RUN PYSPARK_DIST_PATH=$(python -c "import pyspark; print(pyspark.__path__[0])") 
     --kernel_name="Scala" \
     --interpreters=Scala
 
-# Create IPython profile and startup directory
-RUN mkdir -p /home/jovyan/.ipython/profile_default/startup/
-
-# Bake in the SparkSession auto-injection script
-COPY 00-spark-init.py /home/jovyan/.ipython/profile_default/startup/00-spark-init.py
-
 # Fix permissions
 USER root
 RUN chown -R ${NB_UID}:${NB_GID} /home/jovyan/.ipython/ && \
