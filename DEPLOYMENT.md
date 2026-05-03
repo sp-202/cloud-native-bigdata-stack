@@ -99,7 +99,7 @@ Then commit and push to trigger ArgoCD sync.
 
 ```bash
 # Superset
-kubectl exec deploy/big-data-platform-superset -c superset -- \
+kubectl exec deploy/superset -c superset -- \
   superset fab list-users
 
 # Airflow
