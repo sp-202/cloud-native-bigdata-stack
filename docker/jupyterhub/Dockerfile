@@ -16,7 +16,7 @@ USER ${NB_UID}
 
 # Install PySpark pinned to exactly match Spark Connect server version (3.5.8).
 # For Spark Connect (remote execution), only the pyspark Python client version matters.
-RUN pip install --no-cache-dir pyspark==3.5.8
+RUN pip install --no-cache-dir pyspark[connect]==3.5.8 pandas pyarrow grpcio grpcio-status
 
 # Install Python packages for S3 persistence and Scala kernel support
 # Note: sparkmagic is for Livy connections, NOT needed for Spark Connect

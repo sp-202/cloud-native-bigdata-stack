@@ -624,10 +624,10 @@ superset:
   init:
     enabled: true
     createAdmin: true
-    initContainers:
-      - name: wait-for-db
-        image: busybox
-        command: ['sh', '-c', 'until nc -z postgres.default.svc.cluster.local 5432; do echo "waiting for db"; sleep 2; done']
+    jobAnnotations:
+      argocd.argoproj.io/hook: Sync
+      argocd.argoproj.io/sync-wave: "-1"
+      argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
     adminUser:
       username: admin
       firstname: Superset
