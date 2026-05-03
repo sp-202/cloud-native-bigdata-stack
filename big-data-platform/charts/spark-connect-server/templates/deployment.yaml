@@ -67,8 +67,6 @@ spec:
               --conf spark.sql.gravitino.enableIcebergSupport=true \
               --conf spark.sql.warehouse.dir=s3a://warehouse/iceberg/ \
               --conf spark.kubernetes.executor.podTemplateFile=local:///opt/spark/conf/executor-pod-template.yaml \
-              --conf spark.kubernetes.executor.volumes.hostPath.spark-local-dir.mount.path={{ .Values.executor.localDir }} \
-              --conf spark.kubernetes.executor.volumes.hostPath.spark-local-dir.options.path={{ .Values.executor.hostPath }} \
               --conf spark.local.dir={{ .Values.executor.localDir }}/spark-local \
               local:///opt/spark/jars/spark-connect_2.13-3.5.8.jar
           ports:

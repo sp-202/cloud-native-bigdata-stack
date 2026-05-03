@@ -32,7 +32,7 @@ spec:
           service:
             name: {{ .Release.Name }}-api-server
             port:
-              name: airflow-ui
+              name: api-server
   # MinIO Console
   - host: minio.{{ .Values.global.domain }}
     http:
