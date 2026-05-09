@@ -52,16 +52,15 @@ data:
           noTLSVerify: true
       - hostname: argocd.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      # Spark Connect — gRPC via HTTP/2. Cloudflare terminates TLS at the edge
-      # and forwards through the tunnel. http2Origin forces HTTP/2 on the
-      # origin connection (equivalent to h2c but uses cloudflared's HTTP/2
-      # transport layer which properly forwards HTTP/2 trailers that gRPC
-      # requires for status codes — h2c bypasses this and drops trailers).
-      # Requires gRPC toggle ON in Cloudflare dashboard (Network tab).
+      # Spark Connect — gRPC (HTTP/2 prior-knowledge cleartext).
+      # h2c:// is the only valid scheme for gRPC servers: they speak HTTP/2
+      # immediately without any HTTP/1.1 upgrade handshake. Cloudflare
+      # terminates TLS at the edge; gRPC toggle must be ON in the Cloudflare
+      # dashboard (Network tab). Note: Cloudflare gRPC toggle + Tunnel has a
+      # known "Stream removed" issue — use kubectl port-forward for local dev
+      # until Cloudflare resolves tunnel+gRPC compatibility.
       - hostname: spark-connect.dailyblogstudio.com
-        service: http://spark-connect-server-driver-svc.default.svc.cluster.local:15002
-        originRequest:
-          http2Origin: true
+        service: h2c://spark-connect-server-driver-svc.default.svc.cluster.local:15002
       # Catch-all rule (required by cloudflared)
       - service: http_status:404
 {{- end }}
