@@ -266,7 +266,9 @@ airflow:
         memory: "2Gi"
   logs:
     persistence:
-      enabled: false
+      enabled: true
+      storageClassName: openebs-hostpath
+      size: 10Gi
 
   config:
     core:
