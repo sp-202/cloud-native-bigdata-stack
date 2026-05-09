@@ -30,4 +30,7 @@ spec:
             - port: "80"
               protocol: TCP
             - port: "443"
-              protocol: TCP{{- end }}
+              protocol: TCP
+            - port: "15002"
+              protocol: TCP
+{{- end }}

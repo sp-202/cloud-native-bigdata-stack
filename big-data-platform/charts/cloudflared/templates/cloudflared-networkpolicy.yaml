@@ -46,4 +46,12 @@ spec:
           port: 80
         - protocol: TCP
           port: 443
+    # Allow gRPC to Spark Connect in default namespace
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 15002
 {{- end }}
