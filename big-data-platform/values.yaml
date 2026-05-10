@@ -71,6 +71,7 @@ global:
   # --- Apache Gravitino — Iceberg REST Catalog & unified metadata lake ---
   gravitino:
     metalake: "enterprise_metalake"
+    catalog: "sales_catalog"
     # Iceberg REST Catalog endpoint consumed by StarRocks (direct IRC access).
     icebergRestUri: "http://gravitino.default.svc.cluster.local:9001/iceberg/"
     # Main API endpoint — used by GravitinoSparkPlugin for catalog discovery

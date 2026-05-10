@@ -60,11 +60,13 @@ spec:
               --conf spark.hadoop.fs.s3a.secret.key={{ .Values.global.s3.secretKey }} \
               --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
               --conf spark.kryo.registrator=org.apache.sedona.core.serde.SedonaKryoRegistrator \
-              --conf spark.sql.extensions=org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+              --conf spark.sql.extensions=org.apache.gravitino.spark.connector.iceberg.extensions.GravitinoIcebergSparkSessionExtensions,org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions \
               --conf spark.plugins=org.apache.gravitino.spark.connector.plugin.GravitinoSparkPlugin \
               --conf "spark.sql.gravitino.metalake={{ .Values.global.gravitino.metalake }}" \
               --conf "spark.sql.gravitino.uri={{ .Values.global.gravitino.apiUri }}" \
               --conf spark.sql.gravitino.enableIcebergSupport=true \
+              --conf "spark.sql.catalog.{{ .Values.global.gravitino.catalog }}=org.apache.gravitino.spark.connector.iceberg.GravitinoIcebergCatalogSpark35" \
+              --conf "spark.sql.defaultCatalog={{ .Values.global.gravitino.catalog }}" \
               --conf spark.sql.warehouse.dir=s3a://warehouse/iceberg/ \
               --conf spark.kubernetes.executor.podTemplateFile=local:///opt/spark/conf/executor-pod-template.yaml \
               --conf spark.local.dir={{ .Values.executor.localDir }}/spark-local \
