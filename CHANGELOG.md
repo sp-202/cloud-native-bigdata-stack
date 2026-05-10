@@ -2,6 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.2] - 2026-05-10 📊 **Observability & Spark Connect Hardening**
+
+### 🚀 Grafana Dashboard Overhaul: Apache Spark Metrics Now Fully Functional
+
+After importing the Apache Spark - Performance Metrics dashboard (gnetId 7890), 80% of panels displayed "No data". Root cause: the dashboard was designed for older kube-prometheus-stack versions. **All panels now fixed and displaying live metrics.**
+
+#### ✨ What's New
+- **Apache Spark Dashboard (50+ panels)**: Fully fixed and operational, covering driver/executor memory, GC counts, disk I/O, heap memory, thread pools, and task execution
+- **Template Variables**: Pod, Executor, and Node dropdowns now auto-populate from cluster using proper Prometheus queries
+- **Spark Metrics Exposure**: Verified metrics are scraped from Spark driver PrometheusServlet (port 4040) via ServiceMonitor
+
+#### 🔧 Technical Improvements
+
+**Grafana Dashboard Migrations:**
+- **Label name updates** (kube-prometheus-stack evolution): `pod_name` → `pod`, `kubernetes_io_hostname` → `node`, `container_name` → `container`
+- **Spark metrics mapping**: Replaced JVM GC metrics (`jvm_gc_collection_seconds_count`) with Spark-native metrics (`metrics_spark_driver_ExecutorMetrics_Minor/MajorGCCount_Value`)
+- **Node-exporter metrics**: Updated to modern equivalents (`machine_memory_bytes` → `node_memory_MemTotal_bytes`, `machine_cpu_cores` → `count(node_cpu_seconds_total...)`)
+- **Storage device patterns**: EKS NVMe devices (`/dev/nvme.*` vs legacy `/dev/sd[a|c|e]`)
+- **Query optimization**: Fixed by-clauses in disk I/O, memory, and GC queries for proper label grouping
+
+**Spark Connect Enhancements:**
+- Spark Connect gRPC server now exposed via NodePort (30002) with fck-nat forwarding for external access
+- Protocol fix: Restored `h2c://` tunneling (reverted `http2Origin` which broke gRPC trailers)
+- Prometheus scraping: Added ServiceMonitor for Spark driver metrics collection
+- Cloudflared egress rule: Port 15002 now allowed for Spark Connect external connectivity
+
+**Gravitino Integration Stability:**
+- Multi-catalog support: Spark Connect now handles multiple Gravitino catalogs via `extraCatalogs` list
+- Sales catalog exposure: All Spark sessions now have access to `sales_catalog` from Gravitino
+- Catalog discovery: Verified Spark plugin integration for automatic catalog bootstrap
+
+### 🎯 Verification Steps
+1. Open Grafana dashboard (Apache Spark - Performance Metrics)
+2. Select Pod from dropdown (should show spark-connect-server pods)
+3. All memory, GC, disk, and task panels should display live data
+4. For executors, filter by executor pod pattern to see executor-specific metrics
+
+### 📋 Known Limitations
+- Dashboard assumes Spark driver runs on the cluster (connect-server deployment); external Spark clients must have Prometheus ServiceMonitor configured
+- GC metrics only available if Spark metrics are being scraped (verify port 4040 on driver pod is accessible)
+
+---
+
 ## [v1.0.1] - 2026-04-08 ✨ **Complete Gravitino Migration**
 
 ### 🚀 Major Milestone: Full Migration from Hive Metastore to Apache Gravitino

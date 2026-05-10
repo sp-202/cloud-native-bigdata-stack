@@ -2,6 +2,63 @@
 
 ---
 
+## 19. Apache Spark Dashboard Metrics Not Displaying in Grafana (RESOLVED)
+
+**Issue:**
+Imported Grafana dashboard (gnetId 7890 - Apache Spark - Performance Metrics) showed "No data" for 80% of panels after deployment. Dashboard was designed for older kube-prometheus-stack versions. Affected panels included:
+- Memory usage (Driver/Executor)
+- GC metrics (Driver/Executor)
+- Disk I/O (Read/Write bytes)
+- Heap/Non-Heap memory
+- JVM threads
+- Node-level metrics (Total Memory, Total CPU Cores)
+
+Additionally, template variables (Pod, Executor, Node) were not populating dropdowns.
+
+**Root Cause (multi-part):**
+1. **Label name evolution**: Dashboard used deprecated cAdvisor label names (`pod_name`, `kubernetes_io_hostname`, `container_name`) replaced in modern kube-prometheus-stack with (`pod`, `node`, `container`).
+2. **Spark metrics exposure**: Dashboard expected JVM metrics (`jvm_gc_collection_seconds_count` with PS Scavenge/MarkSweep) but Spark 3.5.8 exposes via PrometheusServlet on port 4040 using Spark-native metrics (`metrics_spark_driver_ExecutorMetrics_Minor/MajorGCCount_Value`).
+3. **Node-exporter metrics**: Machine-level metrics (`machine_memory_bytes`, `machine_cpu_cores`) don't exist in modern node-exporter; replaced with (`node_memory_MemTotal_bytes`, `count(node_cpu_seconds_total...)`).
+4. **Storage device naming**: Dashboard hardcoded legacy SCSI device pattern (`/dev/sd[a|c|e]`) but AWS EKS nodes use NVMe (`/dev/nvme.*`).
+5. **Template variable configuration**: Pod/Executor/Node variables were Text-type instead of Query-type, returning no results from Prometheus.
+
+**Resolution:**
+Implemented multi-step fix:
+
+1. **Automated JSON fixes** (Python script):
+   - Regex replacements for all label name changes (pod_name → pod, kubernetes_io_hostname → node, container_name → container)
+   - Spark metric mapping: `jvm_gc_collection_seconds_count{...gc="PS Scavenge"} → rate(metrics_spark_driver_ExecutorMetrics_MinorGCCount_Value[2m])`
+   - Node metrics: `machine_memory_bytes → node_memory_MemTotal_bytes`, `machine_cpu_cores → count(count by (cpu)(node_cpu_seconds_total{...}))`
+   - Device pattern: `/dev/sd[a|c|e] → /dev/nvme.*`
+   - Fixed by() clause label references in disk I/O queries
+
+2. **Manual panel edits** (Grafana UI):
+   - Driver Memory Usage: `sum(container_memory_working_set_bytes{pod=~"^$Pod$"}) / sum(node_memory_MemTotal_bytes{node=~"^$Node$"}) * 100`
+   - Executor Memory Usage: `sum(container_memory_working_set_bytes{pod=~"^$executor$"}) / sum(node_memory_MemTotal_bytes{node=~"^$Node$"}) * 100`
+   - Disk Read/Write Bytes: Updated device patterns to `/dev/nvme.*` and corrected label references
+   - Heap Memory: `metrics_spark_driver_ExecutorMetrics_JVMHeapMemory_Value` (bytes unit)
+   - Non-Heap Memory: `metrics_spark_driver_ExecutorMetrics_JVMOffHeapMemory_Value` (bytes unit)
+   - GC panels (Driver/Executor): Both queries now use Spark metrics, Y-axis unit changed from "s" (seconds) → "short" (counts)
+   - JVM Threads: Repurposed to show `metrics_spark_driver_ExecutorAllocationManager_executors_numberAllExecutors_Value`
+   - Task panels: Updated to use DAGScheduler metrics
+
+3. **Template variable fixes** (Grafana Dashboard Settings):
+   - Pod variable: Query type, data source Prometheus, `label_values(kube_pod_info{namespace="default",pod=~"spark-connect-server.*"}, pod)`, refresh on time range change
+   - executor variable: Query type, `label_values(kube_pod_info{namespace="default",pod=~".*exec.*"}, pod)`, multi-value enabled
+   - Node variable: Query type, `label_values(kube_node_info, node)`
+
+**Verification:**
+All dashboard panels now display live metrics:
+- Memory panels show real driver/executor memory usage percentages
+- GC count panels show actual Minor/Major GC event rates
+- Disk I/O panels track nvme device activity
+- Template dropdowns populate with pod and node names from cluster
+- No "No data" warnings remaining
+
+**Status:** RESOLVED — All 50+ dashboard panels functional. Dashboard JSON exported and archived for future reference.
+
+---
+
 ## 18. Gravitino Web UI: S3FileIO NoClassDefFoundError (PENDING FIX)
 
 **Issue:**
