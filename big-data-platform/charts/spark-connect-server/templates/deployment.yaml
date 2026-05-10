@@ -119,17 +119,18 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
+  type: NodePort
   ports:
     - name: spark-connect
       port: 15002
       targetPort: 15002
+      nodePort: 30002
     - name: spark-ui
       port: 4040
       targetPort: 4040
   selector:
     app: spark-connect-server
     spark-role: driver
-  type: ClusterIP
 ---
 apiVersion: v1
 kind: Service

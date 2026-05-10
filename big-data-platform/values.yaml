@@ -442,6 +442,12 @@ starrocks:
       # false as falsy and emits empty string → null, failing CRD boolean validation.
       # StarRocks 3.3 ubuntu images support non-root (UID 1000).
       runAsNonRoot: true
+      service:
+        type: NodePort
+        ports:
+          - name: query
+            containerPort: 9030
+            nodePort: 30930
       resources:
         requests:
           cpu: "500m"
