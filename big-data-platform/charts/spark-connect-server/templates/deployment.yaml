@@ -66,6 +66,9 @@ spec:
               --conf "spark.sql.gravitino.uri={{ .Values.global.gravitino.apiUri }}" \
               --conf spark.sql.gravitino.enableIcebergSupport=true \
               --conf "spark.sql.catalog.{{ .Values.global.gravitino.catalog }}=org.apache.gravitino.spark.connector.iceberg.GravitinoIcebergCatalogSpark35" \
+              {{- range .Values.global.gravitino.extraCatalogs }}
+              --conf "spark.sql.catalog.{{ . }}=org.apache.gravitino.spark.connector.iceberg.GravitinoIcebergCatalogSpark35" \
+              {{- end }}
               --conf "spark.sql.defaultCatalog={{ .Values.global.gravitino.catalog }}" \
               --conf spark.sql.warehouse.dir=s3a://warehouse/iceberg/ \
               --conf spark.kubernetes.executor.podTemplateFile=local:///opt/spark/conf/executor-pod-template.yaml \
