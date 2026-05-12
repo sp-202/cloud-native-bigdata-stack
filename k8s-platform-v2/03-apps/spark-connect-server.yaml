@@ -103,3 +103,19 @@ spec:
     app: spark-connect-server
     spark-role: driver
   type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-connect-server-nodeport
+  namespace: default
+spec:
+  type: NodePort
+  ports:
+    - name: spark-connect-grpc
+      port: 15002
+      targetPort: 15002
+      nodePort: 30002
+  selector:
+    app: spark-connect-server
+    spark-role: driver

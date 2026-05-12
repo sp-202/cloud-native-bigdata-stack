@@ -47119,6 +47119,78 @@ metadata:
 ---
 apiVersion: v1
 data:
+  core-site.xml: |
+    <configuration>
+      <!-- s3a:// scheme -->
+      <property>
+        <name>fs.s3a.impl</name>
+        <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+      </property>
+      <property>
+        <name>fs.s3a.endpoint</name>
+        <value>http://minio.default.svc.cluster.local:9000</value>
+      </property>
+      <property>
+        <name>fs.s3a.access.key</name>
+        <value>minioadmin</value>
+      </property>
+      <property>
+        <name>fs.s3a.secret.key</name>
+        <value>minioadmin</value>
+      </property>
+      <property>
+        <name>fs.s3a.path.style.access</name>
+        <value>true</value>
+      </property>
+      <property>
+        <name>fs.s3a.connection.ssl.enabled</name>
+        <value>false</value>
+      </property>
+      <property>
+        <name>fs.s3a.attempts.maximum</name>
+        <value>3</value>
+      </property>
+      <property>
+        <name>fs.s3a.aws.credentials.provider</name>
+        <value>org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider</value>
+      </property>
+      <!-- s3:// scheme — route through S3AFileSystem with same settings -->
+      <property>
+        <name>fs.s3.impl</name>
+        <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+      </property>
+      <property>
+        <name>fs.s3.endpoint</name>
+        <value>http://minio.default.svc.cluster.local:9000</value>
+      </property>
+      <property>
+        <name>fs.s3.access.key</name>
+        <value>minioadmin</value>
+      </property>
+      <property>
+        <name>fs.s3.secret.key</name>
+        <value>minioadmin</value>
+      </property>
+      <property>
+        <name>fs.s3.path.style.access</name>
+        <value>true</value>
+      </property>
+      <property>
+        <name>fs.s3.connection.ssl.enabled</name>
+        <value>false</value>
+      </property>
+      <property>
+        <name>fs.s3.aws.credentials.provider</name>
+        <value>org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider</value>
+      </property>
+    </configuration>
+kind: ConfigMap
+metadata:
+  name: starrocks-fe-core-site
+  namespace: default
+---
+apiVersion: v1
+data:
   master.conf: |-
     dir /data
     # User-supplied master configuration:
@@ -49060,6 +49132,22 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: spark-connect-server-nodeport
+  namespace: default
+spec:
+  ports:
+  - name: spark-connect-grpc
+    nodePort: 30002
+    port: 15002
+    targetPort: 15002
+  selector:
+    app: spark-connect-server
+    spark-role: driver
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: spark-history-server
   namespace: default
 spec:
@@ -49138,6 +49226,25 @@ spec:
   selector:
     app: starrocks-fe
   type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: starrocks-fe-nodeport
+  namespace: default
+spec:
+  ports:
+  - name: mysql-query
+    nodePort: 30930
+    port: 9030
+    targetPort: 9030
+  - name: http-ui
+    nodePort: 30830
+    port: 8030
+    targetPort: 8030
+  selector:
+    app: starrocks-fe
+  type: NodePort
 ---
 apiVersion: v1
 kind: Service
@@ -50803,6 +50910,7 @@ spec:
   selector:
     matchLabels:
       app: starrocks-be
+  serviceName: starrocks-be
   template:
     metadata:
       labels:
@@ -50872,6 +50980,7 @@ spec:
   selector:
     matchLabels:
       app: starrocks-fe
+  serviceName: starrocks-fe
   template:
     metadata:
       labels:
@@ -50945,6 +51054,13 @@ spec:
         volumeMounts:
         - mountPath: /data/meta
           name: fe-meta
+        - mountPath: /opt/starrocks/fe/conf/core-site.xml
+          name: core-site
+          subPath: core-site.xml
+      volumes:
+      - configMap:
+          name: starrocks-fe-core-site
+        name: core-site
   volumeClaimTemplates:
   - metadata:
       name: fe-meta
