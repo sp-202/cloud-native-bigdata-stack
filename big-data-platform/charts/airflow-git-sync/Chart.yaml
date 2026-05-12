@@ -1,0 +1,5 @@
+apiVersion: v2
+name: airflow-git-sync
+description: Custom git-sync Deployment for Airflow DAGs — syncs GitHub repo to shared PVC and mirrors to MinIO
+type: application
+version: 1.0.0

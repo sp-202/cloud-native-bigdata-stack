@@ -119,3 +119,8 @@ dependencies:
     version: "1.0.0"
     repository: "file://./charts/ingress"
     condition: ingress.enabled
+
+  - name: airflow-git-sync
+    version: "1.0.0"
+    repository: "file://./charts/airflow-git-sync"
+    condition: airflow-git-sync.enabled

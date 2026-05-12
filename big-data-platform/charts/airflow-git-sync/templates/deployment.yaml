@@ -1,0 +1,73 @@
+# ------------------------------------------------------------------------------
+# airflow-git-sync - Deployment
+# ------------------------------------------------------------------------------
+# Runs the custom git-sync image (subhodeep2022/k8s-git-sync:v2-prod) which
+# bundles git-sync + mc. On every sync it:
+#   1. Writes the git repo to /dags on the shared airflow-dags-shared-pvc
+#   2. Runs sync-hook.sh (exechook) which does:
+#      mc mirror --overwrite /dags/repo myminio/dags
+#
+# Airflow pods mount the same PVC and read DAGs from /dags/repo (the symlink).
+# MinIO gets a flat stable-path copy for external consumption.
+#
+# Managed via ArgoCD Sync Wave: 3 (after PVC at wave -3, before Airflow at wave 5)
+# ------------------------------------------------------------------------------
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-git-sync
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: airflow-git-sync
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: airflow-git-sync
+  template:
+    metadata:
+      labels:
+        app: airflow-git-sync
+    spec:
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+      securityContext:
+        fsGroup: 50000
+        fsGroupChangePolicy: "OnRootMismatch"
+      containers:
+        - name: git-sync
+          image: {{ .Values.image }}
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+          env:
+            - name: MINIO_ACCESS_KEY
+              value: {{ .Values.global.s3.accessKey | quote }}
+            - name: MINIO_SECRET_KEY
+              value: {{ .Values.global.s3.secretKey | quote }}
+          args:
+            - "--repo={{ .Values.repo }}"
+            - "--ref={{ .Values.branch }}"
+            - "--root=/dags"
+            - "--link=repo"
+            - "--period={{ .Values.period }}"
+            - "--exechook-command=/usr/local/bin/sync-hook.sh"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: dags-shared
+              mountPath: /dags
+      volumes:
+        - name: dags-shared
+          persistentVolumeClaim:
+            claimName: airflow-dags-shared-pvc

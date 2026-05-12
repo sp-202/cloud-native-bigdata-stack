@@ -50,8 +50,7 @@ global:
       node-role.kubernetes.io/spark-worker: ""
     minio:
       node-role.kubernetes.io/minio-worker: ""
-    controlPlane:
-      node-role.kubernetes.io/control-plane: ""
+
 
   # --- Storage ---
   storageClassName: "openebs-hostpath"
@@ -225,14 +224,15 @@ airflow:
       repository: apache/airflow
       tag: "3.2.0"
   dags:
+    # Built-in gitSync disabled — replaced by airflow-git-sync sub-chart which
+    # uses the custom image (git-sync + mc) and writes to the shared PVC.
+    # Airflow reads DAGs from the PVC via persistence below.
     gitSync:
+      enabled: false
+    persistence:
       enabled: true
-      repo: "https://github.com/sp-202/airflow-dags.git"
-      branch: "main"
-      rev: "HEAD"
-      depth: 1
-      maxFailures: 0
-      subPath: ""
+      existingClaim: airflow-dags-shared-pvc
+      subPath: "repo/dags"
   # Airflow 3.x: DAG processor is a separate component that parses DAGs.
   # LocalDagBundle reads from the same folder git-sync mounts to ($AIRFLOW_HOME/dags).
   dagProcessor:
@@ -280,6 +280,26 @@ airflow:
       max_active_tasks_per_dag: "20"
     database:
       sql_alchemy_pool_size: "15"
+
+# =============================================================================
+# AIRFLOW GIT-SYNC (custom sub-chart)
+# Uses subhodeep2022/k8s-git-sync:v2-prod (git-sync + mc bundled).
+# Writes repo to airflow-dags-shared-pvc at /dags/repo (symlink).
+# exechook runs sync-hook.sh → mc mirror /dags/repo myminio/dags (stable paths).
+# =============================================================================
+airflow-git-sync:
+  enabled: true
+  image: "subhodeep2022/k8s-git-sync:v2-prod"
+  repo: "https://github.com/sp-202/airflow-dags.git"
+  branch: "main"
+  period: "60s"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
 
 # =============================================================================
 # HIVE METASTORE (+ HiveServer2) — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
