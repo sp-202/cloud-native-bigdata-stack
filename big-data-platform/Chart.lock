@@ -65,5 +65,8 @@ dependencies:
 - name: ingress
   repository: file://./charts/ingress
   version: 1.0.0
-digest: sha256:fdcb46cc9c046fd625de16db712d5cb422ecbb6358ec6a9398b491b491a0dd99
-generated: "2026-05-03T00:58:45.018689594+05:30"
+- name: airflow-git-sync
+  repository: file://./charts/airflow-git-sync
+  version: 1.0.0
+digest: sha256:c894ce9e925a926f49ee66274dd9e0b795332a4c1ae5bf13e09321970a46c0d0
+generated: "2026-05-17T23:28:19.528233103+05:30"
