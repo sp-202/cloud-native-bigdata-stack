@@ -28,7 +28,7 @@ spec:
     - "--benchmark"
     - "tpch"
     - "--data"
-    - "s3a://tpch-data/tpch_sf100"
+    - "s3a://tpch-data/tpch_sf1000/tpch_sf1000"
     - "--queries"
     - "s3a://tpch-data/tpch-queries"
     - "--output"

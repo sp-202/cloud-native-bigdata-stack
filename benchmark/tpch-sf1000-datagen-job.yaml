@@ -50,9 +50,18 @@ spec:
               echo "== Building tpchgen-cli (native CPU optimizations) =="
               RUSTFLAGS='-C target-cpu=native' cargo install tpchgen-cli
 
-              echo "== Generating TPC-H SF1000 (parquet, 320 parts) =="
+              echo "== Generating TPC-H SF1000 (parquet, 384 parts) =="
               mkdir -p /data/tpch_sf1000
               tpchgen-cli -s 1000 --format parquet --parts 384 --output-dir /data/tpch_sf1000
+
+              echo "== Renaming table dirs to {table}.parquet (tpcbench.py expects this) =="
+              cd /data/tpch_sf1000
+              for t in customer lineitem nation orders part partsupp region supplier; do
+                if [ -d "$t" ]; then
+                  mv "$t" "$t.parquet"
+                fi
+              done
+              cd -
 
               echo "== Installing MinIO client =="
               curl -sSL https://dl.min.io/client/mc/release/linux-arm64/mc -o /usr/local/bin/mc

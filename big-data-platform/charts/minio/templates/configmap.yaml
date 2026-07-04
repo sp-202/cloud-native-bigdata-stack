@@ -34,5 +34,10 @@ data:
 
     echo "Creating spark-events directory..."
     /usr/bin/mc pipe myminio/spark-logs/spark-events/.keep < /dev/null || true
+
+    echo "Creating tpch-data subfolders..."
+    /usr/bin/mc pipe myminio/tpch-data/tpch-queries/.keep < /dev/null || true
+    /usr/bin/mc pipe myminio/tpch-data/tpch-results/.keep < /dev/null || true
+
     echo "Buckets created."
     exit 0
