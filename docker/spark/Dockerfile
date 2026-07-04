@@ -1,9 +1,8 @@
 # Builder Stage
-# Using eclipse-temurin:17-jdk-jammy as ARM64-compatible base (multi-arch manifest)
-FROM eclipse-temurin:17-jdk-jammy AS builder
+# Using eclipse-temurin:17-jdk-noble (Ubuntu 24.04, Python 3.12 by default) — arm64 only
+FROM eclipse-temurin:17-jdk-noble AS builder
 
 ENV SPARK_VERSION=3.5.8 \
-    HADOOP_VERSION=3 \
     SCALA_VERSION=2.13 \
     ICEBERG_VERSION=1.10.1 \
     HADOOP_AWS_VERSION=3.3.4 \
@@ -18,10 +17,14 @@ ENV SPARK_VERSION=3.5.8 \
 
 RUN apt-get update && apt-get install -y wget curl
 
-RUN wget https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala2.13.tgz && \
-    tar -xzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala2.13.tgz && \
-    mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala2.13 ${SPARK_HOME} && \
-    rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala2.13.tgz
+# Custom Comet-accelerated arm64 build pulled from S3 by the workflow
+# (docker/spark/spark-3.5.8-comet-v1.tar.gz).
+COPY spark-3.5.8-comet-v1.tar.gz /tmp/spark-comet.tar.gz
+
+RUN mkdir -p /tmp/spark-extract && \
+    tar -xzf /tmp/spark-comet.tar.gz -C /tmp/spark-extract && \
+    mv /tmp/spark-extract/*/ ${SPARK_HOME} && \
+    rm -rf /tmp/spark-extract /tmp/spark-comet.tar.gz
 
 RUN rm -rf $SPARK_HOME/examples $SPARK_HOME/data $SPARK_HOME/tests $SPARK_HOME/licenses
 
@@ -44,7 +47,7 @@ RUN wget https://jdbc.postgresql.org/download/postgresql-${POSTGRES_VERSION}.jar
     wget https://repo1.maven.org/maven2/org/apache/spark/spark-connect_2.13/${SPARK_VERSION}/spark-connect_2.13-${SPARK_VERSION}.jar
 
 # Final Stage
-FROM eclipse-temurin:17-jdk-jammy
+FROM eclipse-temurin:17-jdk-noble
 
 ENV SPARK_HOME=/opt/spark
 ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
@@ -59,7 +62,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && ln -sf /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --no-cache-dir pandas pyarrow numpy
+RUN python3 -m pip install --no-cache-dir --break-system-packages pandas pyarrow numpy
 
 COPY --from=builder /opt/spark /opt/spark
 

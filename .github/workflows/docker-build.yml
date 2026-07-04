@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - benchmark
     paths:
       - "docker/hive/Dockerfile"
       - "docker/spark/Dockerfile"
@@ -22,6 +23,10 @@ on:
           - jupyterhub
           - marimo
           - k8s-git-sync
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   # ────────────────────────────────────────────────
@@ -123,6 +128,16 @@ jobs:
           echo "SPARK_VERSION=${SPARK_VERSION}" >> $GITHUB_OUTPUT
           echo "SPARK_IMAGE_VERSION=${SPARK_IMAGE_VERSION}" >> $GITHUB_OUTPUT
 
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::419772658418:role/github-spark-s3-reader
+          aws-region: us-east-1
+
+      - name: Pull Spark Comet tarball (arm64) from S3
+        run: |
+          aws s3 cp s3://spark-3.5.8-scala-2.13-custom/spark-arm64/spark-3.5.8-comet-v1.tar.gz docker/spark/spark-3.5.8-comet-v1.tar.gz
+
       - name: Set up QEMU (arm64 emulation)
         uses: docker/setup-qemu-action@v3
 
@@ -140,7 +155,7 @@ jobs:
         with:
           context: docker/spark
           file: docker/spark/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/arm64
           push: true
           tags: subhodeep2022/spark-bigdata:spark-${{ steps.spark-config.outputs.SPARK_VERSION }}-${{ steps.spark-config.outputs.SPARK_IMAGE_VERSION }}
           cache-from: type=gha
