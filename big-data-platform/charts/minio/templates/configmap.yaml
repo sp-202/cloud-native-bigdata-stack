@@ -21,6 +21,7 @@ data:
     /usr/bin/mc mb myminio/test-bucket || true
     /usr/bin/mc mb myminio/taxi-data || true
     /usr/bin/mc mb myminio/spark-logs || true
+    /usr/bin/mc mb myminio/tpch-data || true
 
     /usr/bin/mc policy set public myminio/warehouse || true
     /usr/bin/mc policy set public myminio/data || true
@@ -29,6 +30,7 @@ data:
     /usr/bin/mc policy set public myminio/test-bucket || true
     /usr/bin/mc policy set public myminio/taxi-data || true
     /usr/bin/mc policy set public myminio/spark-logs || true
+    /usr/bin/mc policy set public myminio/tpch-data || true
 
     echo "Creating spark-events directory..."
     /usr/bin/mc pipe myminio/spark-logs/spark-events/.keep < /dev/null || true

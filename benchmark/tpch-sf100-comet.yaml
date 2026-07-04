@@ -1,0 +1,237 @@
+# ------------------------------------------------------------------------------
+# TPC-H SF100 Benchmark — Comet-accelerated Spark, submitted via Spark Operator
+# ------------------------------------------------------------------------------
+# Submit:  kubectl apply -f benchmark/tpch-sf100-comet.yaml
+# Status:  kubectl get sparkapplication tpch-sf100-comet -n default
+# Logs:    kubectl logs -n default -l sparkoperator.k8s.io/app-name=tpch-sf100-comet -c spark-kubernetes-driver -f
+# Rerun:   kubectl delete sparkapplication tpch-sf100-comet -n default && kubectl apply -f benchmark/tpch-sf100-comet.yaml
+#
+# Uses the spark-operator-spark ServiceAccount (RBAC'd for pod management,
+# see big-data-platform/charts/spark-connect-server/templates/rbac.yaml) and
+# the platform's node topology: driver -> spark-node, executors -> spark-worker
+# (see big-data-platform/values.yaml global.nodeSelector).
+# ------------------------------------------------------------------------------
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: tpch-sf100-comet
+  namespace: default
+spec:
+  type: Python
+  pythonVersion: "3"
+  mode: cluster
+  image: "subhodeep2022/spark-bigdata:spark-3.5.8-v13-iceberg-gravitino"
+  imagePullPolicy: IfNotPresent
+  sparkVersion: "3.5.8"
+  mainApplicationFile: "s3a://tpch-data/scripts/tpcbench.py"
+  arguments:
+    - "--benchmark"
+    - "tpch"
+    - "--data"
+    - "s3a://tpch-data/tpch_sf100"
+    - "--queries"
+    - "s3a://tpch-data/tpch-queries"
+    - "--output"
+    - "s3a://tpch-data/tpch-results"
+  restartPolicy:
+    type: Never
+
+  # NVMe-backed local dir for shuffle/spill — same hostPath the spark-connect-server
+  # executor pod template uses (see big-data-platform/values.yaml spark-connect-server.executor).
+  volumes:
+    - name: spark-local-dir
+      hostPath:
+        path: /mnt/spark-nvme/spark-shuffle
+        type: DirectoryOrCreate
+
+  driver:
+    cores: 4
+    memory: "8g"
+    memoryOverhead: "2g"
+    serviceAccount: spark-operator-spark
+    labels:
+      app: tpch-sf100
+    nodeSelector:
+      node-role.kubernetes.io/spark-node: ""
+    volumeMounts:
+      - name: spark-local-dir
+        mountPath: /mnt/spark-nvme
+    env:
+      - name: AWS_ACCESS_KEY_ID
+        value: "minioadmin"
+      - name: AWS_SECRET_ACCESS_KEY
+        value: "minioadmin"
+      - name: MINIO_ENDPOINT
+        value: "http://minio.default.svc.cluster.local:9000"
+    javaOptions: >-
+      -XX:+UseG1GC -XX:+UnlockExperimentalVMOptions -XX:G1HeapRegionSize=32m
+      -XX:InitiatingHeapOccupancyPercent=45 -XX:MaxGCPauseMillis=500
+      -XX:G1NewSizePercent=20 -XX:G1MaxNewSizePercent=40 -XX:ConcGCThreads=4
+      -XX:ParallelGCThreads=8 -XX:+ParallelRefProcEnabled -XX:+DisableExplicitGC
+      --add-opens=java.base/java.nio=ALL-UNNAMED
+      --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+      -Djdk.nio.maxCachedBufferSize=262144
+
+  executor:
+    cores: 16
+    instances: 24
+    memory: "32g"
+    memoryOverhead: "10g"
+    coreRequest: "8"
+    coreLimit: "8"
+    nodeSelector:
+      node-role.kubernetes.io/spark-node: ""
+    volumeMounts:
+      - name: spark-local-dir
+        mountPath: /mnt/spark-nvme
+    env:
+      - name: AWS_ACCESS_KEY_ID
+        value: "minioadmin"
+      - name: AWS_SECRET_ACCESS_KEY
+        value: "minioadmin"
+      - name: MINIO_ENDPOINT
+        value: "http://minio.default.svc.cluster.local:9000"
+
+  sparkConf:
+    # --- Local NVMe scratch dir for shuffle/spill (mounted above) ---
+    spark.local.dir: "/mnt/spark-nvme/spark-local"
+
+    # --- Interpreter / plugin overrides (this job bypasses Gravitino) ---
+    spark.pyspark.python: "python3"
+    spark.pyspark.driver.python: "python3"
+    spark.kubernetes.driverEnv.LD_PRELOAD: ""
+    spark.executorEnv.LD_PRELOAD: ""
+    spark.plugins: ""
+    spark.sql.extensions: "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.apache.comet.CometSparkSessionExtensions"
+
+    # --- Off-heap memory ---
+    spark.memory.offHeap.enabled: "true"
+    spark.memory.offHeap.size: "32g"
+    spark.memory.fraction: "0.6"
+    spark.memory.storageFraction: "0.2"
+
+    # --- Apache Comet (native acceleration) ---
+    spark.comet.enabled: "true"
+    spark.comet.exec.enabled: "true"
+    spark.comet.exec.all.enabled: "true"
+    spark.comet.exec.replaceSortMergeJoin: "true"
+    spark.comet.exec.hashJoin.enabled: "true"
+    spark.comet.exec.shuffle.enabled: "true"
+    spark.comet.exec.shuffle.mode: "auto"
+    spark.comet.exec.shuffle.directRead.enabled: "true"
+    spark.comet.exec.shuffle.convertFromSparkPlan.enabled: "true"
+    spark.comet.exec.shuffle.revertRedundantColumnar.enabled: "true"
+    spark.comet.exec.zeroCopySpill.enabled: "true"
+    spark.comet.exec.localTableScan.enabled: "true"
+    spark.comet.exec.localTopKPushdown.enabled: "true"
+    spark.comet.exec.rowComet.enabled: "true"
+    spark.comet.exec.columnarToRow.native.enabled: "true"
+    spark.comet.exec.memoryPool: "fair_unified"
+    spark.comet.exec.memoryPool.fraction: "1.0"
+    spark.comet.memoryPool.fraction: "0.8"
+    spark.comet.sparkToColumnar.enabled: "true"
+    spark.comet.sparkToColumnar.supportedOperatorList: "Range,InMemoryTableScan,RDDScan,OneRowRelation"
+    spark.comet.batchSize: "8192"
+    spark.comet.nativeLoadRequired: "true"
+    spark.comet.shuffle.preferDictionary.ratio: "10.0"
+    spark.comet.shuffle.sizeInBytesMultiplier: "1.0"
+    spark.comet.parquet.write.enabled: "true"
+    spark.comet.cache.serializer.enabled: "true"
+    spark.comet.expression.Cast.allowIncompatible: "true"
+    spark.comet.expression.JsonToStructs.allowIncompatible: "true"
+    spark.comet.operator.DataWritingCommandExec.allowIncompatible: "true"
+    spark.comet.exec.strictFloatingPoint: "false"
+    spark.comet.caseConversion.enabled: "false"
+    spark.comet.logFallbackReasons.enabled: "true"
+    spark.comet.explainFallback.enabled: "true"
+    spark.comet.scan.csv.v2.enabled: "true"
+    spark.comet.scan.json.v2.enabled: "true"
+    spark.comet.native.shuffle.partitioning.roundrobin.maxHashColumns: "0"
+    spark.comet.write.iceberg.splitOperator.enabled: "true"
+    spark.comet.write.iceberg.nativeAcceleration: "true"
+    spark.shuffle.manager: "org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager"
+
+    # --- Adaptive query execution ---
+    spark.sql.adaptive.enabled: "true"
+    spark.sql.adaptive.coalescePartitions.enabled: "true"
+    spark.sql.adaptive.coalescePartitions.minPartitionSize: "16MB"
+    spark.sql.adaptive.localShuffleReader.enabled: "true"
+    spark.sql.adaptive.skewJoin.enabled: "true"
+    spark.sql.adaptive.skewJoin.skewedPartitionFactor: "3"
+    spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes: "128MB"
+    spark.sql.adaptive.advisoryPartitionSizeInBytes: "128MB"
+    spark.sql.adaptive.autoBroadcastJoinThreshold: "200m"
+    spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold: "67108864"
+    spark.sql.shuffle.partitions: "128"
+    spark.default.parallelism: "66"
+    spark.sql.autoBroadcastJoinThreshold: "200m"
+    spark.sql.broadcastTimeout: "600"
+    spark.sql.join.preferSortMergeJoin: "true"
+    spark.sql.join.forceApplyShuffledHashJoin: "false"
+    spark.sql.cbo.enabled: "true"
+    spark.sql.cbo.joinReorder.enabled: "true"
+    spark.sql.statistics.histogram.enabled: "true"
+    spark.sql.statistics.histogram.numBins: "254"
+    spark.sql.codegen.wholeStage: "true"
+    spark.sql.codegen.fallback: "true"
+    spark.sql.ansi.enabled: "false"
+    spark.sql.optimizer.excludedRules: "org.apache.spark.sql.catalyst.optimizer.ConvertToLocalRelation"
+    spark.sql.inMemoryColumnarStorage.batchSize: "8192"
+    spark.sql.cache.serializer: "org.apache.spark.sql.comet.CometCachedBatchSerializer"
+    spark.sql.sources.useV1SourceList: "avro,kafka,orc,parquet,text"
+
+    # --- Parquet / Iceberg reads ---
+    spark.sql.parquet.filterPushdown: "true"
+    spark.sql.parquet.aggregatePushdown: "true"
+    spark.sql.parquet.block.size: "268435456"
+    spark.sql.files.maxPartitionBytes: "268435456"
+    spark.sql.files.openCostInBytes: "8388608"
+    spark.sql.parquet.datetimeRebaseModeInRead: "LEGACY"
+    spark.sql.parquet.datetimeRebaseModeInWrite: "LEGACY"
+    spark.sql.parquet.int96RebaseModeInRead: "LEGACY"
+    spark.sql.parquet.int96RebaseModeInWrite: "LEGACY"
+    spark.sql.iceberg.vectorized.read.enabled: "true"
+
+    # --- S3A (local MinIO, not AWS S3) ---
+    spark.hadoop.fs.s3a.impl: "org.apache.hadoop.fs.s3a.S3AFileSystem"
+    spark.hadoop.fs.s3a.endpoint: "http://minio.default.svc.cluster.local:9000"
+    spark.hadoop.fs.s3a.access.key: "minioadmin"
+    spark.hadoop.fs.s3a.secret.key: "minioadmin"
+    spark.hadoop.fs.s3a.aws.credentials.provider: "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
+    spark.hadoop.fs.s3a.path.style.access: "true"
+    spark.hadoop.fs.s3a.connection.ssl.enabled: "false"
+    spark.hadoop.fs.s3a.fast.upload: "true"
+    spark.hadoop.fs.s3a.multipart.size: "128M"
+
+    # --- Event log (spark-logs bucket, matches platform convention) ---
+    spark.eventLog.enabled: "true"
+    spark.eventLog.dir: "s3a://spark-logs/spark-events/"
+    spark.eventLog.compress: "true"
+    spark.eventLog.compression.codec: "zstd"
+    spark.eventLog.rolling.enabled: "true"
+    spark.eventLog.rolling.maxFileSize: "128m"
+
+    # --- Serialization / compression ---
+    spark.serializer: "org.apache.spark.serializer.KryoSerializer"
+    spark.kryo.unsafe: "true"
+    spark.kryo.registrationRequired: "false"
+    spark.serializer.objectStreamReset: "100"
+    spark.io.compression.codec: "lz4"
+    spark.shuffle.compress: "true"
+    spark.shuffle.spill.compress: "true"
+    spark.rdd.compress: "true"
+
+    # --- Networking timeouts ---
+    spark.network.timeout: "800s"
+    spark.executor.heartbeatInterval: "30s"
+    spark.files.fetchTimeout: "300s"
+
+    # --- UI retention ---
+    spark.ui.enabled: "true"
+    spark.ui.port: "4040"
+    spark.ui.host: "0.0.0.0"
+    spark.ui.retainedJobs: "200"
+    spark.ui.retainedStages: "200"
+    spark.ui.retainedTasks: "100000"
+    spark.ui.retainedDeadExecutors: "20"
+    spark.sql.ui.retainedExecutions: "200"

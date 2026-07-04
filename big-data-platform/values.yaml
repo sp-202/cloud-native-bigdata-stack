@@ -94,7 +94,7 @@ persistence:
     nodeSelector:
       node-role.kubernetes.io/k8s-gp-node: ""
   minio:
-    size: 10Gi
+    size: 2Ti
     localPath: "/mnt/spark-nvme/minio"
     nodeSelector:
       node-role.kubernetes.io/minio-worker: ""
@@ -172,17 +172,18 @@ minio:
   mcImage: "minio/mc:latest"
   resources:
     requests:
-      cpu: "2000m"
-      memory: "4Gi"
+      cpu: "28m"
+      memory: "48Gi"
     limits:
-      cpu: "8000m"
-      memory: "16Gi"
+      cpu: "48"
+      memory: "84Gi"
   buckets:
     - warehouse
     - spark-logs
     - notebooks
     - airflow
-    - delta-tables
+    - delta-table
+    - tpch-data
 
 # =============================================================================
 # AIRFLOW SECRETS — used by templates/airflow-secrets.yaml
@@ -390,7 +391,7 @@ spark-history-server:
 # Driver runs on spark node; executors dispatched to spark-worker nodes
 # =============================================================================
 spark-connect-server:
-  enabled: true
+  enabled: false
   replicas: 1
   resources:
     requests:
@@ -449,7 +450,7 @@ unity-catalog:
 # KUBE-STARROCKS (external dependency)
 # =============================================================================
 starrocks:
-  enabled: true
+  enabled: false
   # kube-starrocks is itself an umbrella with two subcharts: operator + starrocks.
   # FE/BE specs live under the "starrocks" subchart key, NOT under starrocksCluster.
   starrocks:
@@ -500,7 +501,7 @@ starrocks:
 # JUPYTERHUB — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
 # =============================================================================
 jupyterhub:
-  enabled: true
+  enabled: false
   replicas: 1
   sparkRemote: "sc://spark-connect-server-driver-svc:15002"
   resources:

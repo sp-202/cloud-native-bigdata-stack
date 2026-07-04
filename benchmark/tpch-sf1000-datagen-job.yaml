@@ -1,0 +1,89 @@
+# ------------------------------------------------------------------------------
+# TPC-H SF1000 Data Generation — builds tpchgen-cli from source and writes
+# partitioned Parquet directly into the platform's MinIO (bucket: tpch-data),
+# ready for benchmark/tpch-sf100-comet.yaml (update its --data path to
+# s3a://tpch-data/tpch_sf1000 once this finishes).
+# ------------------------------------------------------------------------------
+# Submit:  kubectl apply -f benchmark/tpch-sf1000-datagen-job.yaml
+# Logs:    kubectl logs -n default -f job/tpch-sf1000-datagen
+# Rerun:   kubectl delete job tpch-sf1000-datagen -n default && kubectl apply -f benchmark/tpch-sf1000-datagen-job.yaml
+# Verify:  mc ls --recursive localminio/tpch-data/tpch_sf1000 | tail
+# ------------------------------------------------------------------------------
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tpch-sf1000-datagen
+  namespace: default
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: tpch-sf1000-datagen
+    spec:
+      serviceAccountName: default
+      restartPolicy: Never
+      nodeSelector:
+        node-role.kubernetes.io/minio-worker: ""
+      volumes:
+        - name: tpch-scratch
+          hostPath:
+            path: /mnt/spark-nvme/tpch-gen
+            type: DirectoryOrCreate
+      containers:
+        - name: tpch-datagen
+          image: debian:bookworm-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+
+              echo "== Installing build prerequisites =="
+              apt-get update
+              apt-get install -y --no-install-recommends build-essential curl ca-certificates pkg-config
+              rm -rf /var/lib/apt/lists/*
+
+              echo "== Installing Rust via rustup =="
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+              source "$HOME/.cargo/env"
+
+              echo "== Building tpchgen-cli (native CPU optimizations) =="
+              RUSTFLAGS='-C target-cpu=native' cargo install tpchgen-cli
+
+              echo "== Generating TPC-H SF1000 (parquet, 320 parts) =="
+              mkdir -p /data/tpch_sf1000
+              tpchgen-cli -s 1000 --format parquet --parts 384 --output-dir /data/tpch_sf1000
+
+              echo "== Installing MinIO client =="
+              curl -sSL https://dl.min.io/client/mc/release/linux-arm64/mc -o /usr/local/bin/mc
+              chmod +x /usr/local/bin/mc
+
+              echo "== Uploading to MinIO (bucket: tpch-data) =="
+              mc alias set localminio "$MINIO_ENDPOINT" "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY"
+              mc mb --ignore-existing localminio/tpch-data
+              mc cp --recursive /data/tpch_sf1000 localminio/tpch-data/tpch_sf1000/
+
+              echo "== Verifying upload =="
+              mc ls --recursive localminio/tpch-data/tpch_sf1000 | tail -20
+
+              echo "== Cleaning up local NVMe scratch =="
+              rm -rf /data/tpch_sf1000
+
+              echo "Done: s3a://tpch-data/tpch_sf1000/ is ready for Spark"
+          env:
+            - name: MINIO_ENDPOINT
+              value: "http://minio.default.svc.cluster.local:9000"
+            - name: MINIO_ACCESS_KEY
+              value: "minioadmin"
+            - name: MINIO_SECRET_KEY
+              value: "minioadmin"
+          resources:
+            requests:
+              cpu: "24"
+              memory: "48Gi"
+            limits:
+              cpu: "28"
+              memory: "64Gi"
+          volumeMounts:
+            - name: tpch-scratch
+              mountPath: /data
