@@ -366,7 +366,7 @@ spark-history-server:
 # Driver and executors both land on Karpenter's spark-node NodePool.
 # =============================================================================
 spark-connect-server:
-  enabled: true
+  enabled: false
   replicas: 1
   resources:
     requests:
@@ -388,7 +388,7 @@ spark-connect-server:
 # KUBE-STARROCKS (external dependency)
 # =============================================================================
 starrocks:
-  enabled: true
+  enabled: false
   # kube-starrocks is itself an umbrella with two subcharts: operator + starrocks.
   # FE/BE specs live under the "starrocks" subchart key, NOT under starrocksCluster.
   starrocks:
@@ -455,7 +455,7 @@ starrocks:
 # JUPYTERHUB — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
 # =============================================================================
 jupyterhub:
-  enabled: true
+  enabled: false
   replicas: 1
   sparkRemote: "sc://spark-connect-server-driver-svc:15002"
   resources:
@@ -478,12 +478,17 @@ ingress:
   # NOTE: the ingress chart can't see sibling subcharts' own .enabled values
   # (Helm only auto-shares .Values.global.* across subcharts) — these are
   # separate, manually-duplicated flags. If you flip the real superset.enabled
-  # / gravitino.enabled above, flip the matching one here too, or the ingress
-  # rule and the actual Service will disagree.
+  # / gravitino.enabled / jupyterhub.enabled / spark-connect-server.enabled
+  # above, flip the matching one here too, or the ingress rule and the
+  # actual Service will disagree.
   gravitino:
     enabled: true
   superset:
-    enabled: true
+    enabled: false
+  jupyterhub:
+    enabled: false
+  spark-connect-server:
+    enabled: false
 
 # =============================================================================
 # SPARK OPERATOR (external dependency)
@@ -532,7 +537,7 @@ spark-operator:
 # SUPERSET (external dependency)
 # =============================================================================
 superset:
-  enabled: true
+  enabled: false
   fullnameOverride: "superset"
   postgresql:
     enabled: false

@@ -46,7 +46,8 @@ spec:
             port:
               name: http
   {{- end }}
-  # JupyterHub
+  {{- if and (index .Values "jupyterhub") (index .Values "jupyterhub").enabled }}
+  # JupyterHub — only rendered when jupyterhub.enabled: true
   - host: jupyterhub.{{ .Values.global.domain }}
     http:
       paths:
@@ -57,7 +58,9 @@ spec:
             name: jupyterhub
             port:
               name: web
-  # Spark UI
+  {{- end }}
+  {{- if and (index .Values "spark-connect-server") (index .Values "spark-connect-server").enabled }}
+  # Spark UI — only rendered when spark-connect-server.enabled: true
   - host: spark.{{ .Values.global.domain }}
     http:
       paths:
@@ -68,6 +71,7 @@ spec:
             name: spark-ui
             port:
               name: spark-ui
+  {{- end }}
   # Prometheus
   - host: prometheus.{{ .Values.global.domain }}
     http:
