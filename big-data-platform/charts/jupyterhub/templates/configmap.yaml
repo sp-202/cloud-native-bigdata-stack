@@ -13,24 +13,17 @@ data:
     c.ServerApp.allow_remote_access = True
     c.IdentityProvider.token = ''
 
-    # Notebook Persistence with MinIO using s3contents
+    # Notebook Persistence on S3 using s3contents.
+    # No access_key_id/secret_access_key/endpoint_url — s3fs/boto3 falls back
+    # to the node's IAM role via the default credential chain, and real S3's
+    # default endpoint + TLS apply (the old MinIO config disabled both
+    # verify and use_ssl, which would be wrong against real S3).
     import os
     from s3contents import S3ContentsManager
 
     c.ServerApp.contents_manager_class = S3ContentsManager
-    c.S3ContentsManager.access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
-    c.S3ContentsManager.secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-    c.S3ContentsManager.endpoint_url = os.environ.get('JUPYTER_S3_ENDPOINT')
-    c.S3ContentsManager.bucket = "notebooks"
-    c.S3ContentsManager.prefix = "jupyterhub"
-
-    c.S3ContentsManager.s3fs_additional_kwargs = {
-        "client_kwargs": {
-            "endpoint_url": os.environ.get('JUPYTER_S3_ENDPOINT'),
-            "verify": False,
-            "use_ssl": False,
-        }
-    }
+    c.S3ContentsManager.bucket = os.environ.get('LAKEHOUSE_BUCKET')
+    c.S3ContentsManager.prefix = "jupyterhub/notebooks"
 
   setup-kernels.sh: |
     #!/bin/bash
@@ -48,9 +41,7 @@ data:
       "env": {
         "PYSPARK_PYTHON": "python3",
         "SPARK_REMOTE": "${SPARK_REMOTE}",
-        "MINIO_ENDPOINT": "${MINIO_ENDPOINT}",
-        "AWS_ACCESS_KEY_ID": "${AWS_ACCESS_KEY_ID}",
-        "AWS_SECRET_ACCESS_KEY": "${AWS_SECRET_ACCESS_KEY}"
+        "LAKEHOUSE_BUCKET": "${LAKEHOUSE_BUCKET}"
       }
     }
     KERNEL_EOF

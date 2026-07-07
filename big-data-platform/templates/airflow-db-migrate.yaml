@@ -64,19 +64,24 @@ spec:
                 --lastname {{ .Values.airflow.webserver.defaultUser.lastName }} \
                 --role {{ .Values.airflow.webserver.defaultUser.role }} \
                 --email {{ .Values.airflow.webserver.defaultUser.email }} \
-                --password "{{ .Values.airflow.webserver.defaultUser.password }}" || true
+                --password "$ADMIN_PASSWORD" || true
               echo "DB migration and user init complete."
           env:
             - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
               valueFrom:
                 secretKeyRef:
-                  name: big-data-platform-metadata
+                  name: airflow-credentials
                   key: connection
             - name: AIRFLOW__CORE__FERNET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: big-data-platform-fernet-key
+                  name: airflow-credentials
                   key: fernet-key
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-credentials
+                  key: admin-password
           resources:
             requests:
               cpu: "250m"

@@ -1,14 +1,19 @@
 # ------------------------------------------------------------------------------
 # airflow-git-sync - Deployment
 # ------------------------------------------------------------------------------
-# Runs the custom git-sync image (subhodeep2022/k8s-git-sync:v2-prod) which
-# bundles git-sync + mc. On every sync it:
-#   1. Writes the git repo to /dags on the shared airflow-dags-shared-pvc
-#   2. Runs sync-hook.sh (exechook) which does:
-#      mc mirror --overwrite /dags/repo myminio/dags
+# Runs the custom git-sync image (subhodeep2022/k8s-git-sync:v2-prod), whose
+# only job now is writing the git repo to /dags on the shared
+# airflow-dags-shared-pvc — Airflow pods mount the same PVC and read DAGs
+# from /dags/repo (the symlink).
 #
-# Airflow pods mount the same PVC and read DAGs from /dags/repo (the symlink).
-# MinIO gets a flat stable-path copy for external consumption.
+# The "mirror to object storage" concern (previously the image's own
+# baked-in exechook running `mc mirror ... myminio/dags`) is handled by a
+# separate s3-sync sidecar below instead, using the official amazon/aws-cli
+# image — that's a verified, IAM-role-native tool. We don't know whether the
+# custom image's bundled `mc` can do IAM-role auth at all (mc typically needs
+# explicit static keys unlike the AWS CLI's default credential chain), so
+# rather than guess at an opaque image's internal behavior for a crucial
+# path, this decouples the two concerns and uses the tool built for this.
 #
 # Managed via ArgoCD Sync Wave: 3 (after PVC at wave -3, before Airflow at wave 5)
 # ------------------------------------------------------------------------------
@@ -50,23 +55,51 @@ spec:
             runAsUser: 0
             runAsGroup: 0
             allowPrivilegeEscalation: false
-          env:
-            - name: MINIO_ACCESS_KEY
-              value: {{ .Values.global.s3.accessKey | quote }}
-            - name: MINIO_SECRET_KEY
-              value: {{ .Values.global.s3.secretKey | quote }}
           args:
             - "--repo={{ .Values.repo }}"
             - "--ref={{ .Values.branch }}"
             - "--root=/dags"
             - "--link=repo"
             - "--period={{ .Values.period }}"
-            - "--exechook-command=/usr/local/bin/sync-hook.sh"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: dags-shared
               mountPath: /dags
+        # Mirrors the synced DAGs to S3 for external consumption — replaces
+        # the image's own mc-based exechook (see comment above). Read-only
+        # mount: git-sync owns writes, this only reads and pushes to S3.
+        # Uses the official AWS CLI image, which natively supports the
+        # node's IAM role via its default credential chain — no keys needed.
+        - name: s3-sync
+          image: "amazon/aws-cli:2.17.62"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              while true; do
+                echo "Syncing /dags/repo -> s3://$LAKEHOUSE_BUCKET/dags ..."
+                aws s3 sync /dags/repo "s3://$LAKEHOUSE_BUCKET/dags" --delete || \
+                  echo "WARNING: s3 sync failed, will retry next cycle"
+                sleep {{ .Values.period }}
+              done
+          env:
+            - name: LAKEHOUSE_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: lakehouse-s3
+                  key: bucket
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          volumeMounts:
+            - name: dags-shared
+              mountPath: /dags
+              readOnly: true
       volumes:
         - name: dags-shared
           persistentVolumeClaim:

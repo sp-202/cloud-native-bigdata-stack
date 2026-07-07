@@ -1,0 +1,124 @@
+# ------------------------------------------------------------------------------
+# Gravitino - Postgres Schema Init Job
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: The official apache/gravitino-helm chart only auto-applies the
+# entity-store schema when using its OWN bundled MySQL/PostgreSQL sub-chart
+# (postgresql.enabled: true) — see its templates/deployment.yaml "sqlfile" +
+# "init-postgresql" init containers. Since this platform uses an external,
+# CNPG-managed Postgres instead, that automatic path never runs, and per the
+# chart's own docs ("Deploy Gravitino Using an Existed MySQL Database") the
+# schema must be applied manually before first boot. This Job replicates that
+# exact same two-stage logic (schema file version selection + upgrade script)
+# against postgres-rw instead of the chart's bundled DB.
+#
+# Managed via ArgoCD Sync Wave: -1 (before the Gravitino Deployment, wave 0)
+# ------------------------------------------------------------------------------
+
+{{- if .Values.gravitino.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gravitino-schema-init
+  namespace: default
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+      initContainers:
+        # Copy the version-matched schema/upgrade SQL files out of the
+        # Gravitino image itself — same source the chart's own init
+        # containers use, just staged for the second container below
+        # instead of a bundled-DB client image.
+        - name: sqlfile
+          image: "{{ .Values.gravitino.image.repository }}:{{ .Values.gravitino.image.tag }}"
+          command:
+            - /bin/bash
+            - -c
+            - |
+              cp -r /opt/gravitino/scripts/* /tmp/scripts/
+              VERSION=$(ls /opt/gravitino/libs/gravitino-server-* | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+              echo "$VERSION" > /tmp/scripts/version.txt
+          volumeMounts:
+            - name: scripts
+              mountPath: /tmp/scripts/
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+        - name: wait-for-postgres
+          image: "postgres:16"
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} -U {{ .Values.gravitino.icebergCatalog.db.user }}; do
+                echo "Waiting for postgres..."; sleep 3
+              done
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+      containers:
+        - name: apply-schema
+          image: "postgres:16"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gravitino-db-role
+                  key: password
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              VERSION=$(cat /scripts/version.txt)
+              if [ -z "$VERSION" ]; then
+                echo "ERROR: version.txt empty"; exit 1
+              fi
+              dir="/scripts/postgresql"
+              schema_file=$(ls $dir/schema-*-postgresql.sql | sort -V | awk -F'[-]' '$2 <= '$VERSION' {print $0}' | tail -n 1)
+              if [ ! -f "$schema_file" ]; then
+                echo "ERROR: no schema file found for version $VERSION"; exit 1
+              fi
+              upgrade_file=$(ls $dir/upgrade-*-to-*-postgresql.sql | sort -V | awk -F'[-]' '$4 <= '$VERSION' {print $0}' | tail -n 1)
+              echo "Applying to entity store db: $schema_file"
+              if [ -f "$upgrade_file" ]; then
+                echo "Applying upgrade script first: $upgrade_file"
+                psql -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} \
+                  -U {{ .Values.gravitino.entity.jdbcUser }} -d gravitino -f "$upgrade_file" || \
+                  echo "WARNING: upgrade script failed, continuing with schema script..."
+              fi
+              psql -h {{ .Values.global.postgres.host }} -p {{ .Values.global.postgres.port }} \
+                -U {{ .Values.gravitino.entity.jdbcUser }} -d gravitino -f "$schema_file"
+              echo "Gravitino entity store schema applied."
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+      volumes:
+        - name: scripts
+          emptyDir: {}
+{{- end }}

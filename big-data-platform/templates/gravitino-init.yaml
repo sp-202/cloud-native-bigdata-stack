@@ -6,7 +6,7 @@
 # Description: Bootstraps the Gravitino metadata lake after the server is ready.
 #   1. Creates metalake "enterprise_metalake" (idempotent — 409 = already exists)
 #   2. Registers catalog "sales_catalog" as a lakehouse-iceberg catalog backed by
-#      the iceberg_catalog PostgreSQL DB + MinIO S3FileIO.
+#      the iceberg_catalog PostgreSQL DB + S3FileIO (IAM role auth).
 #
 # This is REQUIRED for the dynamic-config-provider mode to work.
 # Without it, the Iceberg REST Catalog (port 9001) has no catalog to serve and
@@ -16,8 +16,9 @@
 # at: gravitino.{{ .Values.global.domain }}
 #
 # Sync wave ordering:
-#   wave -1 : Gravitino server starts (with init-config + init-databases init containers)
-#   wave  0 : This job — waits for Gravitino readiness, then registers metadata
+#   wave -2 : postgres, gravitino/iceberg_catalog Database CRs (charts/postgres)
+#   wave -1 : gravitino-schema-init Job (applies entity-store schema)
+#   wave  0 : Gravitino server Deployment, then this job registers metadata
 #
 # Managed via ArgoCD Sync Wave: 0
 # ------------------------------------------------------------------------------
@@ -91,7 +92,7 @@ spec:
                 "name": "CATALOG_PLACEHOLDER",
                 "type": "RELATIONAL",
                 "provider": "lakehouse-iceberg",
-                "comment": "Iceberg tables backed by PostgreSQL JDBC + MinIO S3FileIO",
+                "comment": "Iceberg tables backed by PostgreSQL JDBC + S3FileIO (IAM role auth)",
                 "properties": {
                   "catalog-backend": "jdbc",
                   "uri": "JDBC_URI_PLACEHOLDER",
@@ -99,14 +100,15 @@ spec:
                   "jdbc-user": "JDBC_USER_PLACEHOLDER",
                   "jdbc-password": "JDBC_PASSWORD_PLACEHOLDER",
                   "warehouse": "WAREHOUSE_PLACEHOLDER",
-                  "io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
-                  "s3-endpoint": "S3_ENDPOINT_PLACEHOLDER",
-                  "s3-access-key-id": "S3_ACCESS_KEY_PLACEHOLDER",
-                  "s3-secret-access-key": "S3_SECRET_KEY_PLACEHOLDER",
-                  "s3-path-style-access": "true"
+                  "io-impl": "org.apache.iceberg.aws.s3.S3FileIO"
                 }
               }
               CATALOG_JSON
+              # No s3-endpoint/s3-access-key-id/s3-secret-access-key/
+              # s3-path-style-access properties — those were MinIO-only.
+              # Omitting them makes Iceberg's S3FileIO fall back to the AWS
+              # SDK's default credential chain (the node's IAM role) and
+              # real S3's default virtual-hosted-style endpoint.
 
               # Substitute env vars into the JSON
               sed -i \
@@ -115,9 +117,6 @@ spec:
                 -e "s|JDBC_USER_PLACEHOLDER|${ICEBERG_JDBC_USER}|g" \
                 -e "s|JDBC_PASSWORD_PLACEHOLDER|${ICEBERG_JDBC_PASSWORD}|g" \
                 -e "s|WAREHOUSE_PLACEHOLDER|${ICEBERG_WAREHOUSE}|g" \
-                -e "s|S3_ENDPOINT_PLACEHOLDER|${S3_ENDPOINT}|g" \
-                -e "s|S3_ACCESS_KEY_PLACEHOLDER|${S3_ACCESS_KEY}|g" \
-                -e "s|S3_SECRET_KEY_PLACEHOLDER|${S3_SECRET_KEY}|g" \
                 /tmp/catalog.json
 
               HTTP=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
@@ -138,15 +137,16 @@ spec:
             - name: ICEBERG_JDBC_USER
               value: "{{ .Values.gravitino.icebergCatalog.db.user }}"
             - name: ICEBERG_JDBC_PASSWORD
-              value: "{{ .Values.gravitino.icebergCatalog.db.password }}"
+              valueFrom:
+                secretKeyRef:
+                  name: gravitino-db-role
+                  key: password
+            # Real value injected via ArgoCD Application-level helm.parameters
+            # (gravitino.icebergCatalog.warehouse) — the S3 bucket name is
+            # only known after `terraform apply`, so it can't be hardcoded
+            # in values.yaml either. See post-cluster-bootstrap.sh.
             - name: ICEBERG_WAREHOUSE
               value: "{{ .Values.gravitino.icebergCatalog.warehouse }}"
-            - name: S3_ENDPOINT
-              value: "{{ .Values.global.s3.endpoint }}"
-            - name: S3_ACCESS_KEY
-              value: "{{ .Values.global.s3.accessKey }}"
-            - name: S3_SECRET_KEY
-              value: "{{ .Values.global.s3.secretKey }}"
           resources:
             requests:
               cpu: "50m"

@@ -10,122 +10,23 @@
 # ------------------------------------------------------------------------------
 
 {{- $storageClass := .Values.global.storageClassName }}
+# Postgres, Airflow DAGs, and Airflow scheduler/triggerer logs no longer get
+# static local-hostpath PV/PVCs here — they're dynamically provisioned now:
+#   - Postgres: CNPG Cluster volumeClaimTemplates on ebs-gp3 (see charts/postgres)
+#   - Airflow DAGs: efs-airflow-dags StorageClass, PVC below (ReadWriteMany —
+#     git-sync/scheduler/triggerer/webserver mount it concurrently, possibly
+#     from different GP nodes; EBS is ReadWriteOnce-only and can't do that)
+#   - Airflow scheduler/triggerer logs: ebs-gp3 via airflow.logs.persistence
+#     (single-writer StatefulSet volumeClaimTemplate, EBS is fine)
+# NOTE: redis/starrocks below still use local-hostpath and have the same
+# theoretical durability exposure — not fixed here, worth a follow-up if they
+# ever show the same "reset after reschedule" symptom Postgres had.
+# MinIO's PV/PVC (and the dedicated MinIO node) are gone — replaced by S3.
 # =============================================================================
-# PostgreSQL PV/PVC
+# Airflow DAGs PVC — dynamically provisioned on efs-airflow-dags (RWX).
+# No static PV: EFS CSI's efs-ap provisioning mode creates an Access Point
+# per PVC automatically. Name matches airflow.dags.persistence.existingClaim.
 # =============================================================================
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: postgres-data-pv
-  labels:
-    app: postgres
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  capacity:
-    storage: {{ .Values.postgres.size }}
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ $storageClass }}
-  volumeMode: Filesystem
-  local:
-    path: {{ .Values.postgres.localPath }}
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: {{ (keys .Values.postgres.nodeSelector | first) }}
-              operator: Exists
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgres-data-pvc
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: {{ $storageClass }}
-  resources:
-    requests:
-      storage: {{ .Values.postgres.size }}
-  volumeName: postgres-data-pv
-
----
-# =============================================================================
-# MinIO PV/PVC
-# =============================================================================
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: minio-data-pv
-  labels:
-    app: minio
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  capacity:
-    storage: {{ .Values.minio.size }}
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ $storageClass }}
-  volumeMode: Filesystem
-  local:
-    path: {{ .Values.minio.localPath }}
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: {{ (keys .Values.minio.nodeSelector | first) }}
-              operator: Exists
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: minio-data-pvc
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: {{ $storageClass }}
-  resources:
-    requests:
-      storage: {{ .Values.minio.size }}
-  volumeName: minio-data-pv
-
----
-# =============================================================================
-# Airflow DAGs PV/PVC
-# =============================================================================
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: airflow-dags-shared-pv
-  labels:
-    app: airflow
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  capacity:
-    storage: {{ .Values.airflow.size }}
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ $storageClass }}
-  volumeMode: Filesystem
-  local:
-    path: {{ .Values.airflow.localPath }}
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: {{ (keys .Values.airflow.nodeSelector | first) }}
-              operator: Exists
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -134,107 +35,17 @@ metadata:
     argocd.argoproj.io/sync-wave: "-3"
 spec:
   accessModes:
-    - ReadWriteOnce
-  storageClassName: {{ $storageClass }}
+    - ReadWriteMany
+  storageClassName: efs-airflow-dags
   resources:
     requests:
       storage: {{ .Values.airflow.size }}
-  volumeName: airflow-dags-shared-pv
 
 ---
-# =============================================================================
-# Airflow Scheduler Logs PV/PVC
-# PVC name must match the StatefulSet volumeClaimTemplate:
-#   logs-{release-name}-scheduler-0
-# Without this pre-provisioned PV, the scheduler StatefulSet PVC stays
-# Pending forever because there is no matching local volume to bind to.
-# =============================================================================
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: airflow-scheduler-logs-pv
-  labels:
-    app: airflow
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  capacity:
-    storage: {{ .Values.airflowSchedulerLogs.size }}
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ $storageClass }}
-  volumeMode: Filesystem
-  local:
-    path: {{ .Values.airflowSchedulerLogs.localPath }}
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: {{ (keys .Values.airflowSchedulerLogs.nodeSelector | first) }}
-              operator: Exists
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: logs-big-data-platform-scheduler-0
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: {{ $storageClass }}
-  resources:
-    requests:
-      storage: {{ .Values.airflowSchedulerLogs.size }}
-  volumeName: airflow-scheduler-logs-pv
-
----
-# =============================================================================
-# Airflow Triggerer Logs PV/PVC
-# PVC name must match the StatefulSet volumeClaimTemplate:
-#   logs-{release-name}-triggerer-0
-# Same root cause as scheduler — triggerer pod stays Pending without this.
-# =============================================================================
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: airflow-triggerer-logs-pv
-  labels:
-    app: airflow
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  capacity:
-    storage: {{ .Values.airflowTriggererLogs.size }}
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ $storageClass }}
-  volumeMode: Filesystem
-  local:
-    path: {{ .Values.airflowTriggererLogs.localPath }}
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: {{ (keys .Values.airflowTriggererLogs.nodeSelector | first) }}
-              operator: Exists
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: logs-big-data-platform-triggerer-0
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: {{ $storageClass }}
-  resources:
-    requests:
-      storage: {{ .Values.airflowTriggererLogs.size }}
-  volumeName: airflow-triggerer-logs-pv
+# Airflow scheduler/triggerer logs no longer need static local PVs here —
+# airflow.logs.persistence.storageClassName is ebs-gp3, so the official
+# chart's own StatefulSet volumeClaimTemplates (logs-<release>-scheduler-0,
+# logs-<release>-triggerer-0) provision dynamically, same as Postgres.
 
 ---
 # =============================================================================

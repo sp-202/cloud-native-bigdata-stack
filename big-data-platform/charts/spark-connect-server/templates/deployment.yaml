@@ -55,9 +55,6 @@ spec:
               --conf spark.sql.connect.common.enforce_pyspark_compat=true \
               --conf spark.hadoop.fs.s3a.path.style.access={{ .Values.global.s3.pathStyleAccess }} \
               --conf spark.hadoop.fs.s3a.connection.ssl.enabled={{ .Values.global.s3.sslEnabled }} \
-              --conf spark.hadoop.fs.s3a.endpoint={{ .Values.global.s3.endpoint }} \
-              --conf spark.hadoop.fs.s3a.access.key={{ .Values.global.s3.accessKey }} \
-              --conf spark.hadoop.fs.s3a.secret.key={{ .Values.global.s3.secretKey }} \
               --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
               --conf spark.kryo.registrator=org.apache.sedona.core.serde.SedonaKryoRegistrator \
               --conf spark.sql.extensions=org.apache.gravitino.spark.connector.iceberg.extensions.GravitinoIcebergSparkSessionExtensions,org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions \
@@ -70,7 +67,7 @@ spec:
               --conf "spark.sql.catalog.{{ . }}=org.apache.gravitino.spark.connector.iceberg.GravitinoIcebergCatalogSpark35" \
               {{- end }}
               --conf "spark.sql.defaultCatalog={{ .Values.global.gravitino.catalog }}" \
-              --conf spark.sql.warehouse.dir=s3a://warehouse/iceberg/ \
+              --conf spark.sql.warehouse.dir=s3a://$LAKEHOUSE_BUCKET/iceberg/ \
               --conf spark.kubernetes.executor.podTemplateFile=local:///opt/spark/conf/executor-pod-template.yaml \
               --conf spark.local.dir={{ .Values.executor.localDir }}/spark-local \
               local:///opt/spark/jars/spark-connect_2.13-3.5.8.jar
@@ -88,14 +85,31 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            - name: AWS_ACCESS_KEY_ID
-              value: {{ .Values.global.s3.accessKey | quote }}
-            - name: AWS_SECRET_ACCESS_KEY
-              value: {{ .Values.global.s3.secretKey | quote }}
-            - name: MINIO_ENDPOINT
-              value: {{ .Values.global.s3.endpoint | quote }}
+            # No AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/MINIO_ENDPOINT — the
+            # node's IAM role provides S3 credentials via the default chain.
+            - name: LAKEHOUSE_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: lakehouse-s3
+                  key: bucket
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          # TCP check on the Spark UI port rather than httpGet — the JVM
+          # can take a while to come up (driver init, Gravitino catalog
+          # discovery), and a plain socket check avoids depending on a
+          # specific UI path staying stable across Spark versions.
+          readinessProbe:
+            tcpSocket:
+              port: 4040
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            tcpSocket:
+              port: 4040
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 6
           volumeMounts:
             - name: spark-config-volume
               mountPath: /opt/spark/conf/spark-defaults.conf

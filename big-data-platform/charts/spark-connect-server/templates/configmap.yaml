@@ -67,10 +67,12 @@ data:
     spark.hadoop.fs.s3a.paging.maximum           5000
 
     # --- Executor & Driver Resources ---
-    # Executor: 2 vCPU / 4g memory — small footprint so more executors
-    # can run in parallel across both spark-critical and spark-spot pools.
-    # With minExecutors=2 and maxExecutors=8 across two pools, the platform
-    # always has warm executors ready for JupyterHub and Airflow Spark jobs.
+    # Executor: 2 vCPU / 4g memory — small footprint so more executors can
+    # run in parallel on Karpenter's spark-node pool. Note this pool
+    # scale-to-zero's when idle (consolidateAfter: 300s) — unlike the old
+    # always-on spark-critical baseline, there's a cold-start delay
+    # (new-node provisioning time) for the first job after an idle period,
+    # not permanently-warm executors.
     spark.executor.cores             2
     spark.executor.memory            4g
     spark.executor.memoryOverhead    1g
@@ -103,16 +105,21 @@ data:
     spark.sql.gravitino.metalake     {{ .Values.global.gravitino.metalake }}
     spark.sql.gravitino.uri          {{ .Values.global.gravitino.apiUri }}
     spark.sql.gravitino.enableIcebergSupport true
-    spark.sql.warehouse.dir          s3a://warehouse/iceberg/
+    # warehouse.dir is set via --conf on the spark-submit command in
+    # deployment.yaml instead of here — the real bucket name is only known
+    # after `terraform apply`, injected there via the lakehouse-s3 Secret.
     # Add this to ConfigMap to make it feel "instant"
     spark.sql.gravitino.metadata.refresh.interval 5000
 
-    # --- S3 / MinIO Configuration ---
+    # --- S3 Configuration ---
     spark.hadoop.fs.s3a.impl                 org.apache.hadoop.fs.s3a.S3AFileSystem
     spark.hadoop.fs.s3.impl                  org.apache.hadoop.fs.s3a.S3AFileSystem
     spark.hadoop.fs.s3a.path.style.access    {{ .Values.global.s3.pathStyleAccess }}
     spark.hadoop.fs.s3a.connection.ssl.enabled {{ .Values.global.s3.sslEnabled }}
-    spark.hadoop.fs.s3a.aws.credentials.provider org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
+    # No aws.credentials.provider override — Hadoop-aws's own default chain
+    # already includes IAM instance profile support. Forcing
+    # SimpleAWSCredentialsProvider (the old MinIO-era setting) requires
+    # static keys and errors without them.
     spark.hadoop.fs.s3a.fast.upload          true
 
     # --- Networking & UI ---
@@ -121,8 +128,10 @@ data:
     spark.driver.bindAddress                 0.0.0.0
 
     # --- Local NVMe Shuffle Storage ---
-    # Executors land on spark-node/spark-worker which have NVMe at /mnt/spark-nvme.
-    # Terraform pre-creates /mnt/spark-nvme/spark-shuffle on those nodes.
+    # Executors land on Karpenter's spark-node pool, which has NVMe at
+    # /mnt/spark-nvme (auto-detected/RAID0'd by common-runtime.sh at node
+    # boot, same script every node group here uses). The EC2NodeClass
+    # userData additionally creates /mnt/spark-nvme/spark-shuffle on top.
     # hostPath volume in executor-pod-template mounts it into the container.
     spark.local.dir                          {{ .Values.executor.localDir }}
 

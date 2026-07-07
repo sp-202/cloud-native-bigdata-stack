@@ -42,12 +42,16 @@ spec:
           env:
             - name: SPARK_DAEMON_MEMORY
               value: {{ .Values.daemonMemory | quote }}
+            # No AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/s3a.endpoint — the
+            # node's IAM role provides S3 credentials via the default chain.
+            - name: LAKEHOUSE_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: lakehouse-s3
+                  key: bucket
             - name: SPARK_HISTORY_OPTS
               value: >-
-                -Dspark.history.fs.logDirectory={{ .Values.logDirectory }}
-                -Dspark.hadoop.fs.s3a.endpoint={{ .Values.global.s3.endpoint }}
-                -Dspark.hadoop.fs.s3a.access.key={{ .Values.global.s3.accessKey }}
-                -Dspark.hadoop.fs.s3a.secret.key={{ .Values.global.s3.secretKey }}
+                -Dspark.history.fs.logDirectory=s3a://$(LAKEHOUSE_BUCKET)/spark-events/
                 -Dspark.hadoop.fs.s3a.path.style.access={{ .Values.global.s3.pathStyleAccess }}
                 -Dspark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
                 -Dspark.history.fs.subpath.enabled=true
@@ -56,6 +60,20 @@ spec:
                 -Dspark.history.fs.update.interval=10s
           ports:
             - containerPort: 18080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 18080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 18080
+            initialDelaySeconds: 40
+            periodSeconds: 20
+            failureThreshold: 6
 ---
 apiVersion: v1
 kind: Service

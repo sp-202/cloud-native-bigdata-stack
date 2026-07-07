@@ -33,29 +33,8 @@ spec:
             name: {{ .Release.Name }}-api-server
             port:
               name: api-server
-  # MinIO Console
-  - host: minio.{{ .Values.global.domain }}
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: minio
-            port:
-              name: console
-  # MinIO API
-  - host: s3.{{ .Values.global.domain }}
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: minio
-            port:
-              name: api
-  # Superset
+  {{- if and .Values.superset .Values.superset.enabled }}
+  # Superset — only rendered when superset.enabled: true
   - host: superset.{{ .Values.global.domain }}
     http:
       paths:
@@ -66,6 +45,7 @@ spec:
             name: superset
             port:
               name: http
+  {{- end }}
   # JupyterHub
   - host: jupyterhub.{{ .Values.global.domain }}
     http:
@@ -121,28 +101,6 @@ spec:
             name: spark-history-server
             port:
               number: 18080
-  {{- if and .Values.unityCatalog .Values.unityCatalog.enabled }}
-  # Unity Catalog (API + UI) — only rendered when unity-catalog.enabled: true
-  - host: unity-catalog.{{ .Values.global.domain }}
-    http:
-      paths:
-      # API Server routes
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: unity-catalog-server
-            port:
-              name: api
-      # UI routes (root path last as it's catch-all)
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: unity-catalog-ui
-            port:
-              name: ui
-  {{- end }}
   {{- if and .Values.gravitino .Values.gravitino.enabled }}
   # Gravitino — Web UI v2 + Main REST API (port 8090)
   # The Iceberg REST port (9001) is internal-only; Spark uses it in-cluster.
@@ -155,6 +113,6 @@ spec:
           service:
             name: gravitino
             port:
-              name: api
+              name: http
   {{- end }}
 {{- end }}

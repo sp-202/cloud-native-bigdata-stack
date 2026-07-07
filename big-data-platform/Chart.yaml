@@ -2,13 +2,23 @@ apiVersion: v2
 name: big-data-platform
 description: >-
   Data Platform as Code (DPaC) — Helm Umbrella Chart for a full big-data
-  stack on AWS EC2 (ARM64/Graviton). Includes Spark, Hive, Airflow,
-  StarRocks, JupyterHub, Superset, MinIO, PostgreSQL, and Redis.
+  stack on AWS EC2 (ARM64/Graviton). Includes Spark, Gravitino, Airflow,
+  StarRocks, JupyterHub, Superset, S3, PostgreSQL, and Redis.
 type: application
 version: 1.0.0
 appVersion: "1.0.0"
 
 dependencies:
+  - name: cloudnative-pg
+    version: "0.22.1"
+    repository: "https://cloudnative-pg.github.io/charts"
+    condition: cloudnative-pg.enabled
+
+  - name: cert-manager
+    version: "v1.16.2"
+    repository: "https://charts.jetstack.io"
+    condition: cert-manager.enabled
+
   - name: spark-operator
     version: "2.4.0"
     repository: "https://kubeflow.github.io/spark-operator"
@@ -80,30 +90,16 @@ dependencies:
     repository: "file://./charts/redis"
     condition: redis.enabled
 
-  - name: minio
-    version: "1.0.0"
-    repository: "file://./charts/minio"
-    condition: minio.enabled
-
-  - name: hive-metastore
-    version: "1.0.0"
-    repository: "file://./charts/hive-metastore"
-    condition: hive-metastore.enabled
-
-  - name: gravitino
-    version: "1.0.0"
-    repository: "file://./charts/gravitino"
+  - name: gravitino-helm
+    alias: gravitino
+    version: "1.3.11"
+    repository: "oci://registry-1.docker.io/apache/gravitino-helm"
     condition: gravitino.enabled
 
   - name: spark-history-server
     version: "1.0.0"
     repository: "file://./charts/spark-history-server"
     condition: spark-history-server.enabled
-
-  - name: unity-catalog
-    version: "1.0.0"
-    repository: "file://./charts/unity-catalog"
-    condition: unity-catalog.enabled
 
   - name: spark-connect-server
     version: "1.0.0"

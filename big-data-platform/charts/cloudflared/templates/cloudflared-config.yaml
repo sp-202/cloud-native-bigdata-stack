@@ -19,10 +19,6 @@ data:
     ingress:
       - hostname: airflow.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      - hostname: minio.dailyblogstudio.com
-        service: http://traefik.kube-system.svc.cluster.local:80
-      - hostname: s3.dailyblogstudio.com
-        service: http://traefik.kube-system.svc.cluster.local:80
       - hostname: superset.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
       - hostname: jupyterhub.dailyblogstudio.com
@@ -31,9 +27,6 @@ data:
         service: http://traefik.kube-system.svc.cluster.local:80
       - hostname: spark-history.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
-      # unity-catalog disabled — using Hive Metastore as default catalog
-      # - hostname: unity-catalog.dailyblogstudio.com
-      #   service: http://traefik.kube-system.svc.cluster.local:80
       - hostname: prometheus.dailyblogstudio.com
         service: http://traefik.kube-system.svc.cluster.local:80
       - hostname: gravitino.dailyblogstudio.com

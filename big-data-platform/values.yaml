@@ -25,49 +25,56 @@ global:
   # --- Container Images ---
   sparkImage: "subhodeep2022/spark-bigdata:spark-3.5.8-v13-iceberg-gravitino"
   jupyterhubImage: "subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v3"
-  hiveImage: "subhodeep2022/spark-bigdata:hive-3.1.3-arm64-v1"
   airflowImage: "apache/airflow:3.2.0"
   gitSyncImage: "subhodeep2022/k8s-git-sync:v2-prod"
 
-  # --- S3/MinIO Credentials & Endpoints ---
+  # --- S3 ---
+  # No endpoint/accessKey/secretKey — real S3's default endpoint applies, and
+  # every workload gets credentials from the node's IAM role instead of
+  # static keys. pathStyleAccess/sslEnabled still apply to real S3 (virtual-
+  # hosted-style + TLS, the opposite of MinIO's old defaults).
   s3:
-    endpoint: "http://minio.default.svc.cluster.local:9000"
-    accessKey: "minioadmin"
-    secretKey: "minioadmin"
-    pathStyleAccess: true
-    sslEnabled: false
+    pathStyleAccess: false
+    sslEnabled: true
 
   # --- Node Selectors ---
   # Labels are applied by the node-auto-labeler DaemonSet in the bootstrap script.
   # The auto-labeler reads the `node-role` K8s label set by Terraform on each node
   # and creates node-role.kubernetes.io/<role>=  e.g. spark-node → node-role.kubernetes.io/spark-node
+  # sparkWorker/spark-worker removed — that was the static spot-fleet ASG's
+  # node-role, deleted along with it in favor of Karpenter. Karpenter's
+  # spark-node NodePool covers both spot and on-demand capacity under the
+  # same node-role label; spot-vs-on-demand is already distinguishable via
+  # Karpenter's own native karpenter.sh/capacity-type label if ever needed,
+  # no separate custom node-role required for that.
+  # Only gp/spark are used by local chart templates (.Values.global.nodeSelector.x).
+  # Superset/StarRocks don't have entries here — they're external charts with
+  # their own top-level nodeSelector value, not something that reads our
+  # global.* convention; see the superset/starrocks blocks below instead.
   nodeSelector:
     gp:
       node-role.kubernetes.io/k8s-gp-node: ""
     spark:
       node-role.kubernetes.io/spark-node: ""
-    sparkWorker:
-      node-role.kubernetes.io/spark-worker: ""
-    minio:
-      node-role.kubernetes.io/minio-worker: ""
 
 
   # --- Storage ---
   storageClassName: "openebs-hostpath"
 
-  # --- PostgreSQL Connection (shared by Hive, Airflow, Superset) ---
+  # --- PostgreSQL Connection (shared by Airflow, Superset, Gravitino) ---
+  # host is CNPG's primary read-write service ("<cluster-name>-rw"), not a
+  # plain Service named "postgres" — see charts/postgres/templates/cluster.yaml.
+  # No password here: the superuser password lives in the postgres-superuser
+  # Secret (pre-created out-of-band by post-cluster-bootstrap.sh) and is
+  # referenced directly by name wherever it's needed, never as a Helm value.
   postgres:
-    host: "postgres.default.svc.cluster.local"
+    host: "postgres-rw.default.svc.cluster.local"
     port: 5432
     user: "postgres"
-    password: "password"
     database: "postgres"
 
-  # --- Hive Metastore Connection (optional — kept for StarRocks HMS compatibility if needed) ---
-  hiveMetastore:
-    uri: "thrift://hive-metastore.default.svc.cluster.local:9083"
-
   # --- Apache Gravitino — Iceberg REST Catalog & unified metadata lake ---
+  # Sole metadata catalog now — Hive Metastore and Unity Catalog removed.
   gravitino:
     metalake: "enterprise_metalake"
     catalog: "sales_catalog"
@@ -78,44 +85,25 @@ global:
     # Main API endpoint — used by GravitinoSparkPlugin for catalog discovery
     apiUri: "http://gravitino.default.svc.cluster.local:8090"
 
-  # --- Unity Catalog OSS (disabled — replaced by Gravitino) ---
-  unityCatalog:
-    uri: "http://unity-catalog-server.default.svc.cluster.local:8080"
-    token: ""
-
 # =============================================================================
 # PERSISTENCE — PV/PVC definitions
 # =============================================================================
 persistence:
   enabled: true
-  postgres:
-    size: 10Gi
-    localPath: "/var/openebs/local/postgres-data"
-    nodeSelector:
-      node-role.kubernetes.io/k8s-gp-node: ""
-  minio:
-    size: 10Gi
-    localPath: "/mnt/spark-nvme/minio"
-    nodeSelector:
-      node-role.kubernetes.io/minio-worker: ""
+  # postgres no longer has a static local-hostpath PV/PVC here — see
+  # postgres.persistence below (StatefulSet volumeClaimTemplates on ebs-gp3).
+  # minio removed entirely — replaced by S3 (lakehouse-s3 Secret).
+  # DAGs PVC is dynamically provisioned on efs-airflow-dags now (RWX) —
+  # only .size is still read (see charts/persistence/templates/volumes.yaml).
   airflow:
     size: 5Gi
-    localPath: "/var/openebs/local/airflow-shared"
-    nodeSelector:
-      node-role.kubernetes.io/k8s-gp-node: ""
-  # Logs PVs for Airflow StatefulSets (scheduler + triggerer).
-  # Without these, the StatefulSet volumeClaimTemplates create PVCs that
-  # stay Pending forever because there is no matching pre-provisioned PV.
-  airflowSchedulerLogs:
-    size: 10Gi
-    localPath: "/var/openebs/local/airflow-scheduler-logs"
-    nodeSelector:
-      node-role.kubernetes.io/k8s-gp-node: ""
-  airflowTriggererLogs:
-    size: 10Gi
-    localPath: "/var/openebs/local/airflow-triggerer-logs"
-    nodeSelector:
-      node-role.kubernetes.io/k8s-gp-node: ""
+  # Scheduler/triggerer logs no longer need static PVs — they're on ebs-gp3
+  # via airflow.logs.persistence.storageClassName, dynamically provisioned
+  # by the official chart's own StatefulSet volumeClaimTemplates.
+  # Coupled to starrocks.starrocks.starrocksFESpec/BeSpec.nodeSelector below
+  # in the actual chart values — the PV's nodeAffinity must always match
+  # wherever the pod is actually scheduled, or the PVC never binds. Flip
+  # both together if you ever move StarRocks to its dedicated node group.
   starrocksFe:
     size: 10Gi
     localPath: "/mnt/spark-nvme/starrocks-fe"
@@ -134,11 +122,16 @@ persistence:
 
 # =============================================================================
 # POSTGRES — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
+# StatefulSet with volumeClaimTemplates on ebs-gp3 (network-attached, survives
+# node replacement/pod reschedule) — NOT local-hostpath. See charts/postgres.
 # =============================================================================
 postgres:
   enabled: true
-  replicas: 1
+  replicas: 3
   image: "postgres:16"
+  persistence:
+    storageClassName: "ebs-gp3"
+    size: 10Gi
   resources:
     requests:
       cpu: "500m"
@@ -162,42 +155,9 @@ redis:
       cpu: "1000m"
       memory: "1Gi"
 
-# =============================================================================
-# MINIO — MinIO node (im4gn.8xlarge: 32 vCPU / 128 GB + NVMe RAID0)
-# =============================================================================
-minio:
-  enabled: true
-  replicas: 1
-  image: "minio/minio:latest"
-  mcImage: "minio/mc:latest"
-  resources:
-    requests:
-      cpu: "2000m"
-      memory: "4Gi"
-    limits:
-      cpu: "8000m"
-      memory: "16Gi"
-  buckets:
-    - warehouse
-    - spark-logs
-    - notebooks
-    - airflow
-    - delta-tables
-
-# =============================================================================
-# AIRFLOW SECRETS — used by templates/airflow-secrets.yaml
-# These values are NOT passed to the airflow sub-chart.
-# The sub-chart references the pre-created secrets by name below.
-# =============================================================================
-airflowSecrets:
-  fernetKey: "46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho="
-  webserverSecretKey: "bigdata-platform-airflow-webserver-key-change-me"
-  metadataConnection:
-    user: airflow
-    pass: airflow
-    host: postgres.default.svc.cluster.local
-    port: 5432
-    db: airflow
+# MinIO removed entirely — replaced by S3 (one "lakehouse" bucket with
+# prefixes instead of MinIO's separate warehouse/spark-logs/notebooks/
+# airflow/delta-tables buckets; S3 prefixes don't need explicit creation).
 
 # =============================================================================
 # APACHE AIRFLOW (external dependency)
@@ -207,17 +167,27 @@ airflow:
   fullnameOverride: "airflow"
   useStandardNaming: true
   executor: "LocalExecutor"
-  # Reference pre-created secrets from templates/airflow-secrets.yaml
-  fernetKeySecretName: "big-data-platform-fernet-key"
-  webserverSecretKeySecretName: "big-data-platform-webserver-secret-key"
+  # airflow-credentials is pre-created out-of-band by post-cluster-bootstrap.sh
+  # (never in git) — one Secret referenced three times, each setting reading
+  # its own key (fernet-key / webserver-secret-key / connection), matching
+  # what the official chart expects for each of these three settings.
+  fernetKeySecretName: "airflow-credentials"
+  webserverSecretKeySecretName: "airflow-credentials"
   postgresql:
     enabled: false
   data:
-    metadataSecretName: "big-data-platform-metadata"
+    metadataSecretName: "airflow-credentials"
   # Disable the chart's internal Helm-hook migration job.
   # Migrations are handled by templates/airflow-db-migrate.yaml (ArgoCD wave 5).
   # Running both concurrently can cause race conditions under ArgoCD.
   migrateDatabaseJob:
+    enabled: false
+  # Disable the chart's own admin-user creation job too — it defaults to
+  # enabled:true and would race templates/airflow-db-migrate.yaml, which
+  # creates the same "admin" user with the real (secret-sourced) password.
+  # Whichever job happened to run first was silently deciding the actual
+  # login password — this was a real, live bug, not just redundancy.
+  createUserJob:
     enabled: false
   images:
     airflow:
@@ -249,7 +219,8 @@ airflow:
       email: admin@airflow.com
       firstName: Admin
       lastName: User
-      password: admin
+      # No password here — templates/airflow-db-migrate.yaml sources it from
+      # the airflow-credentials Secret's admin-password key via env var.
     replicas: 1
     resources:
       requests:
@@ -270,7 +241,7 @@ airflow:
   logs:
     persistence:
       enabled: true
-      storageClassName: openebs-hostpath
+      storageClassName: ebs-gp3
       size: 10Gi
 
   config:
@@ -283,9 +254,10 @@ airflow:
 
 # =============================================================================
 # AIRFLOW GIT-SYNC (custom sub-chart)
-# Uses subhodeep2022/k8s-git-sync:v2-prod (git-sync + mc bundled).
-# Writes repo to airflow-dags-shared-pvc at /dags/repo (symlink).
-# exechook runs sync-hook.sh → mc mirror /dags/repo myminio/dags (stable paths).
+# Uses subhodeep2022/k8s-git-sync:v2-prod, writing the repo to
+# airflow-dags-shared-pvc at /dags/repo (symlink) — its only job now. A
+# separate s3-sync sidecar (official amazon/aws-cli image, IAM-role auth)
+# mirrors /dags/repo to S3, replacing the image's own mc-based exechook.
 # =============================================================================
 airflow-git-sync:
   enabled: true
@@ -302,41 +274,6 @@ airflow-git-sync:
       memory: "256Mi"
 
 # =============================================================================
-# HIVE METASTORE (+ HiveServer2) — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
-# =============================================================================
-hive-metastore:
-  enabled: false  # Replaced by Apache Gravitino IRC (Iceberg REST Catalog)
-  replicas: 1
-  db:
-    user: "hive"
-    password: "hive"
-    name: "metastore"
-  metastore:
-    resources:
-      requests:
-        cpu: "500m"
-        memory: "1Gi"
-      limits:
-        cpu: "2000m"
-        memory: "4Gi"
-  server:
-    resources:
-      requests:
-        cpu: "500m"
-        memory: "1Gi"
-      limits:
-        cpu: "2000m"
-        memory: "4Gi"
-  initContainer:
-    resources:
-      requests:
-        cpu: "100m"
-        memory: "128Mi"
-      limits:
-        cpu: "250m"
-        memory: "256Mi"
-
-# =============================================================================
 # APACHE GRAVITINO 1.2.0 — Unified Metadata Lake + Iceberg REST Catalog (IRC)
 # GP node — moderate CPU/memory; IRC handles Spark & StarRocks catalog traffic.
 #
@@ -349,17 +286,14 @@ hive-metastore:
 gravitino:
   enabled: true
   replicas: 1
-  image: "apache/gravitino:1.2.0"
-  db:
-    name: "gravitino"
-    user: "postgres"
-    password: "password"
-  icebergCatalog:
-    db:
-      name: "iceberg_catalog"
-      user: "postgres"
-      password: "password"
-    warehouse: "s3://warehouse/iceberg/"
+  image:
+    repository: apache/gravitino
+    tag: "1.3.0"
+  # Matches .Values.global.nodeSelector.gp used elsewhere — this chart's
+  # values.yaml is separate (external dependency), so it's repeated literally
+  # rather than templated (values.yaml itself is plain data, not Go-templated).
+  nodeSelector:
+    node-role.kubernetes.io/k8s-gp-node: ""
   resources:
     requests:
       cpu: "500m"
@@ -367,6 +301,46 @@ gravitino:
     limits:
       cpu: "2000m"
       memory: "4Gi"
+  # entity.jdbcPassword is NOT set here — the official chart renders it as
+  # plaintext into a ConfigMap (SKIP_CONFIG_REWRITE=true disables the
+  # env-var-override mechanism our old custom chart relied on), so it can't
+  # use a Secret reference at all. The real value is injected by
+  # post-cluster-bootstrap.sh as an ArgoCD Application-level Helm parameter
+  # (gravitino.entity.jdbcPassword) instead — never touches this file/git.
+  entity:
+    jdbcUrl: "jdbc:postgresql://postgres-rw.default.svc.cluster.local:5432/gravitino?currentSchema=public"
+    jdbcDriver: "org.postgresql.Driver"
+    jdbcUser: "gravitino"
+  auxService:
+    names: iceberg-rest
+  icebergRest:
+    httpPort: 9001
+    # dynamic-config-provider: IRC delegates catalog lookup to the Core
+    # Server (8090) instead of managing its own static/memory catalog —
+    # same mode the old custom chart used, needed so Spark-created tables
+    # show up in the Gravitino Web UI. icebergRest.warehouse/jdbc.* are
+    # irrelevant in this mode (only used for static/jdbc catalog backends).
+    catalogConfigProvider: dynamic-config-provider
+    dynamicConfigProvider:
+      uri: "http://localhost:8090"
+      metalake: "enterprise_metalake"
+    ioImpl: "org.apache.iceberg.aws.s3.S3FileIO"
+    # No s3.accessKeyId/secretAccessKey/endpoint/pathStyleAccess — omitting
+    # them makes Iceberg's S3FileIO fall back to the AWS SDK's default
+    # credential chain (the node's IAM role) and real S3's default
+    # virtual-hosted-style endpoint. Only region needs to be explicit.
+    s3:
+      region: "us-east-1"
+  # icebergCatalog is this platform's own key (read by templates/gravitino-init.yaml
+  # and templates/gravitino-schema-init.yaml), not part of the official chart's
+  # schema — the catalog's own JDBC backend DB, name/user are safe as plain
+  # values; warehouse (real S3 bucket path) and password are both injected via
+  # ArgoCD helm.parameters at deploy time (bucket name is only known after
+  # `terraform apply`, so it can't be hardcoded here either).
+  icebergCatalog:
+    db:
+      name: "iceberg_catalog"
+      user: "gravitino"
 
 # =============================================================================
 # SPARK HISTORY SERVER — Spark node (i4g.8xlarge: 32 vCPU / 256 GB)
@@ -376,7 +350,9 @@ spark-history-server:
   enabled: true
   replicas: 1
   daemonMemory: "2g"
-  logDirectory: "s3a://spark-logs/spark-events/"
+  # logDirectory is no longer a value here — the real bucket name (only known
+  # after `terraform apply`) is read from the lakehouse-s3 Secret directly in
+  # charts/spark-history-server/templates/deployment.yaml.
   resources:
     requests:
       cpu: "500m"
@@ -386,8 +362,8 @@ spark-history-server:
       memory: "4Gi"
 
 # =============================================================================
-# SPARK CONNECT SERVER — Spark node (i4g.8xlarge: 32 vCPU / 256 GB)
-# Driver runs on spark node; executors dispatched to spark-worker nodes
+# SPARK CONNECT SERVER — Spark node (Karpenter-managed, c7gd/m7gd/r7gd)
+# Driver and executors both land on Karpenter's spark-node NodePool.
 # =============================================================================
 spark-connect-server:
   enabled: true
@@ -403,47 +379,10 @@ spark-connect-server:
     minExecutors: 2
     maxExecutors: 8
   executor:
-    # Node targeting is handled by executor-pod-template-cm.yaml via nodeAffinity
-    # (OR logic: spark-critical OR spark-spot). nodeSelector removed — it is
-    # AND-only and cannot target multiple pools.
+    # Executor node targeting is handled by executor-pod-template-cm.yaml's
+    # nodeAffinity (single spark-node pool now) rather than nodeSelector here.
     localDir: "/mnt/spark-nvme"
     hostPath: "/mnt/spark-nvme/spark-shuffle"
-
-# =============================================================================
-# UNITY CATALOG OSS 0.4.0
-# NOTE: unitycatalog/unitycatalog:0.4.0 does not exist on Docker Hub.
-# Disabled until a valid image tag is confirmed (check ghcr.io or build custom).
-# =============================================================================
-unity-catalog:
-  enabled: false
-  replicas: 1
-  db:
-    name: "unity_catalog"
-    user: "postgres"
-    password: "password"
-  server:
-    image: "unitycatalog/unitycatalog:0.4.0"
-    port: 8080
-    # S3 bucket name + region are injected dynamically:
-    #   Terraform → SSM param → bootstrap script → K8s Secret (unity-catalog-s3)
-    # AWS credentials use EC2 instance profile (IAM role) — no static keys needed
-    resources:
-      requests:
-        cpu: "500m"
-        memory: "1Gi"
-      limits:
-        cpu: "1000m"
-        memory: "2Gi"
-  ui:
-    image: "unitycatalog/unitycatalog-ui:0.4.0"
-    port: 3000
-    resources:
-      requests:
-        cpu: "250m"
-        memory: "256Mi"
-      limits:
-        cpu: "500m"
-        memory: "512Mi"
 
 # =============================================================================
 # KUBE-STARROCKS (external dependency)
@@ -465,6 +404,18 @@ starrocks:
       # false as falsy and emits empty string → null, failing CRD boolean validation.
       # StarRocks 3.3 ubuntu images support non-root (UID 1000).
       runAsNonRoot: true
+      # Defaults to the GP node — matches where its PV is currently pinned
+      # (persistence.starrocksFe.nodeSelector below). To actually move FE to
+      # the dedicated starrocks-node (terraform-aws-k8s-ha's
+      # compute-starrocks.tf, enable_starrocks_nodegroup): flip BOTH this
+      # value AND persistence.starrocksFe.nodeSelector together, or the PVC
+      # won't bind (nodeAffinity would point at a different node than the
+      # pod is scheduled on). Manual, not automatic — see conversation
+      # history for why an ArgoCD helm.parameters toggle doesn't work
+      # cleanly here (nodeSelector is a map; overriding one key adds an AND
+      # condition instead of replacing it).
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
       service:
         type: NodePort
         ports:
@@ -484,6 +435,10 @@ starrocks:
         tag: "3.3-latest"
       replicas: 1
       runAsNonRoot: true
+      # Same coupling as starrocksFESpec above — flip together with
+      # persistence.starrocksBe.nodeSelector.
+      nodeSelector:
+        node-role.kubernetes.io/k8s-gp-node: ""
       resources:
         requests:
           cpu: "500m"
@@ -519,11 +474,16 @@ ingress:
   className: "traefik"
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web
-  # Sub-chart dependency flags passed to ingress template
+  # Sub-chart dependency flags passed to ingress template.
+  # NOTE: the ingress chart can't see sibling subcharts' own .enabled values
+  # (Helm only auto-shares .Values.global.* across subcharts) — these are
+  # separate, manually-duplicated flags. If you flip the real superset.enabled
+  # / gravitino.enabled above, flip the matching one here too, or the ingress
+  # rule and the actual Service will disagree.
   gravitino:
     enabled: true
-  unityCatalog:
-    enabled: false
+  superset:
+    enabled: true
 
 # =============================================================================
 # SPARK OPERATOR (external dependency)
@@ -578,6 +538,12 @@ superset:
     enabled: false
   redis:
     enabled: false
+  # Defaults to the GP node — safe when enable_superset_nodegroup is false
+  # (the default), since that's the only node this could possibly schedule
+  # on. post-cluster-bootstrap.sh overrides this to superset-node via an
+  # ArgoCD helm.parameters entry (same mechanism as Gravitino's password —
+  # see argocd-app.sh) ONLY when enable_superset_nodegroup=true, so it's
+  # automatically correct either way without hand-editing this file.
   nodeSelector:
     node-role.kubernetes.io/k8s-gp-node: ""
   image:
@@ -604,6 +570,26 @@ superset:
     fi
   ingress:
     enabled: false
+  # Secrets injected as raw env vars (valueFrom.secretKeyRef) — reach every
+  # Superset pod including the init Job, per the chart's own template wiring.
+  # See configOverrides below for how DB_PASS/SUPERSET_SECRET_KEY get used,
+  # and init.initscript for ADMIN_PASSWORD.
+  extraEnvRaw:
+    - name: DB_PASS
+      valueFrom:
+        secretKeyRef:
+          name: superset-credentials
+          key: db-password
+    - name: SUPERSET_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: superset-credentials
+          key: secret-key
+    - name: ADMIN_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: superset-credentials
+          key: admin-password
   supersetNode:
     replicas:
       enabled: true
@@ -618,10 +604,12 @@ superset:
         enabled: false
         ssl_cert_reqs: CERT_NONE
       db_type: "postgresql"
-      db_host: "postgres.default.svc.cluster.local"
+      db_host: "postgres-rw.default.svc.cluster.local"
       db_port: "5432"
       db_user: superset
-      db_pass: superset
+      # Not the real password — configOverrides.database below replaces
+      # SQLALCHEMY_DATABASE_URI using $DB_PASS from superset-credentials.
+      db_pass: "unused-see-configOverrides-database"
       db_name: superset
     resources:
       requests:
@@ -650,9 +638,19 @@ superset:
       limits:
         memory: "512Mi"
         cpu: "500m"
+  # Appended to the end of superset_config.py (chart's own default assignments
+  # run first, these overwrite them) — real values come from extraEnvRaw above,
+  # never from a literal here.
   configOverrides:
     secret: |
-      SECRET_KEY = 'bigdata-platform-superset-secret-key-change-me'
+      import os
+      SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
+    database: |
+      import os
+      SQLALCHEMY_DATABASE_URI = (
+          f"postgresql+psycopg2://superset:{os.environ['DB_PASS']}"
+          f"@postgres-rw.default.svc.cluster.local:5432/superset"
+      )
   init:
     enabled: true
     createAdmin: true
@@ -664,7 +662,39 @@ superset:
       firstname: Superset
       lastname: Admin
       email: admin@superset.com
-      password: "CHANGE_ME_STRONG_PASSWORD"
+      # No password here — initscript override below reads $ADMIN_PASSWORD
+      # instead of interpolating .Values.init.adminUser.password directly
+      # (the chart's default initscript does the latter, which would put
+      # the real password in this file).
+    # Same as the chart's default init.initscript (see apache-superset/superset
+    # templates/secret-superset-config.yaml), except the create-admin line
+    # uses "$ADMIN_PASSWORD" (shell env, from extraEnvRaw) instead of a
+    # Helm-templated literal.
+    initscript: |-
+      #!/bin/sh
+      set -eu
+      echo "Upgrading DB schema..."
+      superset db upgrade
+      echo "Initializing roles..."
+      superset init
+      {{ if .Values.init.createAdmin }}
+      echo "Creating admin user..."
+      superset fab create-admin \
+                      --username {{ .Values.init.adminUser.username }} \
+                      --firstname {{ .Values.init.adminUser.firstname }} \
+                      --lastname {{ .Values.init.adminUser.lastname }} \
+                      --email {{ .Values.init.adminUser.email }} \
+                      --password "$ADMIN_PASSWORD" \
+                      || true
+      {{- end }}
+      {{ if .Values.init.loadExamples }}
+      echo "Loading examples..."
+      superset load_examples
+      {{- end }}
+      if [ -f "{{ .Values.extraConfigMountPath }}/import_datasources.yaml" ]; then
+        echo "Importing database connections.... "
+        superset import_datasources -p {{ .Values.extraConfigMountPath }}/import_datasources.yaml
+      fi
     resources:
       requests:
         cpu: "250m"
@@ -692,14 +722,63 @@ metrics-server:
     initialDelaySeconds: 30
 
 # =============================================================================
+# CERT-MANAGER (external dependency)
+# Only consumer today is kube-prometheus-stack's Prometheus Operator admission
+# webhook (below) — generates a self-signed CA for it instead of the chart's
+# own create/patch Jobs, which ArgoCD can't manage safely (see comment there).
+# =============================================================================
+cert-manager:
+  enabled: true
+  crds:
+    enabled: true
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+  webhook:
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"
+  cainjector:
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "128Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"
+
+# =============================================================================
 # KUBE-PROMETHEUS-STACK (external dependency)
 # =============================================================================
 kube-prometheus-stack:
   enabled: true
+  prometheusOperator:
+    admissionWebhooks:
+      # Without this, the chart renders its own admission-create/-patch Jobs
+      # (helm.sh/hook annotations, meaningless to ArgoCD's `helm template`
+      # rendering) as permanent resources. Kubernetes Jobs are immutable, so
+      # every ArgoCD resync fails to reapply them — this was the actual cause
+      # of the "stuck Progressing/OutOfSync" loop. cert-manager (below)
+      # generates the webhook CA instead; the chart's own condition
+      # (see admission-webhooks/job-patch/job-createSecret.yaml) automatically
+      # skips rendering those Jobs when this is true.
+      certManager:
+        enabled: true
   grafana:
     enabled: true
     fullnameOverride: "grafana"
-    adminPassword: "admin"
+    admin:
+      existingSecret: "grafana-credentials"
+      userKey: admin-user
+      passwordKey: admin-password
     ingress:
       enabled: false  # Using centralized ingress instead
     sidecar:

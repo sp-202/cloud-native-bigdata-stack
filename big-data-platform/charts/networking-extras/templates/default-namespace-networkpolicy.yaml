@@ -1,0 +1,66 @@
+# ------------------------------------------------------------------------------
+# NetworkPolicy - default namespace boundary
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Namespace layout this platform actually uses today:
+#   default               — almost everything (Airflow, Superset, Spark,
+#                            Gravitino, Postgres, StarRocks, kube-prometheus-
+#                            stack, JupyterHub, etc. — the whole umbrella
+#                            chart deploys into one release namespace)
+#   kube-system           — Traefik (ingress), Cilium, CoreDNS, CSI drivers
+#   cloudflare            — cloudflared (already has its own NetworkPolicy,
+#                            see charts/cloudflared)
+#   cert-manager          — cert-manager (issues certs, no runtime traffic
+#                            to/from default needed)
+#   kubernetes-dashboard  — standalone, no relationship to this platform
+#
+# This is a coarse, deliberately conservative boundary — NOT a full
+# default-deny-all. It blocks unrelated/future namespaces (kubernetes-
+# dashboard, cert-manager, or anything added later) from reaching directly
+# into this platform's core services, while leaving all intra-namespace
+# traffic within `default` unrestricted. A fully granular per-service policy
+# (Airflow→Postgres only, Superset→Redis only, etc.) would need every real
+# connection enumerated correctly on the first try with no live cluster to
+# verify against — the risk of silently breaking real traffic outweighs the
+# benefit of that extra precision right now.
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+{{- if .Values.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-namespace-boundary
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    # Unrestricted from anything else already in `default` — this is where
+    # almost all of this platform's real inter-service traffic lives
+    # (Airflow↔Postgres, Superset↔Redis/Postgres, Spark↔Gravitino, etc.)
+    # and enumerating it all correctly without live testing isn't safe.
+    - from:
+        - podSelector: {}
+    # Traefik (kube-system) proxying user requests to services in default —
+    # per charts/ingress's centralized Ingress, this is the actual traffic
+    # source for every *.{{ .Values.global.domain }} route.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+    # cloudflared (cloudflare namespace) reaches Spark Connect directly on
+    # 15002 — matches its own existing egress rule in
+    # charts/cloudflared/templates/cloudflared-networkpolicy.yaml.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cloudflare
+      ports:
+        - protocol: TCP
+          port: 15002
+{{- end }}

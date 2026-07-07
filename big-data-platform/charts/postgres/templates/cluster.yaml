@@ -1,0 +1,129 @@
+# ------------------------------------------------------------------------------
+# PostgreSQL - CloudNativePG Cluster
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Primary relational database for platform metadata (Airflow,
+# Superset, Gravitino), run as a CloudNativePG Cluster instead of a hand-rolled
+# StatefulSet — gives real HA across the GP node tier (automatic leader
+# election + failover between the `instances` replicas) instead of a single
+# pod that's a point of failure. Storage is still ebs-gp3 (network-attached,
+# survives node replacement/pod reschedule).
+#
+# Secrets: superuserSecret / managed.roles[].passwordSecret reference Secrets
+# pre-created out-of-band by post-cluster-bootstrap.sh (postgres-superuser,
+# airflow-db-role, superset-db-role) — never plaintext in this chart or in git.
+#
+# Managed via ArgoCD Sync Wave: -2
+# ------------------------------------------------------------------------------
+
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  instances: {{ .Values.replicas }}
+  imageName: {{ .Values.image }}
+
+  superuserSecret:
+    name: postgres-superuser
+
+  storage:
+    storageClass: {{ .Values.persistence.storageClassName | default "ebs-gp3" | quote }}
+    size: {{ .Values.persistence.size | default "10Gi" | quote }}
+
+  affinity:
+    nodeSelector:
+      {{- toYaml .Values.global.nodeSelector.gp | nindent 6 }}
+    # Spread replicas across distinct GP nodes — HA is pointless if two
+    # instances land on the same node and it goes down.
+    podAntiAffinityType: preferred
+    topologyKey: kubernetes.io/hostname
+
+  resources:
+    {{- toYaml .Values.resources | nindent 4 }}
+
+  bootstrap:
+    initdb:
+      database: postgres
+      owner: postgres
+
+  # Declaratively creates/keeps-in-sync the airflow/superset/gravitino login
+  # roles. Passwords come from the referenced Secrets (never inline here).
+  # gravitino gets its own dedicated role now instead of reusing the shared
+  # postgres superuser (previously the case with the old hand-rolled chart) —
+  # same least-privilege pattern already used for airflow/superset.
+  managed:
+    roles:
+      - name: airflow
+        ensure: present
+        login: true
+        passwordSecret:
+          name: airflow-db-role
+      - name: superset
+        ensure: present
+        login: true
+        passwordSecret:
+          name: superset-db-role
+      - name: gravitino
+        ensure: present
+        login: true
+        passwordSecret:
+          name: gravitino-db-role
+---
+# Declarative Database CRs (CNPG >= 1.22) — creates each app's database owned
+# by its role, instead of the old postgres-init ConfigMap running raw SQL with
+# hardcoded passwords on first boot.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: airflow
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  name: airflow
+  owner: airflow
+  cluster:
+    name: postgres
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: superset
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  name: superset
+  owner: superset
+  cluster:
+    name: postgres
+---
+# Gravitino's own entity store (metalake/catalog/table metadata)
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: gravitino
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  name: gravitino
+  owner: gravitino
+  cluster:
+    name: postgres
+---
+# Separate DB for the Iceberg REST Catalog's own JDBC catalog backend
+# (distinct from Gravitino's entity store above — same separation the old
+# chart used, just now under the gravitino role instead of the superuser).
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: iceberg-catalog
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  name: iceberg_catalog
+  owner: gravitino
+  cluster:
+    name: postgres

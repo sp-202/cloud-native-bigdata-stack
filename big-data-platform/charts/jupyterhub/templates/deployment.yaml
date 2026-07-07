@@ -30,26 +30,8 @@ spec:
       nodeSelector:
         {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
       serviceAccountName: jupyterhub
-      initContainers:
-        - name: wait-for-minio
-          image: curlimages/curl:latest
-          resources:
-            requests:
-              cpu: "50m"
-              memory: "64Mi"
-            limits:
-              cpu: "100m"
-              memory: "128Mi"
-          command:
-            - sh
-            - -c
-            - |
-              echo "Waiting for MinIO to be ready..."
-              until curl -sf {{ .Values.global.s3.endpoint }}/minio/health/live; do
-                echo "MinIO not ready, retrying in 3s..."
-                sleep 3
-              done
-              echo "MinIO is ready"
+      # No wait-for-minio init container — real S3 doesn't need a
+      # readiness wait the way the in-cluster MinIO pod did.
       containers:
         - name: jupyterhub
           image: {{ .Values.global.jupyterhubImage }}
@@ -62,14 +44,14 @@ spec:
               value: {{ .Values.sparkRemote | quote }}
             - name: PYSPARK_PYTHON
               value: "python3"
-            - name: AWS_ACCESS_KEY_ID
-              value: {{ .Values.global.s3.accessKey | quote }}
-            - name: AWS_SECRET_ACCESS_KEY
-              value: {{ .Values.global.s3.secretKey | quote }}
-            - name: JUPYTER_S3_ENDPOINT
-              value: {{ .Values.global.s3.endpoint | quote }}
-            - name: MINIO_ENDPOINT
-              value: {{ .Values.global.s3.endpoint | quote }}
+            # No AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/S3 endpoint — the
+            # node's IAM role provides S3 credentials via boto3/Hadoop's
+            # default credential chain.
+            - name: LAKEHOUSE_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: lakehouse-s3
+                  key: bucket
             - name: JUPYTER_ENABLE_LAB
               value: "yes"
             - name: JUPYTER_TOKEN
