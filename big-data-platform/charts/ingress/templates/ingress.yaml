@@ -23,6 +23,11 @@ spec:
   ingressClassName: {{ .Values.className }}
   rules:
   # Airflow
+  # Service name is "airflow-api-server", not "{{ .Release.Name }}-api-server"
+  # — the airflow subchart sets fullnameOverride: "airflow" (values.yaml),
+  # which breaks the {{ .Release.Name }}-X pattern used by subcharts without
+  # an override. Was pointing at a service that never existed, causing a
+  # flat 404 on every request. Confirmed live.
   - host: airflow.{{ .Values.global.domain }}
     http:
       paths:
@@ -30,7 +35,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: {{ .Release.Name }}-api-server
+            name: airflow-api-server
             port:
               name: api-server
   {{- if and .Values.superset .Values.superset.enabled }}
