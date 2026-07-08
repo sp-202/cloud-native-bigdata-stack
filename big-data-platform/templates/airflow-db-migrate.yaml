@@ -55,16 +55,35 @@ spec:
             - |
               set -e
               airflow db migrate
-              # Create admin user immediately after migration — idempotent via || true.
-              # Done here (wave -1) instead of a separate wave-1 hook so the user
-              # always exists even when an ArgoCD sync fails before wave 1 is reached.
+              # Create admin user immediately after migration. Done here (wave -1)
+              # instead of a separate wave-1 hook so the user always exists even
+              # when an ArgoCD sync fails before wave 1 is reached.
+              #
+              # Must stay idempotent across repeat syncs (this Job reruns on every
+              # sync) — `airflow users create` exits non-zero if the user already
+              # exists, which is expected, not a failure. But a blanket `|| true`
+              # previously swallowed EVERY failure reason equally, including a
+              # genuinely broken user-creation (e.g. wrong auth manager, DB not
+              # ready) — the Job would still report success with no admin user
+              # actually created, and login would fail with no visible cause.
+              # Only "already exists" is now treated as OK; anything else fails
+              # the Job loudly. Confirmed live: this exact silent-failure shape
+              # was suspected as the cause of an "invalid credentials" report.
+              set +e
               airflow users create \
                 --username {{ .Values.airflow.webserver.defaultUser.username }} \
                 --firstname {{ .Values.airflow.webserver.defaultUser.firstName }} \
                 --lastname {{ .Values.airflow.webserver.defaultUser.lastName }} \
                 --role {{ .Values.airflow.webserver.defaultUser.role }} \
                 --email {{ .Values.airflow.webserver.defaultUser.email }} \
-                --password "$ADMIN_PASSWORD" || true
+                --password "$ADMIN_PASSWORD" > /tmp/user_create.log 2>&1
+              USER_CREATE_EXIT=$?
+              set -e
+              cat /tmp/user_create.log
+              if [ $USER_CREATE_EXIT -ne 0 ] && ! grep -qi "already exist" /tmp/user_create.log; then
+                echo "ERROR: airflow users create failed for an unexpected reason (exit $USER_CREATE_EXIT) — see output above."
+                exit 1
+              fi
               echo "DB migration and user init complete."
           env:
             - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
