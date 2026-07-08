@@ -78,6 +78,10 @@ spec:
               name: spark-ui
   {{- end }}
   # Prometheus
+  # Service name is "kube-prometheus-stack-prometheus" — the
+  # kube-prometheus-stack subchart sets fullnameOverride:
+  # "kube-prometheus-stack" (values.yaml), so "{{ .Release.Name }}-X" would
+  # point at a nonexistent service (same 404 bug as the earlier airflow fix).
   - host: prometheus.{{ .Values.global.domain }}
     http:
       paths:
@@ -85,7 +89,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: {{ .Release.Name }}-kube-pro-prometheus
+            name: kube-prometheus-stack-prometheus
             port:
               name: http-web
   # Grafana

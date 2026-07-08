@@ -21,6 +21,13 @@ fullnameOverride: ""
 # namespaces.yaml (-3), well before the -2 CRs that depend on it.
 cloudnative-pg:
   enabled: true
+  # Drops the "big-data-platform-" prefix (matches airflow/redis/postgres).
+  # The operator's own webhook Service/ValidatingWebhookConfiguration/
+  # MutatingWebhookConfiguration names (cnpg-webhook-service,
+  # cnpg-*-webhook-configuration) are fixed by the chart regardless of
+  # release name, and nothing else in this repo references the
+  # release-prefixed operator name — pure rename.
+  fullnameOverride: "cloudnative-pg"
   commonAnnotations:
     argocd.argoproj.io/sync-wave: "-3"
 
@@ -340,6 +347,12 @@ airflow-git-sync:
 # =============================================================================
 gravitino:
   enabled: true
+  # Drops the "big-data-platform-" prefix from the Deployment/pod name
+  # (matches airflow/redis/postgres). The chart's own Service is already
+  # named "gravitino" regardless of release name — verified via `helm
+  # template` that this override doesn't change it, so the ingress backend
+  # reference (charts/ingress/templates/ingress.yaml) needs no update.
+  fullnameOverride: "gravitino"
   replicas: 1
   image:
     repository: apache/gravitino
@@ -794,6 +807,11 @@ metrics-server:
 # =============================================================================
 cert-manager:
   enabled: true
+  # Drops the "big-data-platform-" prefix from every resource this subchart
+  # creates (matches the pattern airflow/redis/postgres already use). No
+  # other file references this chart's release-prefixed name, so this is a
+  # pure rename — nothing else needs updating to match.
+  fullnameOverride: "cert-manager"
   crds:
     enabled: true
   nodeSelector:
@@ -831,6 +849,15 @@ cert-manager:
 # =============================================================================
 kube-prometheus-stack:
   enabled: true
+  # Drops the "big-data-platform-" prefix (matches airflow/redis/postgres) —
+  # also replaces the cryptic auto-truncated "kube-pro" name (Helm's own
+  # 63-char fullname truncation, since "big-data-platform-kube-prometheus-
+  # stack-operator" was too long) with the real chart name. Verified via
+  # `helm template` that the prometheus Service becomes
+  # "kube-prometheus-stack-prometheus" — updated the ingress backend
+  # (charts/ingress/templates/ingress.yaml) to match, same fix pattern as
+  # the airflow ingress bug.
+  fullnameOverride: "kube-prometheus-stack"
   prometheusOperator:
     nodeSelector:
       node-role.kubernetes.io/data-node: ""
