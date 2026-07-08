@@ -30,7 +30,7 @@ spec:
         app: redis
     spec:
       nodeSelector:
-        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+        {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
       containers:
         - name: redis
           image: {{ .Values.image }}

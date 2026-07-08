@@ -27,8 +27,12 @@ spec:
       labels:
         app: spark-history-server
     spec:
+      # data-node, not spark-node — this is just a log viewer reading
+      # completed job history from S3, it doesn't need Karpenter's
+      # scale-from-zero Spark capacity. Pinning it there meant just opening
+      # the UI would cold-start an expensive Spark instance for no reason.
       nodeSelector:
-        {{- toYaml .Values.global.nodeSelector.spark | nindent 8 }}
+        {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
       containers:
         - name: spark-history-server
           image: {{ .Values.global.sparkImage }}

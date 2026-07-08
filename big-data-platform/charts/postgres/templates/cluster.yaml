@@ -36,7 +36,7 @@ spec:
 
   affinity:
     nodeSelector:
-      {{- toYaml .Values.global.nodeSelector.gp | nindent 6 }}
+      {{- toYaml .Values.global.nodeSelector.data | nindent 6 }}
     # Spread replicas across distinct GP nodes — HA is pointless if two
     # instances land on the same node and it goes down.
     podAntiAffinityType: preferred

@@ -33,7 +33,7 @@ spec:
     spec:
       restartPolicy: OnFailure
       nodeSelector:
-        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+        {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
       initContainers:
         # Copy the version-matched schema/upgrade SQL files out of the
         # Gravitino image itself — same source the chart's own init

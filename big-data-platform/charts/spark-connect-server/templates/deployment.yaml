@@ -32,6 +32,14 @@ spec:
       serviceAccountName: spark-operator-spark
       nodeSelector:
         {{- toYaml .Values.global.nodeSelector.spark | nindent 8 }}
+      # spark-node's NodePool taint (terraform-aws-k8s-ha/karpenter-k8s.tf)
+      # — without this, the driver couldn't schedule there despite matching
+      # the nodeSelector above.
+      tolerations:
+        - key: "spark-only"
+          value: "true"
+          effect: "NoSchedule"
+          operator: "Equal"
       containers:
         - name: spark-connect-server
           image: {{ .Values.global.sparkImage }}

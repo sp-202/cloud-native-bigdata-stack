@@ -33,7 +33,7 @@ spec:
     spec:
       restartPolicy: OnFailure
       nodeSelector:
-        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+        {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
       initContainers:
         - name: wait-for-postgres
           image: "postgres:15-alpine"

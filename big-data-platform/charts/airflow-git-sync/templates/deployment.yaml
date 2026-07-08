@@ -44,7 +44,7 @@ spec:
         app: airflow-git-sync
     spec:
       nodeSelector:
-        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+        {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
       securityContext:
         fsGroup: 50000
         fsGroupChangePolicy: "OnRootMismatch"

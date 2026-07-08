@@ -28,7 +28,7 @@ spec:
         app: jupyterhub
     spec:
       nodeSelector:
-        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+        {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
       serviceAccountName: jupyterhub
       # No wait-for-minio init container — real S3 doesn't need a
       # readiness wait the way the in-cluster MinIO pod did.

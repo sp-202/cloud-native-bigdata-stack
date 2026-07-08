@@ -24,8 +24,8 @@ data:
               - matchExpressions:
                   - key: node-role.kubernetes.io/spark-node
                     operator: Exists
-      # Tolerate spot interruption taint if applied by NTH
       tolerations:
+        # Tolerate spot interruption taint if applied by NTH
         - key: "node.kubernetes.io/unreachable"
           operator: "Exists"
           effect: "NoExecute"
@@ -34,6 +34,13 @@ data:
           operator: "Exists"
           effect: "NoExecute"
           tolerationSeconds: 30
+        # spark-node's NodePool taint (terraform-aws-k8s-ha/karpenter-k8s.tf)
+        # — without this, executors couldn't schedule there at all despite
+        # matching the nodeAffinity above.
+        - key: "spark-only"
+          value: "true"
+          effect: "NoSchedule"
+          operator: "Equal"
       volumes:
         - name: spark-shuffle
           hostPath:

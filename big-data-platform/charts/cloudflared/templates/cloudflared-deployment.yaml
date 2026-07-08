@@ -29,6 +29,9 @@ spec:
       serviceAccountName: cloudflared
       automountServiceAccountToken: false
 
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.core | nindent 8 }}
+
       # Spread pods across nodes for HA
       topologySpreadConstraints:
         - maxSkew: 1

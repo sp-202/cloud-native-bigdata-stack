@@ -70,6 +70,7 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
       nodeSelector:
         'kubernetes.io/os': linux
+        {{- toYaml .Values.global.nodeSelector.core | nindent 8 }}
 ---
 apiVersion: v1
 kind: ServiceAccount

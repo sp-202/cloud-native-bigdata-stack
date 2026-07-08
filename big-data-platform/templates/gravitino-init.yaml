@@ -40,7 +40,7 @@ spec:
     spec:
       restartPolicy: OnFailure
       nodeSelector:
-        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+        {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
       initContainers:
         # Wait for Gravitino Core Server (port 8090) to pass its readiness probe
         - name: wait-for-gravitino
