@@ -10,6 +10,20 @@
 nameOverride: ""
 fullnameOverride: ""
 
+# The postgres Cluster/Database CRs (charts/postgres, sync-wave -2) need the
+# CNPG operator actually running to reconcile them — a CR with no controller
+# watching it just sits inert. The cloudnative-pg subchart has no sync-wave
+# of its own (defaults to 0, same wave as most other resources), so without
+# this it doesn't exist yet when the Cluster/Database CRs are created, and
+# the wave -1 hook Jobs (airflow-db-migrate, gravitino-schema-init) that
+# need a live Postgres connection retry forever. commonAnnotations pushes
+# every resource this subchart creates to the same early wave as
+# namespaces.yaml (-3), well before the -2 CRs that depend on it.
+cloudnative-pg:
+  enabled: true
+  commonAnnotations:
+    argocd.argoproj.io/sync-wave: "-3"
+
 # --- Namespace Toggles ---
 namespaces:
   createDashboard: true
