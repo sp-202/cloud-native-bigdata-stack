@@ -1,4 +1,10 @@
 dependencies:
+- name: cloudnative-pg
+  repository: https://cloudnative-pg.github.io/charts
+  version: 0.22.1
+- name: cert-manager
+  repository: https://charts.jetstack.io
+  version: v1.16.2
 - name: spark-operator
   repository: https://kubeflow.github.io/spark-operator
   version: 2.4.0
@@ -41,20 +47,11 @@ dependencies:
 - name: redis
   repository: file://./charts/redis
   version: 1.0.0
-- name: minio
-  repository: file://./charts/minio
-  version: 1.0.0
-- name: hive-metastore
-  repository: file://./charts/hive-metastore
-  version: 1.0.0
-- name: gravitino
-  repository: file://./charts/gravitino
-  version: 1.0.0
+- name: gravitino-helm
+  repository: oci://registry-1.docker.io/apache
+  version: 1.3.11
 - name: spark-history-server
   repository: file://./charts/spark-history-server
-  version: 1.0.0
-- name: unity-catalog
-  repository: file://./charts/unity-catalog
   version: 1.0.0
 - name: spark-connect-server
   repository: file://./charts/spark-connect-server
@@ -68,5 +65,5 @@ dependencies:
 - name: airflow-git-sync
   repository: file://./charts/airflow-git-sync
   version: 1.0.0
-digest: sha256:c894ce9e925a926f49ee66274dd9e0b795332a4c1ae5bf13e09321970a46c0d0
-generated: "2026-05-17T23:28:19.528233103+05:30"
+digest: sha256:691c5f8024d57ec7f39c631685f4e07ca1d5e93cc59f42a32263260164c020ab
+generated: "2026-07-08T11:51:13.18637+05:30"
