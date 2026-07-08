@@ -86,6 +86,14 @@ spec:
               fi
               echo "DB migration and user init complete."
           env:
+            # This Job is custom (not part of the official airflow chart's
+            # own templates), so it does NOT inherit config.core.* values
+            # (values.yaml) via a shared ConfigMap the way the chart's own
+            # components do — must be set explicitly here too, or
+            # `airflow users create` below fails against the wrong
+            # (default, non-FAB) auth manager. Confirmed live.
+            - name: AIRFLOW__CORE__AUTH_MANAGER
+              value: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
             - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
               valueFrom:
                 secretKeyRef:

@@ -311,6 +311,19 @@ airflow:
       parallelism: "64"
       max_active_runs_per_dag: "20"
       max_active_tasks_per_dag: "20"
+      # Airflow 3.1.0 switched the DEFAULT auth manager from FAB to the new
+      # "Simple Auth Manager" (dev/test only — generates random per-user
+      # passwords to a local file inside the pod, no support for a known
+      # admin/password the way this stack is built around). This entire
+      # deployment assumes FAB: templates/airflow-db-migrate.yaml runs
+      # `airflow users create --password "$ADMIN_PASSWORD"` (a FAB-only
+      # CLI command) with a password sourced from the airflow-credentials
+      # Secret, and webserver.defaultUser (below) is FAB's own config
+      # shape. Without this, `airflow users create` fails with
+      # "AttributeError: 'AirflowSecurityManagerV2' object has no
+      # attribute 'find_role'" — the FAB provider is still bundled in the
+      # image, just no longer the default. Confirmed live.
+      auth_manager: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
     database:
       sql_alchemy_pool_size: "15"
 
