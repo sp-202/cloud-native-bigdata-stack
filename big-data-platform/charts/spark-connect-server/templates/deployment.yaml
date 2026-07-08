@@ -76,6 +76,7 @@ spec:
               {{- end }}
               --conf "spark.sql.defaultCatalog={{ .Values.global.gravitino.catalog }}" \
               --conf spark.sql.warehouse.dir=s3a://$LAKEHOUSE_BUCKET/iceberg/ \
+              --conf spark.eventLog.dir=s3a://$LAKEHOUSE_BUCKET/spark-events/ \
               --conf spark.kubernetes.executor.podTemplateFile=local:///opt/spark/conf/executor-pod-template.yaml \
               --conf spark.local.dir={{ .Values.executor.localDir }}/spark-local \
               local:///opt/spark/jars/spark-connect_2.13-3.5.8.jar

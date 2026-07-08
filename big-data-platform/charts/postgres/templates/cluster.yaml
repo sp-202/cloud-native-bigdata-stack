@@ -26,6 +26,15 @@ metadata:
 spec:
   instances: {{ .Values.replicas }}
   imageName: {{ .Values.image }}
+  # Explicit, matching the CNPG image's own baked-in `postgres` user (UID/GID
+  # 26, confirmed via `getent passwd 26` inside ghcr.io/cloudnative-pg/postgresql:16).
+  # Without this, initdb intermittently failed with "could not look up
+  # effective user ID 26: user does not exist" — a known CNPG identity-
+  # resolution issue (cloudnative-pg/cloudnative-pg#3331, #5076) where the
+  # operator's implicit UID/GID resolution can diverge from the image's
+  # actual /etc/passwd entry. Confirmed live.
+  postgresUID: 26
+  postgresGID: 26
 
   superuserSecret:
     name: postgres-superuser

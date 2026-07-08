@@ -139,9 +139,15 @@ data:
     spark.sql.shuffle.partitions             200
     spark.sql.adaptive.enabled               true
 
-    # --- Event Logging (Spark History Server reads from spark-logs/spark-events) ---
+    # --- Event Logging (Spark History Server reads from the real lakehouse bucket) ---
+    # eventLog.dir is set via --conf on the spark-submit command in
+    # deployment.yaml instead of here, same reason as spark.sql.warehouse.dir
+    # above — the real bucket name is only known after `terraform apply`.
+    # Was hardcoded here to a nonexistent "spark-logs" bucket that doesn't
+    # match spark-history-server's actual read path — event logs would have
+    # silently gone nowhere History Server could ever find them. Confirmed
+    # live (found while debugging spark-history-server's startup crash).
     spark.eventLog.enabled                   true
-    spark.eventLog.dir                       s3a://spark-logs/spark-events/
 
   log4j2.properties: |
     # =============================================================================

@@ -288,7 +288,15 @@ airflow:
   logs:
     persistence:
       enabled: true
-      storageClassName: ebs-gp3
+      # The official chart's logs PVC uses accessMode ReadWriteMany by
+      # default (scheduler/webserver/triggerer/workers all need to read the
+      # SAME log files concurrently) — ebs-gp3 is EBS block storage, which
+      # cannot satisfy RWX at all (EBS only supports RWO/ReadOnlyMany), so
+      # the PVC sat Pending forever with "Volume capabilities not
+      # supported", not a transient provisioning error. Needs an actual
+      # network filesystem — reusing the same EFS storage class already
+      # provisioned for airflow-dags. Confirmed live.
+      storageClassName: efs-airflow-dags
       size: 10Gi
 
   config:
