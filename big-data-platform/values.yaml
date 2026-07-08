@@ -148,13 +148,18 @@ persistence:
 
 # =============================================================================
 # POSTGRES — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
-# StatefulSet with volumeClaimTemplates on ebs-gp3 (network-attached, survives
-# node replacement/pod reschedule) — NOT local-hostpath. See charts/postgres.
+# CloudNativePG Cluster CR (charts/postgres/templates/cluster.yaml) on
+# ebs-gp3 (network-attached, survives node replacement/pod reschedule).
+# image MUST be a CNPG-published postgresql image, not the plain Docker Hub
+# `postgres` image — CNPG's initdb/instance-manager expects that image's
+# specific UID/filesystem layout. Using vanilla `postgres:16` fails every
+# single initdb attempt with "could not look up effective user ID 26: user
+# does not exist". Confirmed live.
 # =============================================================================
 postgres:
   enabled: true
   replicas: 3
-  image: "postgres:16"
+  image: "ghcr.io/cloudnative-pg/postgresql:16"
   persistence:
     storageClassName: "ebs-gp3"
     size: 10Gi
