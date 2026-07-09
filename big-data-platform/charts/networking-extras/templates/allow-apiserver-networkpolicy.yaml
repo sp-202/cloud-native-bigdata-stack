@@ -1,0 +1,46 @@
+# ------------------------------------------------------------------------------
+# CiliumNetworkPolicy - allow EKS control plane ingress to `default`
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# default-namespace-networkpolicy.yaml (a standard networking.k8s.io/v1
+# NetworkPolicy) locks `default` down to ingress from: pods already in
+# `default`, kube-system (Traefik), and cloudflare (Spark Connect). The EKS
+# control plane isn't a pod and doesn't match any of those, so anything it
+# needs to reach directly by pod IP was silently dropped — confirmed live via
+# `cilium monitor --type drop` ("Policy denied") for metrics-server (breaks
+# `kubectl top`/HPA), Prometheus, and admission webhooks (kube-prometheus-
+# stack, CNPG) that ArgoCD's own sync depends on.
+#
+# Deliberately a separate CiliumNetworkPolicy rather than editing the
+# standard NetworkPolicy above to add an ipBlock/CIDR rule: the control
+# plane's actual source IPs live on ENIs that can land in ANY of the 8
+# subnets passed to aws_eks_cluster.main's vpc_config.subnet_ids (the 5
+# dedicated eks_cp subnets, plus private/pods/public — terraform-aws-k8s-ha's
+# eks.tf), not just a single predictable CIDR block, so a static ipBlock
+# guess would be fragile and could silently stop matching if EKS ever
+# reshuffles which ENIs it uses. Cilium's `kube-apiserver` entity solves this
+# properly: Cilium watches the `kubernetes` Service's actual Endpoints
+# (confirmed live: `kubectl get endpoints kubernetes -n default` -> the
+# control plane's real current IPs) and keeps this identity accurate
+# automatically, however many ENIs/subnets are actually in use. Cilium unions
+# allow-rules across NetworkPolicy and CiliumNetworkPolicy for the same
+# endpoint — this only ever adds permission, it can't weaken the boundary
+# the other policy already enforces.
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+{{- if .Values.enabled }}
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-apiserver-ingress
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - kube-apiserver
+{{- end }}
