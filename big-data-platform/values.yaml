@@ -261,6 +261,25 @@ airflow:
   # creates the same "admin" user with the real (secret-sourced) password.
   # Whichever job happened to run first was silently deciding the actual
   # login password — this was a real, live bug, not just redundancy.
+  #
+  # createUserJob.enabled here does NOT actually control this — the
+  # chart's own helper (templates/_helpers.yaml, createUserJob.isEnabled)
+  # checks webserver.defaultUser.enabled FIRST and only falls back to
+  # createUserJob.enabled when webserver.defaultUser is unset entirely:
+  #   {{- if .Values.webserver.defaultUser -}}
+  #     {{- .Values.webserver.defaultUser.enabled -}}
+  #   {{- else -}}
+  #     {{- .Values.createUserJob.enabled -}}
+  #   {{- end -}}
+  # Since webserver.defaultUser (below) IS set — it has to be, for
+  # airflow-db-migrate.yaml to read its username/role/email — this
+  # setting was silently dead code the whole time and the chart's own
+  # airflow-create-user Job kept running anyway. Confirmed live: it
+  # crash-looped with the exact same empty-ADMIN_PASSWORD race as
+  # airflow-db-migrate.yaml (its own default password is a hardcoded
+  # "admin", never wired to the real secret, so even a successful run
+  # would have set the WRONG password). The real, effective switch is
+  # webserver.defaultUser.enabled below — left false there instead.
   createUserJob:
     enabled: false
   images:
@@ -299,7 +318,13 @@ airflow:
       node-role.kubernetes.io/data-node: ""
   webserver:
     defaultUser:
-      enabled: true
+      # This is the flag that actually disables the chart's own
+      # airflow-create-user Job (see createUserJob comment above) — the
+      # username/role/email/name fields below stay set regardless, since
+      # airflow-db-migrate.yaml still reads them for its own user-create
+      # call. Only .enabled controls whether the CHART creates its own
+      # competing Job.
+      enabled: false
       role: Admin
       username: admin
       email: admin@airflow.com
