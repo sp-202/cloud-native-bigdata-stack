@@ -69,6 +69,22 @@ spec:
               # Only "already exists" is now treated as OK; anything else fails
               # the Job loudly. Confirmed live: this exact silent-failure shape
               # was suspected as the cause of an "invalid credentials" report.
+              #
+              # `airflow users create` only prompts interactively (getpass) when
+              # --password resolves to an empty string — Python treats "" as
+              # falsy same as not-provided. There's no TTY in this container, so
+              # that prompt immediately crashes with EOFError instead of failing
+              # cleanly. Confirmed live on a fresh cluster: ADMIN_PASSWORD was
+              # briefly empty on the Job's first attempt (the airflow-credentials
+              # Secret hadn't finished populating yet), producing a confusing
+              # Python traceback that only made sense after checking the Job's
+              # later, successful retry. Failing fast here on an empty password
+              # turns that into a one-line, immediately-understandable error
+              # instead — the Job's own backoffLimit still retries either way.
+              if [ -z "$ADMIN_PASSWORD" ]; then
+                echo "ERROR: ADMIN_PASSWORD is empty — airflow-credentials Secret not fully populated yet. Failing so the Job retries."
+                exit 1
+              fi
               set +e
               airflow users create \
                 --username {{ .Values.airflow.webserver.defaultUser.username }} \
