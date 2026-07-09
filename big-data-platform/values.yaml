@@ -30,6 +30,28 @@ cloudnative-pg:
   fullnameOverride: "cloudnative-pg"
   commonAnnotations:
     argocd.argoproj.io/sync-wave: "-3"
+  # The operator ran BestEffort (no requests/limits) by default — zero
+  # guaranteed CPU share. It also serves the mutating/validating admission
+  # webhooks (cnpg-webhook-service) that every postgresql.cnpg.io Cluster/
+  # Database create or update must pass through synchronously with a 30s
+  # deadline. Confirmed live: on a node with CPU limits overcommitted to
+  # ~120% during a fresh-deploy pod-startup storm, this pod's webhook
+  # handler got starved and ArgoCD's sync started failing with
+  # "failed calling webhook ... context deadline exceeded" — the exact
+  # same CPU-starvation failure class already root-caused and fixed for
+  # the EFS CSI driver node plugin (eks-addons.tf, node.resources). Same
+  # fix here: a real CPU request gives the scheduler grounds to guarantee
+  # this pod a share instead of leaving it BestEffort. Deliberately NO cpu
+  # limit — confirmed live elsewhere that a cpu limit on a latency-sensitive
+  # pod causes hard CFS throttling mid-request (RST_STREAM/CANCEL for the
+  # EFS CSI driver's TLS handshake), the same failure class as this webhook
+  # timeout; the request alone already gives a guaranteed floor.
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      memory: "256Mi"
 
 # --- Namespace Toggles ---
 namespaces:
