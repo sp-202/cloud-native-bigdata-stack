@@ -296,13 +296,17 @@ airflow:
     persistence:
       enabled: true
       # The official chart's logs PVC uses accessMode ReadWriteMany by
-      # default (scheduler/webserver/triggerer/workers all need to read the
-      # SAME log files concurrently) — ebs-gp3 is EBS block storage, which
-      # cannot satisfy RWX at all (EBS only supports RWO/ReadOnlyMany), so
-      # the PVC sat Pending forever with "Volume capabilities not
-      # supported", not a transient provisioning error. Needs an actual
-      # network filesystem — reusing the same EFS storage class already
-      # provisioned for airflow-dags. Confirmed live.
+      # default (scheduler/api-server/triggerer/dag-processor all need to
+      # read/write the SAME log files concurrently, and they can land on
+      # different data-nodes) — ebs-gp3 is EBS block storage, which cannot
+      # satisfy RWX at all (EBS only supports RWO/ReadOnlyMany). Needs an
+      # actual network filesystem — reusing the same EFS storage class
+      # provisioned for airflow-dags. EFS-backed mounts were intermittently
+      # timing out in this environment (access-point mounts REQUIRE TLS,
+      # and that handshake kept exceeding the CSI driver's default 15s
+      # budget) — fixed at the source in eks-addons.tf
+      # (aws_eks_addon.efs_csi_driver's node.efsUtilsConfOverrides), not by
+      # avoiding EFS.
       storageClassName: efs-airflow-dags
       size: 10Gi
 

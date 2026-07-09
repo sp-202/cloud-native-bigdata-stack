@@ -16,8 +16,7 @@
 #   - Airflow DAGs: efs-airflow-dags StorageClass, PVC below (ReadWriteMany —
 #     git-sync/scheduler/triggerer/webserver mount it concurrently, possibly
 #     from different GP nodes; EBS is ReadWriteOnce-only and can't do that)
-#   - Airflow scheduler/triggerer logs: ebs-gp3 via airflow.logs.persistence
-#     (single-writer StatefulSet volumeClaimTemplate, EBS is fine)
+#   - Airflow scheduler/triggerer logs: efs-airflow-dags too (same RWX need)
 # NOTE: redis/starrocks below still use local-hostpath and have the same
 # theoretical durability exposure — not fixed here, worth a follow-up if they
 # ever show the same "reset after reschedule" symptom Postgres had.
@@ -26,6 +25,11 @@
 # Airflow DAGs PVC — dynamically provisioned on efs-airflow-dags (RWX).
 # No static PV: EFS CSI's efs-ap provisioning mode creates an Access Point
 # per PVC automatically. Name matches airflow.dags.persistence.existingClaim.
+# EFS-backed mounts were intermittently timing out in this environment
+# (access-point mounts REQUIRE TLS, and that handshake kept exceeding the
+# CSI driver's default 15s budget) — fixed at the source in eks-addons.tf
+# (aws_eks_addon.efs_csi_driver's node.efsUtilsConfOverrides), not by
+# avoiding EFS.
 # =============================================================================
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -42,10 +46,12 @@ spec:
       storage: {{ .Values.airflow.size }}
 
 ---
-# Airflow scheduler/triggerer logs no longer need static local PVs here —
-# airflow.logs.persistence.storageClassName is ebs-gp3, so the official
-# chart's own StatefulSet volumeClaimTemplates (logs-<release>-scheduler-0,
-# logs-<release>-triggerer-0) provision dynamically, same as Postgres.
+# Airflow logs no longer need a static local PV here — the official
+# chart's logs.persistence creates its own PVC (named "<release>-logs",
+# a single PVC shared across scheduler/api-server/triggerer/dag-processor,
+# NOT a per-StatefulSet volumeClaimTemplate) on efs-airflow-dags, same
+# RWX reasoning as airflow-dags-shared-pvc above. Configured in
+# values.yaml under airflow.logs.persistence.
 
 ---
 # =============================================================================
