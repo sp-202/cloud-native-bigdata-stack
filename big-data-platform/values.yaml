@@ -30,6 +30,20 @@ cloudnative-pg:
   fullnameOverride: "cloudnative-pg"
   commonAnnotations:
     argocd.argoproj.io/sync-wave: "-3"
+  # A single replica means the admission webhook (cnpg-webhook-service)
+  # has exactly one backend serving every Cluster/Database create/update
+  # for the whole cluster, synchronously, with a 30s deadline. Webhook
+  # requests don't need leader election (only the reconciliation loop
+  # does — CNPG's own controller-runtime manager elects a leader
+  # independently of webhook serving), so a 2nd replica is pure added
+  # capacity/redundancy with no correctness downside. Confirmed live:
+  # even with the CPU floor below and the Cilium apiserver-ingress policy
+  # fix (networking-extras chart) both in place, ArgoCD's sync still hit
+  # intermittent "context deadline exceeded" calling this webhook while
+  # the single pod was otherwise idle (3m CPU) — a second replica removes
+  # the single-point-of-contention regardless of the exact per-request
+  # cause.
+  replicaCount: 2
   # The operator ran BestEffort (no requests/limits) by default — zero
   # guaranteed CPU share. It also serves the mutating/validating admission
   # webhooks (cnpg-webhook-service) that every postgresql.cnpg.io Cluster/
