@@ -316,7 +316,18 @@ spec:
                   operator: In
                   values:
                     - "8xlarge"
-                    - "12xlarge"
+                # Spot capacity can be reclaimed by AWS with ~2min notice
+                # at any time — exactly the instability that breaks a
+                # benchmark run (executors dying mid-query, forcing
+                # stage recomputation, isn't a config bug, it's spot
+                # doing exactly what spot does). spark_nodepool's own
+                # requirements allow both spot AND on-demand
+                # (karpenter-k8s.tf), so this needs an explicit
+                # constraint here to actually rule spot out for this job.
+                - key: karpenter.sh/capacity-type
+                  operator: In
+                  values:
+                    - "on-demand"
     tolerations:
       - key: spark-only
         operator: Equal
@@ -344,7 +355,11 @@ spec:
                   operator: In
                   values:
                     - "8xlarge"
-                    - "12xlarge"
+                - key: karpenter.sh/capacity-type
+                  operator: In
+                  values:
+                    - "on-demand"
+
     tolerations:
       - key: spark-only
         operator: Equal
