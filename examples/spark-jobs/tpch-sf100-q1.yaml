@@ -24,11 +24,17 @@
 #
 # Resource sizing (exact spec given, not the earlier smoke-test's 1-core
 # throwaway numbers):
-#   Executor: spark.executor.cores=16 (JVM task-slot count, decoupled from
-#     the actual container CPU grant below — a common oversubscription
-#     tuning pattern since Spark threads mostly wait on I/O/shuffle), but
-#     spark.kubernetes.executor.request.cores/limit.cores=8 (the REAL
-#     Kubernetes CPU request/limit Karpenter/the scheduler sees).
+#   Executor: spark.executor.cores=10 (JVM task-slot count) matches
+#     spark.kubernetes.executor.request.cores/limit.cores=10 (the REAL
+#     Kubernetes CPU grant) 1:1 — no oversubscription. An earlier version
+#     of this file ran cores=16 against only 8 real cores, on the theory
+#     that oversubscription helps since Spark threads often wait on I/O.
+#     That doesn't hold for Comet's native execution (vectorized, CPU-bound
+#     columnar compute, not I/O-wait-bound) — confirmed live via actual
+#     timing: the 10 most compute-heavy TPC-H queries ran 50-245% slower
+#     under 2:1 oversubscription (total suite +61%, 422.7s -> 680.1s) from
+#     CFS throttling 16 genuinely-busy threads down to an 8-core quota.
+#     1:1 avoids that entirely.
 #   Executor memory: heap 16g + overhead 10g + off-heap 32g = 58Gi actual
 #     container footprint, computed automatically by Spark itself —
 #     ResourceProfile.getResourcesForClusterManager() sums executor.memory
@@ -53,15 +59,16 @@
 #     memory (that's all executor-side) — but worth knowing if a future
 #     job does heavier driver-side work under this same off-heap setting.
 #
-# Node sizing: 4 executors x (8 vCPU, 58Gi) + driver (5 vCPU, 26Gi) =
-# 37 vCPU / 258Gi total, a ~7:1 memory:CPU ratio. spark-node's NodePool
+# Node sizing: 4 executors x (10 vCPU, 58Gi) + driver (5 vCPU, 26Gi) =
+# 45 vCPU / 258Gi total, a ~5.7:1 memory:CPU ratio. spark-node's NodePool
 # (terraform-aws-k8s-ha karpenter-k8s.tf) allows c7gd (2:1), m7gd (4:1),
-# and r7gd (8:1, memory-optimized) — r7gd is the clear match for this
-# ratio, and r7gd.12xlarge (48 vCPU/384Gi) fits the ENTIRE job (driver +
-# all 4 executors) on a single node with ~11 vCPU/126Gi headroom for
-# system/DaemonSet overhead. Not hard-coded here — Karpenter's own
-# bin-packing picks the instance automatically from the NodePool's allowed
-# set, this is just confirming nothing blocks it from choosing correctly.
+# and r7gd (8:1, memory-optimized) — r7gd is still the closest match, and
+# r7gd.12xlarge (48 vCPU/384Gi) still fits the ENTIRE job on one node, but
+# now with only ~3 vCPU headroom for system/DaemonSet overhead (down from
+# ~11 vCPU before the 8->10 core change) — tight enough that Karpenter
+# could plausibly split this across 2 nodes instead depending on exact
+# allocatable capacity after kubelet/system reservations. Not hard-coded
+# here either way — Karpenter's own bin-packing decides.
 #
 # Run:
 #   kubectl apply -f examples/spark-jobs/tpch-sf100-q1.yaml
@@ -91,8 +98,6 @@ spec:
     - "s3a://tpch-sf100-419772658418/tpch_sf100"
     - "--queries"
     - "s3a://tpch-sf100-419772658418/tpch-queries"
-    - "--query"
-    - "1"
     - "--output"
     - "s3a://tpch-sf100-419772658418/tpch-results"
   sparkVersion: "3.5.8"
@@ -102,13 +107,25 @@ spec:
   sparkConf:
     "spark.local.dir": "/mnt/spark-nvme/spark-local"
 
-    # --- exact executor CPU/memory split given ---
-    # request.cores is the real Kubernetes CPU grant (decoupled from
-    # executor.cores=16 below, which only sets the JVM's task-slot count).
-    # There is deliberately no memory equivalent here — Spark computes the
-    # pod's memory request/limit itself from executor.memory +
-    # memoryOverhead + memory.offHeap.size (see header comment).
-    "spark.kubernetes.executor.request.cores": "8"
+    # --- executor CPU: 1:1, no oversubscription ---
+    # executor.cores (JVM task-slot count) and request/limit.cores (the
+    # real Kubernetes CPU grant) are both 10 — deliberately matched.
+    # Confirmed live via actual timing data: an earlier version of this
+    # file ran executor.cores=16 against only 8 real cores (2:1
+    # oversubscription), a pattern that only helps when threads spend
+    # most of their time WAITING (I/O, shuffle fetch) so idle slack gets
+    # shared. Comet's native execution is the opposite — vectorized,
+    # CPU-bound columnar compute, actively using the CPU nearly 100% of
+    # the time — so 16 genuinely-busy threads on an 8-core CFS quota just
+    # throttled hard. Measured effect: the 10 most compute-heavy TPC-H
+    # queries (the ones with many concurrent Comet operator pipelines —
+    # Q17/Q18/Q20/Q21's correlated subqueries and self-joins hit hardest)
+    # ran 50-245% slower than the same queries on a 1:1 core mapping;
+    # simple scans barely moved. Total suite time: +61% (422.7s -> 680.1s).
+    # No memory equivalent needed here — Spark computes the pod's memory
+    # request/limit itself from executor.memory + memoryOverhead +
+    # memory.offHeap.size (see header comment).
+    "spark.kubernetes.executor.request.cores": "10"
     "spark.memory.fraction": "0.6"
     "spark.memory.storageFraction": "0.2"
     "spark.memory.offHeap.enabled": "true"
@@ -291,8 +308,8 @@ spec:
         mountPath: /mnt/spark-nvme
 
   executor:
-    cores: 16
-    coreLimit: "8"
+    cores: 10
+    coreLimit: "10"
     instances: 4
     memory: "16g"
     memoryOverhead: "10g"
