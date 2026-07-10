@@ -298,6 +298,25 @@ spec:
     serviceAccount: spark-operator-spark
     nodeSelector:
       node-role.kubernetes.io/spark-node: ""
+      karpenter.k8s.aws/instance-family: "r7gd"
+    # nodeSelector only does exact single-value match, so allowing EITHER
+    # 8xlarge or 12xlarge (not pinning to one) needs a real nodeAffinity
+    # with the In operator instead. Pinning the family+size at all here is
+    # deliberately for reproducible before/after benchmark comparisons —
+    # letting Karpenter's bin-packing choose freely (the normal, better
+    # default for a real job) means a timing delta between two runs could
+    # just be Karpenter picking a different instance type, not the config
+    # change actually being compared.
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: karpenter.k8s.aws/instance-size
+                  operator: In
+                  values:
+                    - "8xlarge"
+                    - "12xlarge"
     tolerations:
       - key: spark-only
         operator: Equal
@@ -315,6 +334,17 @@ spec:
     memoryOverhead: "10g"
     nodeSelector:
       node-role.kubernetes.io/spark-node: ""
+      karpenter.k8s.aws/instance-family: "r7gd"
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: karpenter.k8s.aws/instance-size
+                  operator: In
+                  values:
+                    - "8xlarge"
+                    - "12xlarge"
     tolerations:
       - key: spark-only
         operator: Equal
