@@ -1,0 +1,314 @@
+# ------------------------------------------------------------------------------
+# TPC-H SF100 Q1 (spark-operator/SparkApplication CRD) — real S3 data, not synthetic
+# ------------------------------------------------------------------------------
+# Runs the actual DataFusion Comet benchmark runner (s3://tpch-sf100-419772658418/
+# scripts/tpcbench.py) against the real SF100 parquet dataset already in that
+# bucket, --query 1 only (TPC-H Q1 — "pricing summary report", a single GROUP
+# BY/aggregation over lineitem, the standard simplest TPC-H query).
+#
+# NOTE: the bucket has TPC-H data (tpch_sf100/, tpch-queries/) — there is no
+# TPC-DS data in it at all, so this targets --benchmark tpch, not tpcds. If you
+# actually need TPC-DS specifically, that dataset would need to be generated
+# into this bucket (or a new one) first.
+#
+# terraform-aws-k8s-ha's storage-s3-tpch-benchmark.tf grants the node role
+# read/write access to this bucket (source parquet data is read-only in
+# practice, but the benchmark run also needs to WRITE its own results and
+# event logs back into the same bucket) — that resource has been written
+# but NOT applied yet, run `terraform apply
+# -target=aws_iam_policy.tpch_sf100_s3
+# -target=aws_iam_role_policy_attachment.node_tpch_sf100_s3` before
+# submitting this, or the S3 calls will fail with AccessDenied. That
+# bucket was created outside Terraform (by hand) and is not referenced by
+# any other .tf resource, so `terraform destroy`/clean.sh can never touch it.
+#
+# Resource sizing (exact spec given, not the earlier smoke-test's 1-core
+# throwaway numbers):
+#   Executor: spark.executor.cores=16 (JVM task-slot count, decoupled from
+#     the actual container CPU grant below — a common oversubscription
+#     tuning pattern since Spark threads mostly wait on I/O/shuffle), but
+#     spark.kubernetes.executor.request.cores/limit.cores=8 (the REAL
+#     Kubernetes CPU request/limit Karpenter/the scheduler sees).
+#   Executor memory: heap 16g + overhead 10g + off-heap 32g = 58Gi actual
+#     container footprint, computed automatically by Spark itself —
+#     ResourceProfile.getResourcesForClusterManager() sums executor.memory
+#     + memoryOverhead + memory.offHeap.size (confirmed directly against
+#     Spark 3.5.8's own source) into one totalMemMiB value used for BOTH
+#     the pod's memory request AND limit (Spark always sets request==limit
+#     for memory, unlike CPU). No manual override needed or possible —
+#     spark.kubernetes.executor.limit.memory / .request.memory are not
+#     real Spark config keys (verified against BasicExecutorFeatureStep.scala
+#     and ResourceProfile.scala); an earlier version of this file set the
+#     former under the mistaken belief it was required, which would have
+#     been silently ignored, not harmful, but also not doing anything.
+#   Driver: 5 cores / 20g memory / 6g overhead (26Gi pod footprint).
+#     spark.memory.offHeap.* is a global SparkConf, so it also reaches the
+#     driver's JVM, but BasicDriverFeatureStep.scala's own pod-sizing
+#     (confirmed against source) is just driverMemoryMiB +
+#     memoryOverheadMiB — off-heap is NOT added for the driver the way it
+#     is for executors, so this 26Gi ceiling is not off-heap-aware. Low
+#     practical risk here specifically: this job's driver only plans the
+#     query and collects Q1's tiny aggregated result, it doesn't run the
+#     heavy Tungsten/columnar execution that actually consumes off-heap
+#     memory (that's all executor-side) — but worth knowing if a future
+#     job does heavier driver-side work under this same off-heap setting.
+#
+# Node sizing: 4 executors x (8 vCPU, 58Gi) + driver (5 vCPU, 26Gi) =
+# 37 vCPU / 258Gi total, a ~7:1 memory:CPU ratio. spark-node's NodePool
+# (terraform-aws-k8s-ha karpenter-k8s.tf) allows c7gd (2:1), m7gd (4:1),
+# and r7gd (8:1, memory-optimized) — r7gd is the clear match for this
+# ratio, and r7gd.12xlarge (48 vCPU/384Gi) fits the ENTIRE job (driver +
+# all 4 executors) on a single node with ~11 vCPU/126Gi headroom for
+# system/DaemonSet overhead. Not hard-coded here — Karpenter's own
+# bin-packing picks the instance automatically from the NodePool's allowed
+# set, this is just confirming nothing blocks it from choosing correctly.
+#
+# Run:
+#   kubectl apply -f examples/spark-jobs/tpch-sf100-q1.yaml
+#   kubectl get sparkapplication tpch-sf100-q1 -n default -w
+#   kubectl get nodes -l node-role.kubernetes.io/spark-node -w
+#   kubectl logs -n default -l spark-app-name=tpch-sf100-q1,spark-role=driver -f
+#
+# Clean up:
+#   kubectl delete -f examples/spark-jobs/tpch-sf100-q1.yaml
+# ------------------------------------------------------------------------------
+apiVersion: "sparkoperator.k8s.io/v1beta2"
+kind: SparkApplication
+metadata:
+  name: tpch-sf100-q1
+  namespace: default
+spec:
+  type: Python
+  pythonVersion: "3"
+  mode: cluster
+  image: "subhodeep2022/spark-bigdata:spark-3.5.8-v13-iceberg-gravitino"
+  imagePullPolicy: IfNotPresent
+  mainApplicationFile: "s3a://tpch-sf100-419772658418/scripts/tpcbench.py"
+  arguments:
+    - "--benchmark"
+    - "tpch"
+    - "--data"
+    - "s3a://tpch-sf100-419772658418/tpch_sf100"
+    - "--queries"
+    - "s3a://tpch-sf100-419772658418/tpch-queries"
+    - "--query"
+    - "1"
+    - "--output"
+    - "s3a://tpch-sf100-419772658418/tpch-results"
+  sparkVersion: "3.5.8"
+  restartPolicy:
+    type: Never
+
+  sparkConf:
+    "spark.local.dir": "/mnt/spark-nvme/spark-local"
+
+    # --- exact executor CPU/memory split given ---
+    # request.cores is the real Kubernetes CPU grant (decoupled from
+    # executor.cores=16 below, which only sets the JVM's task-slot count).
+    # There is deliberately no memory equivalent here — Spark computes the
+    # pod's memory request/limit itself from executor.memory +
+    # memoryOverhead + memory.offHeap.size (see header comment).
+    "spark.kubernetes.executor.request.cores": "8"
+    "spark.memory.fraction": "0.6"
+    "spark.memory.storageFraction": "0.2"
+    "spark.memory.offHeap.enabled": "true"
+    "spark.memory.offHeap.size": "32g"
+
+    # --- S3A: read/write access via node role (storage-s3-tpch-benchmark.tf) ---
+    # No explicit fs.s3a.aws.credentials.provider here — confirmed against
+    # Comet's own "S3 Credential Providers" docs: Comet's native S3 reader
+    # (bypasses Hadoop S3A entirely, uses its own Rust object_store client)
+    # only needs a credential BRIDGE for vendor-issued/per-path STS
+    # credentials; "You don't [need one], if... You use EC2 instance
+    # profiles" — exactly this cluster's setup (node IAM role via IMDS).
+    # An earlier version of this file explicitly set this key to the Java
+    # class name com.amazonaws.auth.DefaultAWSCredentialsProviderChain —
+    # meaningless to Comet's native layer, which picked up that same
+    # Hadoop conf key and failed every native S3 read with "Generic S3
+    # error: Unsupported credential provider: ...DefaultAWSCredentialsProviderChain",
+    # confirmed live. Leaving this unset lets both the JVM/Hadoop S3A
+    # layer AND Comet's native layer fall back to their own correct
+    # default chains, both of which already support EC2 instance profiles
+    # natively with no configuration at all.
+    "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
+    "spark.hadoop.fs.s3a.fast.upload": "true"
+    "spark.hadoop.fs.s3a.connection.ssl.enabled": "true"
+
+    # buffer.dir: the s3a client's own local scratch space for multipart
+    # upload staging — NOT the same as spark.local.dir (shuffle spill).
+    # /data1/s3a doesn't exist on this cluster's nodes (that path is from
+    # a different reference environment); the real local NVMe mount here
+    # is /mnt/spark-nvme (common-runtime.sh, terraform-aws-k8s-ha), so
+    # this points at a subdir of that instead.
+    "spark.hadoop.fs.s3a.fast.upload.buffer": "disk"
+    "spark.hadoop.fs.s3a.buffer.dir": "/mnt/spark-nvme/s3a-buffer"
+    "spark.hadoop.fs.s3a.multipart.size": "128M"
+    "spark.hadoop.fs.s3a.multipart.threshold": "256M"
+    "spark.hadoop.fs.s3a.threads.max": "50"
+    "spark.hadoop.fs.s3a.connection.maximum": "200"
+    "spark.hadoop.fs.s3a.multipart.purge": "true"
+    "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "2"
+
+    # --- Comet native execution (full set, matching the proven reference job) ---
+    "spark.plugins": "org.apache.spark.CometPlugin"
+    "spark.sql.extensions": "org.apache.comet.CometSparkSessionExtensions"
+    "spark.shuffle.manager": "org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager"
+    "spark.comet.enabled": "true"
+    "spark.comet.exec.enabled": "true"
+    "spark.comet.exec.all.enabled": "true"
+    "spark.comet.exec.replaceSortMergeJoin": "true"
+    "spark.comet.exec.hashJoin.enabled": "true"
+    "spark.comet.exec.shuffle.enabled": "true"
+    "spark.comet.exec.shuffle.mode": "auto"
+    "spark.comet.exec.shuffle.directRead.enabled": "true"
+    "spark.comet.exec.shuffle.convertFromSparkPlan.enabled": "true"
+    "spark.comet.exec.shuffle.revertRedundantColumnar.enabled": "true"
+    "spark.comet.exec.zeroCopySpill.enabled": "true"
+    "spark.comet.exec.localTableScan.enabled": "true"
+    "spark.comet.exec.localTopKPushdown.enabled": "true"
+    "spark.comet.exec.rowComet.enabled": "true"
+    "spark.comet.exec.columnarToRow.native.enabled": "true"
+    "spark.comet.exec.memoryPool": "fair_unified"
+    "spark.comet.exec.memoryPool.fraction": "1.0"
+    "spark.comet.memoryPool.fraction": "0.8"
+    "spark.comet.sparkToColumnar.enabled": "true"
+    "spark.comet.sparkToColumnar.supportedOperatorList": "Range,InMemoryTableScan,RDDScan,OneRowRelation"
+    "spark.comet.batchSize": "8192"
+    "spark.comet.nativeLoadRequired": "true"
+    "spark.comet.shuffle.preferDictionary.ratio": "10.0"
+    "spark.comet.shuffle.sizeInBytesMultiplier": "1.0"
+    "spark.comet.parquet.write.enabled": "true"
+    "spark.comet.cache.serializer.enabled": "true"
+    "spark.comet.expression.Cast.allowIncompatible": "true"
+    "spark.comet.expression.JsonToStructs.allowIncompatible": "true"
+    "spark.comet.operator.DataWritingCommandExec.allowIncompatible": "true"
+    "spark.comet.exec.strictFloatingPoint": "false"
+    "spark.comet.caseConversion.enabled": "false"
+    "spark.comet.logFallbackReasons.enabled": "true"
+    "spark.comet.explainFallback.enabled": "true"
+    "spark.comet.scan.csv.v2.enabled": "true"
+    "spark.comet.scan.json.v2.enabled": "true"
+    "spark.comet.native.shuffle.partitioning.roundrobin.maxHashColumns": "0"
+    "spark.comet.write.iceberg.splitOperator.enabled": "true"
+    "spark.comet.write.iceberg.nativeAcceleration": "true"
+
+    # --- SQL / AQE ---
+    "spark.sql.adaptive.enabled": "true"
+    "spark.sql.adaptive.coalescePartitions.enabled": "true"
+    "spark.sql.adaptive.coalescePartitions.minPartitionSize": "16MB"
+    "spark.sql.adaptive.localShuffleReader.enabled": "true"
+    "spark.sql.adaptive.skewJoin.enabled": "true"
+    "spark.sql.adaptive.skewJoin.skewedPartitionFactor": "3"
+    "spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes": "128MB"
+    "spark.sql.adaptive.advisoryPartitionSizeInBytes": "128MB"
+    "spark.sql.adaptive.autoBroadcastJoinThreshold": "200m"
+    "spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold": "67108864"
+    "spark.sql.shuffle.partitions": "128"
+    "spark.default.parallelism": "66"
+    "spark.sql.autoBroadcastJoinThreshold": "200m"
+    "spark.sql.broadcastTimeout": "600"
+    "spark.sql.join.preferSortMergeJoin": "true"
+    "spark.sql.join.forceApplyShuffledHashJoin": "false"
+    "spark.sql.cbo.enabled": "true"
+    "spark.sql.cbo.joinReorder.enabled": "true"
+    "spark.sql.statistics.histogram.enabled": "true"
+    "spark.sql.statistics.histogram.numBins": "254"
+    "spark.sql.codegen.wholeStage": "true"
+    "spark.sql.codegen.fallback": "true"
+    "spark.sql.ansi.enabled": "false"
+    "spark.sql.optimizer.excludedRules": "org.apache.spark.sql.catalyst.optimizer.ConvertToLocalRelation"
+    "spark.sql.inMemoryColumnarStorage.batchSize": "8192"
+    "spark.sql.cache.serializer": "org.apache.spark.sql.comet.CometCachedBatchSerializer"
+    "spark.sql.sources.useV1SourceList": "avro,kafka,orc,parquet,text"
+
+    # --- Parquet ---
+    "spark.sql.parquet.filterPushdown": "true"
+    "spark.sql.parquet.aggregatePushdown": "true"
+    "spark.sql.parquet.block.size": "268435456"
+    "spark.sql.files.maxPartitionBytes": "268435456"
+    "spark.sql.files.openCostInBytes": "8388608"
+    "spark.sql.parquet.datetimeRebaseModeInRead": "LEGACY"
+    "spark.sql.parquet.datetimeRebaseModeInWrite": "LEGACY"
+    "spark.sql.parquet.int96RebaseModeInRead": "LEGACY"
+    "spark.sql.parquet.int96RebaseModeInWrite": "LEGACY"
+    "spark.sql.iceberg.vectorized.read.enabled": "true"
+
+    # --- Serialization ---
+    "spark.serializer": "org.apache.spark.serializer.KryoSerializer"
+    "spark.kryo.unsafe": "true"
+    "spark.kryo.registrationRequired": "false"
+    "spark.serializer.objectStreamReset": "100"
+    "spark.io.compression.codec": "lz4"
+    "spark.shuffle.compress": "true"
+    "spark.shuffle.spill.compress": "true"
+    "spark.rdd.compress": "true"
+
+    # --- UI ---
+    "spark.ui.enabled": "true"
+    "spark.ui.port": "4040"
+    "spark.ui.host": "0.0.0.0"
+    "spark.ui.retainedJobs": "200"
+    "spark.ui.retainedStages": "200"
+    "spark.ui.retainedTasks": "100000"
+    "spark.ui.retainedDeadExecutors": "20"
+    "spark.sql.ui.retainedExecutions": "200"
+
+    # ── Stability ────────────────────────────────────────────────────────────
+    "spark.network.timeout": "2000s"
+    "spark.executor.heartbeatInterval": "300s"
+    "spark.files.fetchTimeout": "300s"
+    "spark.kubernetes.submission.connectionTimeout": "120000"
+    "spark.kubernetes.submission.requestTimeout": "120000"
+    "spark.kubernetes.driver.connectionTimeout": "120000"
+    "spark.kubernetes.driver.requestTimeout": "120000"
+    "spark.kubernetes.executor.podNamePrefix": "tpch-sf100-q1"
+
+    # ── Event logs ──────────────────────────────────────────────────────────
+    # ${S3_BUCKET} was a real shell variable in the original bash
+    # spark-submit script — nothing expands it inside a YAML manifest, so
+    # it's the literal bucket name here instead.
+    "spark.eventLog.enabled": "true"
+    "spark.eventLog.dir": "s3a://tpch-sf100-419772658418/spark-event-logs"
+    "spark.eventLog.compress": "true"
+    "spark.eventLog.compression.codec": "zstd"
+    "spark.eventLog.rolling.enabled": "true"
+    "spark.eventLog.rolling.maxFileSize": "64m"
+
+  driver:
+    cores: 5
+    memory: "20g"
+    memoryOverhead: "6g"
+    serviceAccount: spark-operator-spark
+    nodeSelector:
+      node-role.kubernetes.io/spark-node: ""
+    tolerations:
+      - key: spark-only
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+    volumeMounts:
+      - name: spark-shuffle
+        mountPath: /mnt/spark-nvme
+
+  executor:
+    cores: 16
+    coreLimit: "8"
+    instances: 4
+    memory: "16g"
+    memoryOverhead: "10g"
+    nodeSelector:
+      node-role.kubernetes.io/spark-node: ""
+    tolerations:
+      - key: spark-only
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+    volumeMounts:
+      - name: spark-shuffle
+        mountPath: /mnt/spark-nvme
+
+  volumes:
+    - name: spark-shuffle
+      hostPath:
+        path: /mnt/spark-nvme/spark-shuffle
+        type: DirectoryOrCreate

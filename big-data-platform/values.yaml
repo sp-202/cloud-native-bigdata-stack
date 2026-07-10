@@ -656,6 +656,29 @@ spark-operator:
       timeoutSeconds: 10
       failureThreshold: 20
       initialDelaySeconds: 30
+    # Ran BestEffort by default (confirmed live: {} resources on the real
+    # Deployment) — same CPU-starvation class already root-caused and
+    # fixed for cloudnative-pg and the EFS CSI driver node plugin this
+    # session. This one is worse than most: the chart's own values.yaml
+    # comment (spark-operator/values.yaml ~line 200) explicitly warns
+    # "each job submission will spawn a JVM within the controller pods
+    # using java -Xmx128m. Kubernetes may kill these Java processes at
+    # will to enforce resource limits... you will see 'failed to run
+    # spark-submit for SparkApplication [...]: signal: killed'" — under
+    # BestEffort that spawned JVM has zero guaranteed memory floor, and
+    # this is a single shared controller submitting every SparkApplication
+    # cluster-wide, not a per-job pod. CPU request only (no limit — same
+    # CFS-throttling reasoning as cloudnative-pg/EFS CSI); memory gets
+    # both, since the chart's own docs identify memory pressure as the
+    # actual failure mode here, and unlike CPU, a memory limit is the
+    # correct tool for capping a runaway/leaking JVM rather than something
+    # that hurts a healthy one.
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+      limits:
+        memory: "512Mi"
   webhook:
     enable: true
     nodeSelector:
@@ -668,6 +691,14 @@ spark-operator:
       timeoutSeconds: 10
       failureThreshold: 20
       initialDelaySeconds: 30
+    # Lighter than the controller — this pod only validates/mutates
+    # SparkApplication objects, it doesn't spawn per-submission JVMs.
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "128Mi"
+      limits:
+        memory: "256Mi"
   prometheus:
     metrics:
       enable: true
