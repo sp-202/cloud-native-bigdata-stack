@@ -96,6 +96,16 @@ spec:
     # --- Local NVMe scratch dir for shuffle/spill (mounted above) ---
     spark.local.dir: "/mnt/spark-nvme/spark-local"
 
+    # --- Aggressive shuffle-file cleanup ---
+    # This benchmark runs all 22 TPC-H queries sequentially in one SparkSession,
+    # sharing one physical NVMe across 6 executors/node. Default cleanup only
+    # runs every 30 min (spark.cleaner.periodicGC.interval), so shuffle files from
+    # earlier queries pile up on disk faster than they're reclaimed -> node runs
+    # out of space mid-run. Force frequent, synchronous cleanup instead.
+    spark.cleaner.periodicGC.interval: "60s"
+    spark.cleaner.referenceTracking.blocking: "true"
+    spark.cleaner.referenceTracking.blocking.shuffle: "true"
+
     # --- Interpreter / plugin overrides (this job bypasses Gravitino) ---
     spark.pyspark.python: "python3"
     spark.pyspark.driver.python: "python3"
