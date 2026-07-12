@@ -22,43 +22,6 @@
 # bucket was created outside Terraform (by hand) and is not referenced by
 # any other .tf resource, so `terraform destroy`/clean.sh can never touch it.
 #
-# Resource sizing (exact spec given, not the earlier smoke-test's 1-core
-# throwaway numbers):
-#   Executor: spark.executor.cores=10 (JVM task-slot count) matches
-#     spark.kubernetes.executor.request.cores/limit.cores=10 (the REAL
-#     Kubernetes CPU grant) 1:1 — no oversubscription. An earlier version
-#     of this file ran cores=16 against only 8 real cores, on the theory
-#     that oversubscription helps since Spark threads often wait on I/O.
-#     That doesn't hold for Comet's native execution (vectorized, CPU-bound
-#     columnar compute, not I/O-wait-bound) — confirmed live via actual
-#     timing: the 10 most compute-heavy TPC-H queries ran 50-245% slower
-#     under 2:1 oversubscription (total suite +61%, 422.7s -> 680.1s) from
-#     CFS throttling 16 genuinely-busy threads down to an 8-core quota.
-#     1:1 avoids that entirely.
-#   Executor memory: heap 16g + overhead 10g + off-heap 32g = 58Gi actual
-#     container footprint, computed automatically by Spark itself —
-#     ResourceProfile.getResourcesForClusterManager() sums executor.memory
-#     + memoryOverhead + memory.offHeap.size (confirmed directly against
-#     Spark 3.5.8's own source) into one totalMemMiB value used for BOTH
-#     the pod's memory request AND limit (Spark always sets request==limit
-#     for memory, unlike CPU). No manual override needed or possible —
-#     spark.kubernetes.executor.limit.memory / .request.memory are not
-#     real Spark config keys (verified against BasicExecutorFeatureStep.scala
-#     and ResourceProfile.scala); an earlier version of this file set the
-#     former under the mistaken belief it was required, which would have
-#     been silently ignored, not harmful, but also not doing anything.
-#   Driver: 5 cores / 20g memory / 6g overhead (26Gi pod footprint).
-#     spark.memory.offHeap.* is a global SparkConf, so it also reaches the
-#     driver's JVM, but BasicDriverFeatureStep.scala's own pod-sizing
-#     (confirmed against source) is just driverMemoryMiB +
-#     memoryOverheadMiB — off-heap is NOT added for the driver the way it
-#     is for executors, so this 26Gi ceiling is not off-heap-aware. Low
-#     practical risk here specifically: this job's driver only plans the
-#     query and collects Q1's tiny aggregated result, it doesn't run the
-#     heavy Tungsten/columnar execution that actually consumes off-heap
-#     memory (that's all executor-side) — but worth knowing if a future
-#     job does heavier driver-side work under this same off-heap setting.
-#
 # Node sizing: 4 executors x (10 vCPU, 58Gi) + driver (5 vCPU, 26Gi) =
 # 45 vCPU / 258Gi total, a ~5.7:1 memory:CPU ratio. spark-node's NodePool
 # (terraform-aws-k8s-ha karpenter-k8s.tf) allows c7gd (2:1), m7gd (4:1),
@@ -106,57 +69,16 @@ spec:
 
   sparkConf:
     "spark.local.dir": "/mnt/spark-nvme/spark-local"
-
-    # --- executor CPU: 1:1, no oversubscription ---
-    # executor.cores (JVM task-slot count) and request/limit.cores (the
-    # real Kubernetes CPU grant) are both 10 — deliberately matched.
-    # Confirmed live via actual timing data: an earlier version of this
-    # file ran executor.cores=16 against only 8 real cores (2:1
-    # oversubscription), a pattern that only helps when threads spend
-    # most of their time WAITING (I/O, shuffle fetch) so idle slack gets
-    # shared. Comet's native execution is the opposite — vectorized,
-    # CPU-bound columnar compute, actively using the CPU nearly 100% of
-    # the time — so 16 genuinely-busy threads on an 8-core CFS quota just
-    # throttled hard. Measured effect: the 10 most compute-heavy TPC-H
-    # queries (the ones with many concurrent Comet operator pipelines —
-    # Q17/Q18/Q20/Q21's correlated subqueries and self-joins hit hardest)
-    # ran 50-245% slower than the same queries on a 1:1 core mapping;
-    # simple scans barely moved. Total suite time: +61% (422.7s -> 680.1s).
-    # No memory equivalent needed here — Spark computes the pod's memory
-    # request/limit itself from executor.memory + memoryOverhead +
-    # memory.offHeap.size (see header comment).
     "spark.kubernetes.executor.request.cores": "10"
     "spark.memory.fraction": "0.6"
     "spark.memory.storageFraction": "0.2"
     "spark.memory.offHeap.enabled": "true"
     "spark.memory.offHeap.size": "32g"
 
-    # --- S3A: read/write access via node role (storage-s3-tpch-benchmark.tf) ---
-    # No explicit fs.s3a.aws.credentials.provider here — confirmed against
-    # Comet's own "S3 Credential Providers" docs: Comet's native S3 reader
-    # (bypasses Hadoop S3A entirely, uses its own Rust object_store client)
-    # only needs a credential BRIDGE for vendor-issued/per-path STS
-    # credentials; "You don't [need one], if... You use EC2 instance
-    # profiles" — exactly this cluster's setup (node IAM role via IMDS).
-    # An earlier version of this file explicitly set this key to the Java
-    # class name com.amazonaws.auth.DefaultAWSCredentialsProviderChain —
-    # meaningless to Comet's native layer, which picked up that same
-    # Hadoop conf key and failed every native S3 read with "Generic S3
-    # error: Unsupported credential provider: ...DefaultAWSCredentialsProviderChain",
-    # confirmed live. Leaving this unset lets both the JVM/Hadoop S3A
-    # layer AND Comet's native layer fall back to their own correct
-    # default chains, both of which already support EC2 instance profiles
-    # natively with no configuration at all.
     "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
     "spark.hadoop.fs.s3a.fast.upload": "true"
     "spark.hadoop.fs.s3a.connection.ssl.enabled": "true"
 
-    # buffer.dir: the s3a client's own local scratch space for multipart
-    # upload staging — NOT the same as spark.local.dir (shuffle spill).
-    # /data1/s3a doesn't exist on this cluster's nodes (that path is from
-    # a different reference environment); the real local NVMe mount here
-    # is /mnt/spark-nvme (common-runtime.sh, terraform-aws-k8s-ha), so
-    # this points at a subdir of that instead.
     "spark.hadoop.fs.s3a.fast.upload.buffer": "disk"
     "spark.hadoop.fs.s3a.buffer.dir": "/mnt/spark-nvme/s3a-buffer"
     "spark.hadoop.fs.s3a.multipart.size": "128M"
