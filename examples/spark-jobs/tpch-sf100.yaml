@@ -22,24 +22,23 @@
 # bucket was created outside Terraform (by hand) and is not referenced by
 # any other .tf resource, so `terraform destroy`/clean.sh can never touch it.
 #
-# Node sizing: 23 executors x (5 vCPU, 58Gi) + driver (5 vCPU, 58Gi) =
-# 120 vCPU / 1392Gi total (the proven Comet reference sizing; the 58Gi
-# per pod is 20Gi heap + 6Gi memoryOverhead + 32Gi spark.memory.offHeap.size,
-# which K8s also counts into the pod's memory request) — no longer a
-# single-node job. r7gd.12xlarge (48 vCPU/384Gi) needs at least 4 nodes
-# to cover the 1392Gi (memory-bound, not CPU-bound: 120 vCPU only needs 3
-# nodes' worth). Not hard-coded here either way — Karpenter's own
-# bin-packing across the on-demand r7gd.12xlarge pool decides the actual
-# node count.
+# Node sizing: 10 executors x (8 vCPU, 74Gi) + driver (5 vCPU, 58Gi) =
+# 85 vCPU / 798Gi total. Each executor pod's 74Gi is 32Gi heap + 10Gi
+# memoryOverhead + 32Gi spark.memory.offHeap.size (K8s counts off-heap
+# into the pod's memory request too). r7gd.12xlarge (48 vCPU/384Gi) needs
+# at least 3 nodes to cover the 798Gi (memory-bound, not CPU-bound: 85
+# vCPU only needs 2 nodes' worth). Not hard-coded here either way —
+# Karpenter's own bin-packing across the on-demand r7gd.12xlarge pool
+# decides the actual node count.
 #
 # Run:
-#   kubectl apply -f examples/spark-jobs/tpch-sf100-q1.yaml
+#   kubectl apply -f examples/spark-jobs/tpch-sf100.yaml
 #   kubectl get sparkapplication tpch-sf100-q1 -n default -w
 #   kubectl get nodes -l node-role.kubernetes.io/spark-node -w
 #   kubectl logs -n default -l spark-app-name=tpch-sf100-q1,spark-role=driver -f
 #
 # Clean up:
-#   kubectl delete -f examples/spark-jobs/tpch-sf100-q1.yaml
+#   kubectl delete -f examples/spark-jobs/tpch-sf100.yaml
 # ------------------------------------------------------------------------------
 apiVersion: "sparkoperator.k8s.io/v1beta2"
 kind: SparkApplication
@@ -68,7 +67,7 @@ spec:
 
   sparkConf:
     "spark.local.dir": "/mnt/spark-nvme/spark-local"
-    "spark.kubernetes.executor.request.cores": "5"
+    "spark.kubernetes.executor.request.cores": "8"
     "spark.memory.fraction": "0.6"
     "spark.memory.storageFraction": "0.2"
     "spark.memory.offHeap.enabled": "true"
@@ -77,10 +76,13 @@ spec:
     "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
     "spark.hadoop.fs.s3.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
     "spark.hadoop.fs.s3a.endpoint.region": "us-east-1"
-    # EKS Pod Identity: remap the deprecated V1 web-identity provider class
-    # to the AWS SDK v2 container-credentials provider hadoop-aws actually uses.
-    "spark.hadoop.fs.s3a.aws.credentials.provider.mapping": "com.amazonaws.auth.WebIdentityTokenCredentialsProvider=software.amazon.awssdk.auth.credentials.ContainerCredentialsProvider"
-    "spark.hadoop.fs.s3a.aws.credentials.provider": "software.amazon.awssdk.auth.credentials.ContainerCredentialsProvider"
+    # No explicit aws.credentials.provider override — this image's
+    # hadoop-aws still expects the SDK v1 AWSCredentialsProvider interface
+    # (confirmed live: pointing this at the SDK v2
+    # software.amazon.awssdk.auth.credentials.ContainerCredentialsProvider
+    # class failed startup with "does not implement AWSCredentialsProvider").
+    # Hadoop's default provider chain already resolves container/pod
+    # credentials on its own — this was the proven-working state before.
     "spark.hadoop.fs.s3a.fast.upload": "true"
     "spark.hadoop.fs.s3a.connection.ssl.enabled": "true"
 
@@ -200,6 +202,15 @@ spec:
     memory: "20g"
     memoryOverhead: "6g"
     serviceAccount: spark-operator-spark
+    # Belt-and-suspenders on top of spark_nodepool's consolidationPolicy
+    # (karpenter-k8s.tf, now WhenEmpty): do-not-disrupt is the blanket
+    # Karpenter opt-out covering the mechanisms WhenEmpty doesn't —
+    # drift (NodePool/EC2NodeClass spec changes) and expiration — not
+    # just consolidation. Scoped to this job's own pods only, so it
+    # doesn't stop Karpenter reclaiming this node once the job exits and
+    # only DaemonSet pods are left on it.
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
     nodeSelector:
       node-role.kubernetes.io/spark-node: ""
       karpenter.k8s.aws/instance-family: "r7gd"
@@ -244,11 +255,13 @@ spec:
         mountPath: /opt/spark/log4j2-custom
 
   executor:
-    cores: 5
-    coreLimit: "5"
+    cores: 8
+    coreLimit: "8"
     instances: 10
-    memory: "20g"
-    memoryOverhead: "6g"
+    memory: "32g"
+    memoryOverhead: "10g"
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
     nodeSelector:
       node-role.kubernetes.io/spark-node: ""
       karpenter.k8s.aws/instance-family: "r7gd"
