@@ -1,0 +1,132 @@
+# ------------------------------------------------------------------------------
+# Smoke-test SparkApplication (spark-operator CRD path) — 1M random records
+# ------------------------------------------------------------------------------
+# Same test as tpcds-simple-test.yaml (plain Job + spark-submit), but
+# submitted through the spark-operator/SparkApplication CRD instead — to
+# validate that path specifically, including Karpenter provisioning a
+# spark-node through the operator's own driver/executor pod specs rather
+# than a hand-built pod template.
+#
+# Unlike raw spark-submit, the SparkApplication CRD supports tolerations
+# and configMap volumes natively in its own schema (driver.tolerations,
+# volumes[].configMap) — no separate pod-template ConfigMap needed here,
+# unlike tpcds-simple-test.yaml where spark-submit's --conf-based volume
+# mounting doesn't support the configMap type at all.
+#
+# Karpenter heads-up: spark-node's NodePool only allows arm64 Graviton3
+# (c7gd/m7gd/r7gd) at 4xlarge minimum (terraform-aws-k8s-ha
+# karpenter-k8s.tf) — watch `kubectl get nodes -l node-role.kubernetes.io/
+# spark-node -w` to see it provisioned. Scales back down ~5min after idle.
+#
+# Run:
+#   kubectl apply -f examples/spark-jobs/tpcds-simple-test-operator.yaml
+#   kubectl get sparkapplication tpcds-simple-test-operator -n default -w
+#   kubectl get nodes -l node-role.kubernetes.io/spark-node -w
+#   kubectl logs -n default -l spark-app-name=tpcds-simple-test-operator,spark-role=driver -f
+#
+# Clean up:
+#   kubectl delete -f examples/spark-jobs/tpcds-simple-test-operator.yaml
+# ------------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tpcds-simple-test-operator-script
+  namespace: default
+data:
+  tpcds_simple_query.py: |
+    from pyspark.sql import SparkSession
+    from pyspark.sql.functions import rand
+
+    spark = SparkSession.builder.appName("tpcds-simple-test-operator").getOrCreate()
+
+    # 1,000,000 rows, one random bucket per row (0-999) — cheap to generate,
+    # but the GROUP BY still forces a real shuffle across the executor.
+    df = spark.range(0, 1_000_000).withColumn("bucket", (rand() * 1000).cast("int"))
+    df.createOrReplaceTempView("test_data")
+
+    print(f"Total records generated: {df.count()}")
+
+    result = spark.sql(
+        "SELECT bucket, COUNT(*) AS cnt FROM test_data GROUP BY bucket ORDER BY cnt DESC LIMIT 10"
+    )
+    result.show()
+
+    spark.stop()
+---
+apiVersion: "sparkoperator.k8s.io/v1beta2"
+kind: SparkApplication
+metadata:
+  name: tpcds-simple-test-operator
+  namespace: default
+spec:
+  type: Python
+  pythonVersion: "3"
+  mode: cluster
+  image: "subhodeep2022/spark-bigdata:spark-3.5.8-v13-iceberg-gravitino"
+  imagePullPolicy: IfNotPresent
+  mainApplicationFile: "local:///opt/spark-jobs/tpcds_simple_query.py"
+  sparkVersion: "3.5.8"
+  restartPolicy:
+    type: Never
+
+  # Comet native execution — same accelerator every real job on this
+  # platform runs with. No Iceberg extension here (this test has no
+  # catalog/S3), just Comet's own.
+  sparkConf:
+    "spark.local.dir": "/mnt/spark-nvme/spark-local"
+    "spark.sql.shuffle.partitions": "8"
+    "spark.plugins": "org.apache.spark.CometPlugin"
+    "spark.sql.extensions": "org.apache.comet.CometSparkSessionExtensions"
+    "spark.shuffle.manager": "org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager"
+    "spark.comet.enabled": "true"
+    "spark.comet.exec.enabled": "true"
+    "spark.comet.exec.all.enabled": "true"
+    "spark.comet.exec.shuffle.enabled": "true"
+    "spark.comet.exec.shuffle.mode": "auto"
+    "spark.comet.exec.hashJoin.enabled": "true"
+    "spark.comet.exec.replaceSortMergeJoin": "true"
+    "spark.comet.logFallbackReasons.enabled": "true"
+    "spark.comet.explainFallback.enabled": "true"
+
+  driver:
+    cores: 1
+    memory: "1g"
+    serviceAccount: spark-operator-spark
+    nodeSelector:
+      node-role.kubernetes.io/spark-node: ""
+    tolerations:
+      - key: spark-only
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+    volumeMounts:
+      - name: test-script
+        mountPath: /opt/spark-jobs
+      - name: spark-shuffle
+        mountPath: /mnt/spark-nvme
+
+  executor:
+    cores: 1
+    instances: 1
+    memory: "2g"
+    nodeSelector:
+      node-role.kubernetes.io/spark-node: ""
+    tolerations:
+      - key: spark-only
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+    volumeMounts:
+      - name: test-script
+        mountPath: /opt/spark-jobs
+      - name: spark-shuffle
+        mountPath: /mnt/spark-nvme
+
+  volumes:
+    - name: test-script
+      configMap:
+        name: tpcds-simple-test-operator-script
+    - name: spark-shuffle
+      hostPath:
+        path: /mnt/spark-nvme/spark-shuffle
+        type: DirectoryOrCreate

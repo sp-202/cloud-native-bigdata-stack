@@ -1,0 +1,221 @@
+# ------------------------------------------------------------------------------
+# Smoke-test Spark job — TPC-DS-style dataset (~1M rows), one simple query
+# ------------------------------------------------------------------------------
+# Plain Job + spark-submit (k8s://... cluster mode), matching the pattern
+# actually used on this platform for one-off jobs — not the SparkApplication
+# CRD. Generates a small store_sales-style fact table joined to an item
+# dimension table in-memory, then runs one aggregation query (revenue by
+# category), with Comet native execution enabled (same accelerator every
+# real job on this platform runs with). No S3/Iceberg catalog — deliberately
+# minimal beyond that, just enough to prove spark-submit + Comet +
+# Karpenter's spark-node pool + driver/executor scheduling all work
+# end-to-end.
+#
+# Corrected vs. the last hand-run version of this job:
+#   - node-role selector was "spark-worker" (removed — see
+#     terraform-aws-k8s-ha karpenter-k8s.tf; the single spark tier is now
+#     labeled spark-node). Fixed to match.
+#   - no toleration for the spark-node NodePool's "spark-only" taint — the
+#     driver/executor pods would never actually schedule without one,
+#     regardless of the node selector matching. Added via pod templates
+#     (same hostPath+toleration+affinity block spark-connect-server already
+#     uses), not a bare --conf, since spark-submit has no direct
+#     --conf flag for tolerations.
+#   - serviceAccountName: default cannot create pods in this cluster
+#     (confirmed live: `kubectl auth can-i create pods
+#     --as=system:serviceaccount:default:default` -> no). Switched to
+#     spark-operator-spark, the service account the spark-operator chart
+#     already created with the right RBAC for exactly this.
+#
+# Karpenter heads-up: spark-node's NodePool only allows arm64 Graviton3
+# (c7gd/m7gd/r7gd) at 4xlarge minimum (terraform-aws-k8s-ha
+# karpenter-k8s.tf) — there's no smaller tier to request, so this 1-core
+# driver / 1-core executor test still brings up a full 4xlarge+ node. It
+# scales back down ~5min after going idle (consolidateAfter: 300s), so the
+# cost is bounded, just not tiny for how small this job's own footprint is.
+#
+# Run:
+#   kubectl apply -f examples/spark-jobs/tpcds-simple-test.yaml
+#   kubectl get pods -n default -l job-name=tpcds-simple-test -w
+#   kubectl logs -n default -l job-name=tpcds-simple-test -f
+#
+# Clean up:
+#   kubectl delete -f examples/spark-jobs/tpcds-simple-test.yaml
+#   kubectl delete sparkapp -n default -l spark-app-name=tpcds-simple-test --ignore-not-found
+# ------------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tpcds-simple-test-script
+  namespace: default
+data:
+  tpcds_simple_query.py: |
+    from pyspark.sql import SparkSession
+    from pyspark.sql.functions import rand
+
+    spark = SparkSession.builder.appName("tpcds-simple-test").getOrCreate()
+
+    # 1,000,000 rows, one random bucket per row (0-999) — cheap to generate,
+    # but the GROUP BY still forces a real shuffle across the executor.
+    df = spark.range(0, 1_000_000).withColumn("bucket", (rand() * 1000).cast("int"))
+    df.createOrReplaceTempView("test_data")
+
+    print(f"Total records generated: {df.count()}")
+
+    result = spark.sql(
+        "SELECT bucket, COUNT(*) AS cnt FROM test_data GROUP BY bucket ORDER BY cnt DESC LIMIT 10"
+    )
+    result.show()
+
+    spark.stop()
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tpcds-simple-test-pod-templates
+  namespace: default
+data:
+  # Same nodeAffinity + spark-only toleration + spark-nvme hostPath pattern
+  # as charts/spark-connect-server/templates/executor-pod-template-cm.yaml —
+  # kept identical on purpose so this example matches how the platform's
+  # own long-running Spark component is actually configured.
+  driver-pod-template.yaml: |
+    apiVersion: v1
+    kind: Pod
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/spark-node
+                    operator: Exists
+      tolerations:
+        - key: "node.kubernetes.io/unreachable"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 30
+        - key: "node.kubernetes.io/not-ready"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 30
+        - key: "spark-only"
+          value: "true"
+          effect: "NoSchedule"
+          operator: "Equal"
+      volumes:
+        - name: spark-shuffle
+          hostPath:
+            path: /mnt/spark-nvme/spark-shuffle
+            type: DirectoryOrCreate
+        # spark.kubernetes.driver.volumes.configMap.* (--conf based) doesn't
+        # support the "configMap" volume type in this Spark version
+        # (KubernetesVolumeUtils: "Kubernetes Volume type `configMap` is not
+        # supported", confirmed live) — only certain types like PVC/
+        # emptyDir/hostPath are. Pod templates accept any real Kubernetes
+        # volume type since they're just raw pod spec YAML, so the script
+        # mount lives here instead.
+        - name: script
+          configMap:
+            name: tpcds-simple-test-script
+      containers:
+        - name: spark-kubernetes-driver
+          volumeMounts:
+            - name: spark-shuffle
+              mountPath: /mnt/spark-nvme
+            - name: script
+              mountPath: /opt/spark-jobs
+  executor-pod-template.yaml: |
+    apiVersion: v1
+    kind: Pod
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/spark-node
+                    operator: Exists
+      tolerations:
+        - key: "node.kubernetes.io/unreachable"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 30
+        - key: "node.kubernetes.io/not-ready"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 30
+        - key: "spark-only"
+          value: "true"
+          effect: "NoSchedule"
+          operator: "Equal"
+      volumes:
+        - name: spark-shuffle
+          hostPath:
+            path: /mnt/spark-nvme/spark-shuffle
+            type: DirectoryOrCreate
+      containers:
+        - name: spark-kubernetes-executor
+          volumeMounts:
+            - name: spark-shuffle
+              mountPath: /mnt/spark-nvme
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tpcds-simple-test
+  namespace: default
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: spark-operator-spark
+      restartPolicy: Never
+      containers:
+        - name: spark-submit
+          image: subhodeep2022/spark-bigdata:spark-3.5.8-v13-iceberg-gravitino
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              /opt/spark/bin/spark-submit \
+                --master k8s://https://kubernetes.default.svc:443 \
+                --deploy-mode cluster \
+                --name tpcds-simple-test \
+                --conf spark.kubernetes.container.image=subhodeep2022/spark-bigdata:spark-3.5.8-v13-iceberg-gravitino \
+                --conf spark.kubernetes.namespace=default \
+                --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-operator-spark \
+                --conf spark.kubernetes.driver.podTemplateFile=/opt/spark-jobs/pod-templates/driver-pod-template.yaml \
+                --conf spark.kubernetes.executor.podTemplateFile=/opt/spark-jobs/pod-templates/executor-pod-template.yaml \
+                --conf spark.kubernetes.driver.volumes.configMap.script.options.name=tpcds-simple-test-script \
+                --conf spark.kubernetes.driver.volumes.configMap.script.mount.path=/opt/spark-jobs \
+                --conf spark.local.dir=/mnt/spark-nvme/spark-local \
+                --conf spark.executor.instances=1 \
+                --conf spark.executor.cores=1 \
+                --conf spark.executor.memory=2g \
+                --conf spark.driver.cores=1 \
+                --conf spark.driver.memory=1g \
+                --conf spark.sql.shuffle.partitions=8 \
+                \
+                `# Comet native execution — same accelerator every real job` \
+                `# on this platform runs with. No Iceberg extension here (this` \
+                `# test has no catalog/S3), just Comet's own.` \
+                --conf spark.plugins=org.apache.spark.CometPlugin \
+                --conf spark.sql.extensions=org.apache.comet.CometSparkSessionExtensions \
+                --conf spark.shuffle.manager=org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager \
+                --conf spark.comet.enabled=true \
+                --conf spark.comet.exec.enabled=true \
+                --conf spark.comet.exec.all.enabled=true \
+                --conf spark.comet.exec.shuffle.enabled=true \
+                --conf spark.comet.exec.shuffle.mode=auto \
+                --conf spark.comet.exec.hashJoin.enabled=true \
+                --conf spark.comet.exec.replaceSortMergeJoin=true \
+                --conf spark.comet.logFallbackReasons.enabled=true \
+                --conf spark.comet.explainFallback.enabled=true \
+                local:///opt/spark-jobs/tpcds_simple_query.py
+          volumeMounts:
+            - name: pod-templates
+              mountPath: /opt/spark-jobs/pod-templates
+      volumes:
+        - name: pod-templates
+          configMap:
+            name: tpcds-simple-test-pod-templates
