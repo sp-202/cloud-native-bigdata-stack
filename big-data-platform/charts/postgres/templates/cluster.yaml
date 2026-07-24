@@ -54,6 +54,22 @@ spec:
   resources:
     {{- toYaml .Values.resources | nindent 4 }}
 
+  # Every replica join runs pg_basebackup with CNPG's hardcoded options
+  # (confirmed against upstream pkg/management/postgres/join.go) — no
+  # `--checkpoint=fast`, so the backup can't start until the primary's
+  # *next* naturally-scheduled checkpoint completes. There's no Cluster-spec
+  # field that overrides that flag; the only lever available is how long
+  # that wait can be. Left at Postgres's own default (5min), every join
+  # (postgres-2, postgres-3, and any future scale-out) sits idle for up to
+  # 5 minutes before the backup even starts — looks identical to a stuck
+  # job from the outside. 2min bounds that wait to something predictable
+  # without dropping low enough to turn into constant background checkpoint
+  # I/O (the usual anti-pattern with sub-minute checkpoint_timeout).
+  postgresql:
+    parameters:
+      checkpoint_timeout: "2min"
+      checkpoint_completion_target: "0.9"
+
   bootstrap:
     initdb:
       database: postgres
