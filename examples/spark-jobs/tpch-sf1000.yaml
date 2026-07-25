@@ -43,7 +43,7 @@
 apiVersion: "sparkoperator.k8s.io/v1beta2"
 kind: SparkApplication
 metadata:
-  name: tpch-sf100
+  name: tpch-sf1000
   namespace: default
 spec:
   type: Python
@@ -56,7 +56,7 @@ spec:
     - "--benchmark"
     - "tpch"
     - "--data"
-    - "s3a://tpch-sf100-419772658418/tpch_sf100"
+    - "s3a://tpch-sf100-419772658418/tpch_sf1000"
     - "--queries"
     - "s3a://tpch-sf100-419772658418/tpch-queries"
     - "--output"
@@ -96,6 +96,44 @@ spec:
     "spark.hadoop.fs.s3a.connection.maximum": "200"
     "spark.hadoop.fs.s3a.multipart.purge": "true"
     "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "2"
+
+    # ── Comet native parquet reader — S3 connection concurrency ──────────────
+    # CRITICAL: the fs.s3a.* limits above do NOT apply to Comet's native
+    # reader — it reads S3 through its own Rust parallel reader, not
+    # hadoop-s3a (confirmed in the fork's CometConf.scala). These are the
+    # settings that actually bound Comet's S3 connections.
+    #
+    # At SF1000 the defaults (thread-pool.size=16) meant 32 executors x 16
+    # threads = 512 concurrent S3 read connections firing in a burst at each
+    # scan stage. That churn overran Cilium's masquerade NAT-entry-creation
+    # rate (not the map SIZE — maps measured healthy at ~7.5K/2M, nodes idle,
+    # S3 fine in steady state), producing the intermittent ~0.8% "error
+    # sending request" GET failures + 58s retries + executor churn on the big
+    # lineitem/partsupp scans. See terraform-aws-k8s-ha issues.md #38 and
+    # cilium/cilium#33074.
+    #
+    # thread-pool.size -> 4: this is the CONCURRENCY CAP (max parallel S3 read
+    #   threads per executor), so it directly bounds the per-executor burst of
+    #   simultaneous connection setups — the exact thing that trips Cilium's
+    #   masquerade NAT-entry-creation rate. 16 (default) gave 17 failed tasks
+    #   /2112 on the lineitem scan; 8 cut it to 2-3; 4 halves the concurrent
+    #   burst again to drive it to zero. Confirmed via the fork's CometConf
+    #   doc: "for executors configured with a smaller number of cores, use a
+    #   smaller number" — 4 is conservative for 8-core executors but the
+    #   58s-retry stalls hurt the benchmark far more than slightly lower read
+    #   parallelism (mergeRanges below compensates by making each read bigger).
+    # mergeRanges.delta 8MB->64MB: coalesce column-chunk reads into fewer,
+    #   larger sequential GETs -> fewer TOTAL connections AND faster on S3.
+    #   Pairs with the lower thread count: bigger merged reads need fewer
+    #   threads. adjust.readRange.skew left false (enabling it opens MORE
+    #   connections). NOTE: object_store's retry is its built-in default
+    #   (max_retries=10/retry_timeout=180s) — Comet doesn't expose it, so
+    #   raising retries would need a native-code change + image rebuild; the
+    #   reader-concurrency knobs here are the no-rebuild fix.
+    "spark.comet.parquet.read.parallel.io.enabled": "true"
+    "spark.comet.parquet.read.parallel.io.thread-pool.size": "4"
+    "spark.comet.parquet.read.io.mergeRanges": "true"
+    "spark.comet.parquet.read.io.mergeRanges.delta": "67108864"
 
     # --- Comet native execution (full set, matching the proven reference job) ---
     "spark.plugins": "org.apache.spark.CometPlugin"
@@ -173,7 +211,7 @@ spec:
     "spark.kubernetes.submission.requestTimeout": "120000"
     "spark.kubernetes.driver.connectionTimeout": "120000"
     "spark.kubernetes.driver.requestTimeout": "120000"
-    "spark.kubernetes.executor.podNamePrefix": "tpch-sf100-q1"
+    "spark.kubernetes.executor.podNamePrefix": "tpch-sf1000"
 
     # ── Shuffle tuning ───────────────────────────────────────────────────────
     "spark.shuffle.file.buffer": "1m"
@@ -194,8 +232,15 @@ spec:
     # log4j2-custom ConfigMap is mounted at /opt/spark/log4j2-custom (see
     # volumeMounts/volumes below) — JSON console layout, tuned to quiet
     # Jetty/Parquet/Hive-metastore noise.
+    # -verbose:gc REMOVED — it prints a GC line to stdout on every collection,
+    # which lands in the container log on the 77Gi ROOT disk (not the NVMe).
+    # At SF1000 across 32 executors that (plus the S3-error stacktrace spam and
+    # INFO logging below) filled root -> kubelet disk-pressure -> executors
+    # evicted -> churn. Shuffle/spill is fine (on the 2.6TB NVMe). GC tuning
+    # flags stay; only the logging is dropped. If you want GC data back later,
+    # redirect it to NVMe: -Xlog:gc:/mnt/spark-nvme/gc-%p.log instead of stdout.
     "spark.driver.extraJavaOptions": "-Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties"
-    "spark.executor.defaultJavaOptions": "-verbose:gc -XX:+UseParallelGC -XX:InitiatingHeapOccupancyPercent=70 -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties"
+    "spark.executor.defaultJavaOptions": "-XX:+UseParallelGC -XX:InitiatingHeapOccupancyPercent=70 -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties"
 
   driver:
     cores: 5
@@ -257,7 +302,7 @@ spec:
   executor:
     cores: 8
     coreLimit: "8"
-    instances: 12
+    instances: 32
     memory: "32g"
     memoryOverhead: "10g"
     annotations:
@@ -323,8 +368,11 @@ data:
     # limitations under the License.
     #
 
-    # Set everything to be logged to the console
-    rootLogger.level = info
+    # rootLogger WARN, not info — at SF1000 (256 concurrent tasks) INFO emits
+    # a JSON line per task-scheduler event to the container log on the 77Gi
+    # root disk, a major contributor to the disk-pressure that evicted
+    # executors. WARN keeps errors/warnings, drops the per-task chatter.
+    rootLogger.level = warn
     rootLogger.appenderRef.stdout.ref = console
 
     # In the pattern layout configuration below, we specify an explicit `%ex` conversion
