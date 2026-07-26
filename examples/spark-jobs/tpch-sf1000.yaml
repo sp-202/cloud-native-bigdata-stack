@@ -268,8 +268,16 @@ spec:
     # evicted -> churn. Shuffle/spill is fine (on the 2.6TB NVMe). GC tuning
     # flags stay; only the logging is dropped. If you want GC data back later,
     # redirect it to NVMe: -Xlog:gc:/mnt/spark-nvme/gc-%p.log instead of stdout.
-    # "spark.driver.extraJavaOptions": "-Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties"
-    # "spark.executor.defaultJavaOptions": "-XX:+UseParallelGC -XX:InitiatingHeapOccupancyPercent=70 -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties"
+    # -Djava.io.tmpdir -> NVMe: Comet's native lib (libcomet.so ~121MB) + JVM
+    #   temp extract to /tmp on the 77Gi ROOT disk by default; at SF1000 that
+    #   feeds the ephemeral-storage pressure that evicts executors (exit 137
+    #   "Evicted", NOT OOM). /mnt/spark-nvme is the hostPath NVMe mount (2.6TB)
+    #   -> keeps JVM/Comet temp off the root disk. See issues.md #40.
+    # RE-ENABLED: both lines had been commented out, which also dropped the
+    #   log4j WARN config the block above says must STAY — default INFO logging
+    #   is itself a root-disk-pressure contributor. See issues.md #38/#40.
+    "spark.driver.extraJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties"
+    "spark.executor.defaultJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -XX:+UseParallelGC -XX:InitiatingHeapOccupancyPercent=70 -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties"
 
   driver:
     cores: 5
