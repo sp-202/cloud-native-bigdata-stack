@@ -140,6 +140,11 @@ spec:
     "spark.comet.write.iceberg.splitOperator.enabled": "true"
     "spark.comet.write.iceberg.nativeAcceleration": "true"
 
+    # --- Native Scan Cache (CTE Cache) and Zero-Copy Spill Compression ---
+    "spark.comet.exec.shuffle.compression.codec": "zstd"
+    "spark.comet.native.scan.cache.enabled": "true"
+    "spark.executorEnv.COMET_NATIVE_SCAN_CACHE_ENABLED": "true"
+
     # --- SQL / AQE ---
     # Just the base AQE toggles — no skew/partition-size micro-tuning,
     # TPC-H SF100's generated data is uniformly distributed, not skewed.
