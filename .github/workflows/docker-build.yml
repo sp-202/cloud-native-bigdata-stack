@@ -138,6 +138,10 @@ jobs:
         run: |
           aws s3 cp s3://spark-3.5.8-scala-2.13-custom/spark-arm64/spark-3.5.8-comet-v1.tar.gz docker/spark/spark-3.5.8-comet-v1.tar.gz
 
+      - name: Pull Comet tarball (arm64) from S3
+        run: |
+          aws s3 cp s3://spark-3.5.8-scala-2.13-custom/comet-arm/comet-spark-spark3.5_2.13-0.17.0-SNAPSHOT.jar docker/spark/comet-spark-spark3.5_2.13-0.17.0-SNAPSHOT.jar
+
       - name: Set up QEMU (arm64 emulation)
         uses: docker/setup-qemu-action@v3
 

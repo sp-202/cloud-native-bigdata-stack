@@ -13,11 +13,12 @@ ENV SPARK_VERSION=3.5.8 \
     SEDONA_VERSION=1.8.1 \
     GEOTOOLS_WRAPPER_VERSION=1.8.1-33.1 \
     H3_VERSION=4.0.1 \
+    COMET_VERSION=0.17.0-SNAPSHOT \
     SPARK_HOME=/opt/spark
 
 RUN apt-get update && apt-get install -y wget curl
 
-# Custom Comet-accelerated arm64 build pulled from S3 by the workflow
+# Base Spark arm64 build pulled from S3 by the workflow
 # (docker/spark/spark-3.5.8-comet-v1.tar.gz).
 COPY spark-3.5.8-comet-v1.tar.gz /tmp/spark-comet.tar.gz
 
@@ -27,6 +28,11 @@ RUN mkdir -p /tmp/spark-extract && \
     rm -rf /tmp/spark-extract /tmp/spark-comet.tar.gz
 
 RUN rm -rf $SPARK_HOME/examples $SPARK_HOME/data $SPARK_HOME/tests $SPARK_HOME/licenses
+
+# Comet acceleration jar, built separately (arm64) and pulled from S3 by the
+# workflow (docker/spark/comet-spark-spark3.5_2.13-${COMET_VERSION}.jar) —
+# not bundled inside the base tarball above.
+COPY comet-spark-spark3.5_2.13-${COMET_VERSION}.jar ${SPARK_HOME}/jars/
 
 # Download JARs into WORKDIR — no -P flag needed
 # Iceberg-native setup: iceberg-spark-runtime (core) + iceberg-aws-bundle (S3FileIO with shaded AWS SDK v2)
