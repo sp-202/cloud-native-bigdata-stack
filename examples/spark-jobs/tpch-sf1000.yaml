@@ -240,6 +240,21 @@ spec:
     "spark.kubernetes.driver.requestTimeout": "120000"
     "spark.kubernetes.executor.podNamePrefix": "tpch-sf1000"
 
+    # ── Graceful executor decommission ──────────────────────────────────────
+    # do-not-disrupt (driver/executor annotations above) already blocks
+    # Karpenter's own voluntary disruption (consolidation/drift/expiration)
+    # for this job's pods — this is defense-in-depth for what that doesn't
+    # cover: involuntary termination (node hardware failure, manual
+    # intervention). Without it, a killed executor forces the shuffle/RDD
+    # data it held to be recomputed from scratch; with it, that data
+    # migrates to another live executor first. Zero cost when nothing
+    # actually terminates early, matches data-on-eks's own Karpenter/Spark
+    # best-practices guidance.
+    "spark.executor.decommission.enabled": "true"
+    "spark.storage.decommission.enabled": "true"
+    "spark.storage.decommission.shuffleBlocks.enabled": "true"
+    "spark.storage.decommission.rddBlocks.enabled": "true"
+
     # ── Shuffle tuning ───────────────────────────────────────────────────────
     "spark.shuffle.file.buffer": "1m"
     "spark.reducer.maxSizeInFlight": "48m"
@@ -284,6 +299,19 @@ spec:
     memory: "20g"
     memoryOverhead: "6g"
     serviceAccount: spark-operator-spark
+    # ndots:5 (k8s default) makes every non-cluster hostname (s3.us-east-1.
+    # amazonaws.com, etc.) get tried against 4 search-domain suffixes before
+    # the raw name, each a wasted DNS round trip — data-on-eks's own
+    # networking best-practices doc calls this out specifically for the
+    # S3/RDS-endpoint case. ndots:2 still resolves in-cluster service names
+    # (namespace-local and cross-namespace) correctly, it just stops
+    # appending suffixes to anything with 2+ dots already (which S3/AWS
+    # endpoints always have) — pure latency/DNS-volume win, no downside for
+    # what this job actually talks to.
+    dnsConfig:
+      options:
+        - name: ndots
+          value: "2"
     # Belt-and-suspenders on top of spark_nodepool's consolidationPolicy
     # (karpenter-k8s.tf, now WhenEmpty): do-not-disrupt is the blanket
     # Karpenter opt-out covering the mechanisms WhenEmpty doesn't —
@@ -342,6 +370,13 @@ spec:
     instances: 16
     memory: "64g"
     memoryOverhead: "20g"
+    # Same ndots rationale as the driver above — executors are the ones
+    # actually issuing the high-volume S3 lookups Comet's native reader
+    # generates, so this matters more here than on the driver.
+    dnsConfig:
+      options:
+        - name: ndots
+          value: "2"
     annotations:
       karpenter.sh/do-not-disrupt: "true"
     nodeSelector:

@@ -22,14 +22,37 @@
 # bucket was created outside Terraform (by hand) and is not referenced by
 # any other .tf resource, so `terraform destroy`/clean.sh can never touch it.
 #
-# Node sizing: 10 executors x (8 vCPU, 74Gi) + driver (5 vCPU, 58Gi) =
-# 85 vCPU / 798Gi total. Each executor pod's 74Gi is 32Gi heap + 10Gi
-# memoryOverhead + 32Gi spark.memory.offHeap.size (K8s counts off-heap
-# into the pod's memory request too). r7gd.12xlarge (48 vCPU/384Gi) needs
-# at least 3 nodes to cover the 798Gi (memory-bound, not CPU-bound: 85
-# vCPU only needs 2 nodes' worth). Not hard-coded here either way —
-# Karpenter's own bin-packing across the on-demand r7gd.12xlarge pool
-# decides the actual node count.
+# Node sizing: 6 executors x (16 vCPU, 148Gi) + driver (5 vCPU, 26Gi) on
+# r7gd.12xlarge, ~2 executors/node (3 nodes). A "1 executor per node, ~40
+# vCPU" fat-executor redesign was drafted here and then deliberately
+# walked back — NOT applied — once data-on-eks's own real, production
+# Comet benchmark config surfaced (see the Apache DataFusion blog "What
+# two months with the Comet community got our Spark workload on Amazon
+# EKS", and data-on-eks's tpcds-benchmark-comet-parquet.yaml): AWS's own
+# TPC-DS 3TB benchmark on the exact same r8gd.12xlarge instance runs THIN
+# executors (cores=5, memory=20g, memoryOverhead=6g) at ~2/node — the
+# opposite direction from fat-executor consolidation. Two concrete reasons
+# that reference config wins over speculative fat-executor math: (1) their
+# root cause for excess S3 connection/DNS volume was fixed in Comet's own
+# code (#3802, object-store + bucket-region caching — confirmed already
+# present in this fork's git log), not by shrinking executor count, so
+# consolidating executors here would have been solving the same problem
+# twice; (2) very large JVM heaps (150-300Gi+) carry their own GC-pause
+# tax that can hurt tail latency worse than the network stalls being
+# chased. Kept at the current 16-core/148Gi/2-per-node shape rather than
+# resized to AWS's thinner 5-core pattern, since that's a real follow-up
+# resizing decision, not yet made — this comment exists so the header
+# never again silently drifts from what spec.executor below actually says.
+#
+# The underlying S3 stall issue this was all in service of: the same
+# 55-63s Comet S3 stall signature (issues.md #38, later corrected by #39
+# to ENA bandwidth allowance exhaustion, confirmed live for this exact job
+# via bw_in/out_allowance_exceeded climbing into the millions while
+# Cilium's NAT/CT maps sat idle) always clustered on the same subset of
+# executors, consistent with those executors sharing one node's bandwidth
+# cap — reducing executor density per node (the move already made, 4->2)
+# is still a valid partial mitigation for that; going further to 1/node
+# was the (unapplied) idea for removing that sharing entirely.
 #
 # Run:
 #   kubectl apply -f examples/spark-jobs/tpch-sf100.yaml
@@ -67,11 +90,11 @@ spec:
 
   sparkConf:
     "spark.local.dir": "/mnt/spark-nvme/spark-local"
-    "spark.kubernetes.executor.request.cores": "8"
+    "spark.kubernetes.executor.request.cores": "16"
     "spark.memory.fraction": "0.6"
     "spark.memory.storageFraction": "0.2"
     "spark.memory.offHeap.enabled": "true"
-    "spark.memory.offHeap.size": "32g"
+    "spark.memory.offHeap.size": "64g"
 
     "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
     "spark.hadoop.fs.s3.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
@@ -96,6 +119,26 @@ spec:
     "spark.hadoop.fs.s3a.connection.maximum": "200"
     "spark.hadoop.fs.s3a.multipart.purge": "true"
     "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "2"
+
+    # ── Comet native parquet reader — S3 connection concurrency ──────────────
+    # Comet's native reader bypasses hadoop-s3a entirely (its own Rust S3
+    # client), so none of the fs.s3a.* settings above bound it. The knobs
+    # that do (verified against the vendored fork's actual compiled-in
+    # defaults in CometConf.scala, not assumed): parallel.io.enabled=true,
+    # thread-pool.size=16 PER EXECUTOR (doc: "in a single executor"),
+    # mergeRanges=true, mergeRanges.delta=8MB. All left unset here to take
+    # those defaults as-is.
+    #
+    # This job is now 6 executors (down from 12, see the header's "Node
+    # sizing" note): at the default thread-pool.size=16, peak concurrent
+    # S3 GETs is 6*16=96 cluster-wide, and — more relevant than the
+    # cluster-wide total — only 2 executors' worth (32) share any single
+    # node's connection/bandwidth limit now, down from 4 executors' worth
+    # (64) before. That's the actual lever the executor-count change
+    # pulls; thread-pool.size itself is unchanged.
+    # No evidence (GET-count/latency metrics from an actual run) yet that
+    # the default 8MB mergeRanges.delta is too tight for this dataset —
+    # revisit with real numbers before hand-tuning it further.
 
     # --- Comet native execution (full set, matching the proven reference job) ---
     "spark.plugins": "org.apache.spark.CometPlugin"
@@ -141,17 +184,59 @@ spec:
     "spark.comet.write.iceberg.nativeAcceleration": "true"
 
     # --- Native Scan Cache (CTE Cache) and Zero-Copy Spill Compression ---
-    "spark.comet.exec.shuffle.compression.codec": "zstd"
-    "spark.comet.native.scan.cache.enabled": "true"
-    "spark.executorEnv.COMET_NATIVE_SCAN_CACHE_ENABLED": "true"
+    "spark.comet.exec.shuffle.compression.codec": "lz4"
+    # "spark.comet.native.scan.cache.enabled": "true"
+    # "spark.executorEnv.COMET_NATIVE_SCAN_CACHE_ENABLED": "true"
 
     # --- SQL / AQE ---
-    # Just the base AQE toggles — no skew/partition-size micro-tuning,
-    # TPC-H SF100's generated data is uniformly distributed, not skewed.
+    # tpcbench.py runs the FULL 22-query TPC-H suite here (no --query arg
+    # is passed below), not just Q1 despite the header comment above — so
+    # this has to be tuned for the whole mix, not one query.
+    #
+    # Only the on/off switches were set before, which left two defaults
+    # silently active:
+    #   - spark.sql.shuffle.partitions defaults to 200, unrelated to this
+    #     job's 96 task slots (6 executors x 16 cores).
+    #   - spark.sql.adaptive.coalescePartitions.parallelismFirst defaults
+    #     to true, which makes AQE IGNORE advisoryPartitionSizeInBytes
+    #     entirely and only merge partitions under minPartitionSize (1MB
+    #     default) to preserve parallelism. So coalescing was barely
+    #     doing anything — that's why low-data queries still fan out
+    #     into ~200 small partitions instead of a handful of big ones.
+    #
+    # Separately: several TPC-H queries end in a GROUP BY over a handful
+    # of distinct values (Q1 by l_returnflag/l_linestatus = 4 groups,
+    # Q5/Q8/Q10 by nation/region = tens of groups). That final shuffle
+    # collapses onto a few hot reduce partitions no matter how this is
+    # tuned, because skewJoin only rebalances joins, not aggregates —
+    # expect a handful of idle executors on those stages; that's the
+    # query shape, not a misconfiguration.
     "spark.sql.adaptive.enabled": "true"
     "spark.sql.adaptive.localShuffleReader.enabled": "true"
     "spark.sql.adaptive.coalescePartitions.enabled": "true"
+    # "spark.sql.adaptive.coalescePartitions.parallelismFirst": "false"
+    # Below this, a partition isn't worth its own task: S3 GET latency
+    # and task-scheduling overhead dominate under ~32m anyway.
+    # "spark.sql.adaptive.coalescePartitions.minPartitionSize": "32m"
+    # Matches spark.sql.files.maxPartitionBytes' default (128m), so the
+    # scan side and the shuffle side target the same partition size.
+    "spark.sql.adaptive.advisoryPartitionSizeInBytes": "128m"
+    # ~4x the 96 task slots: enough initial partitions for lineitem-scale
+    # joins to land near the 128m target after coalescing, while AQE can
+    # still merge hard down on the low-volume queries/stages.
+    "spark.sql.shuffle.partitions": "384"
     "spark.sql.adaptive.skewJoin.enabled": "true"
+    # skewJoin's factor/threshold (default 5x median / 256m) are left as
+    # Spark defaults deliberately — raising advisoryPartitionSizeInBytes
+    # already lifts the baseline partition size skew is measured against.
+    # Only tighten these if the run logs actually show skewed-partition
+    # warnings.
+
+    # S3 reports no real block locality, so making Spark wait through
+    # PROCESS_LOCAL/NODE_LOCAL/RACK_LOCAL levels (3s each by default)
+    # before it'll schedule on an idle executor just stalls it for
+    # nothing on this job — schedule immediately instead.
+    # "spark.locality.wait": "0s"
 
     # --- UI ---
     "spark.ui.enabled": "true"
@@ -180,6 +265,21 @@ spec:
     "spark.kubernetes.driver.requestTimeout": "120000"
     "spark.kubernetes.executor.podNamePrefix": "tpch-sf100-q1"
 
+    # ── Graceful executor decommission ──────────────────────────────────────
+    # do-not-disrupt (driver/executor annotations above) already blocks
+    # Karpenter's own voluntary disruption (consolidation/drift/expiration)
+    # for this job's pods — this is defense-in-depth for what that doesn't
+    # cover: involuntary termination (node hardware failure, manual
+    # intervention). Without it, a killed executor forces the shuffle/RDD
+    # data it held to be recomputed from scratch; with it, that data
+    # migrates to another live executor first. Zero cost when nothing
+    # actually terminates early, matches data-on-eks's own Karpenter/Spark
+    # best-practices guidance.
+    "spark.executor.decommission.enabled": "true"
+    "spark.storage.decommission.enabled": "true"
+    "spark.storage.decommission.shuffleBlocks.enabled": "true"
+    "spark.storage.decommission.rddBlocks.enabled": "true"
+
     # ── Shuffle tuning ───────────────────────────────────────────────────────
     "spark.shuffle.file.buffer": "1m"
     "spark.reducer.maxSizeInFlight": "48m"
@@ -207,6 +307,19 @@ spec:
     memory: "20g"
     memoryOverhead: "6g"
     serviceAccount: spark-operator-spark
+    # ndots:5 (k8s default) makes every non-cluster hostname (s3.us-east-1.
+    # amazonaws.com, etc.) get tried against 4 search-domain suffixes before
+    # the raw name, each a wasted DNS round trip — data-on-eks's own
+    # networking best-practices doc calls this out specifically for the
+    # S3/RDS-endpoint case. ndots:2 still resolves in-cluster service names
+    # (namespace-local and cross-namespace) correctly, it just stops
+    # appending suffixes to anything with 2+ dots already (which S3/AWS
+    # endpoints always have) — pure latency/DNS-volume win, no downside for
+    # what this job actually talks to.
+    dnsConfig:
+      options:
+        - name: ndots
+          value: "2"
     # Belt-and-suspenders on top of spark_nodepool's consolidationPolicy
     # (karpenter-k8s.tf, now WhenEmpty): do-not-disrupt is the blanket
     # Karpenter opt-out covering the mechanisms WhenEmpty doesn't —
@@ -260,11 +373,18 @@ spec:
         mountPath: /opt/spark/log4j2-custom
 
   executor:
-    cores: 8
-    coreLimit: "8"
-    instances: 12
-    memory: "32g"
-    memoryOverhead: "10g"
+    cores: 16
+    coreLimit: "16"
+    instances: 6
+    memory: "64g"
+    memoryOverhead: "20g"
+    # Same ndots rationale as the driver above — executors are the ones
+    # actually issuing the high-volume S3 lookups Comet's native reader
+    # generates, so this matters more here than on the driver.
+    dnsConfig:
+      options:
+        - name: ndots
+          value: "2"
     annotations:
       karpenter.sh/do-not-disrupt: "true"
     nodeSelector:
