@@ -2,73 +2,100 @@ apiVersion: v1
 data:
   spark-defaults.conf: |
     # =============================================================================
-    # Spark Configuration (Kubernetes) - Generated for Local Use
+    # GLOBAL PRODUCTION DEFAULTS (Spark 4.0.1 + Delta + Hive + MinIO)
     # =============================================================================
 
-    # --- Application & Naming ---
-    spark.app.name                   spark-bigdata
-    spark.kubernetes.executor.podNamePrefix spark-executor
+    # --- Delta Lake & Hive Metastore (Must be at the top) ---
+    spark.sql.extensions                        io.delta.sql.DeltaSparkSessionExtension
+    spark.sql.catalog.spark_catalog             org.apache.spark.sql.delta.catalog.DeltaCatalog
+    spark.sql.catalogImplementation             hive
+    spark.hadoop.hive.metastore.uris            thrift://hive-metastore.default.svc.cluster.local:9083
 
-    # --- Master & Deployment ---
-    spark.master                     k8s://https://127.0.0.1:6443
-    spark.submit.deployMode          client
-    spark.kubernetes.namespace       default
-    spark.kubernetes.container.image subhodeep2022/spark-bigdata:spark-4.0.1-uc-0.3.1-proper-way-v7-compatible-jars
+    # --- Hive & Delta Interoperability Fixes (ADDED TO PREVENT INVOCATION ERRORS) ---
+    # This stops Spark from attempting to sync Delta schemas to Hive-native formats
+    spark.sql.hive.manageFilesourcePartitions   false
+    spark.sql.hive.caseSensitiveInferenceMode   NEVER_INFER
+    # Allows Delta to update the Metastore without triggering strict Hive DDL checks
+    spark.sql.delta.alterTable.schemaCheck.enabled false
+    # Increases parameter limits for complex Delta schemas
+    spark.hadoop.hive.table.parameters.maxlen   10000
+
+    # --- Core Kubernetes & Deployment ---
+    spark.master                                k8s://https://kubernetes.default.svc
+    spark.kubernetes.namespace                  default
     spark.kubernetes.authenticate.driver.serviceAccountName spark-operator-spark
+    spark.submit.deployMode                     cluster
 
-    # --- SQL & ANSI Mode ---
-    spark.sql.ansi.enabled           false
-
-    # --- Dynamic Resource Allocation ---
-    spark.dynamicAllocation.enabled              true
+    # --- Resource Strategy: Dynamic Allocation ---
+    spark.dynamicAllocation.enabled             true
     spark.dynamicAllocation.shuffleTracking.enabled true
     spark.dynamicAllocation.minExecutors         1
-    spark.dynamicAllocation.maxExecutors         5
-    spark.dynamicAllocation.executorIdleTimeout  600
+    spark.dynamicAllocation.maxExecutors         10
+    # Spark 4.0 Fix: Use bare integers for seconds
+    spark.dynamicAllocation.executorIdleTimeout 60
+    spark.dynamicAllocation.schedulerBacklogTimeout 1
 
-    # --- Networking & Timeouts ---
-    spark.network.timeout            120
-    spark.files.fetchTimeout         60
-    spark.executor.heartbeatInterval 10
+    # --- S3A / MinIO Infrastructure ---
+    spark.hadoop.fs.s3a.endpoint                http://minio.default.svc.cluster.local:9000
+    spark.hadoop.fs.s3a.access.key              minioadmin
+    spark.hadoop.fs.s3a.secret.key              minioadmin
+    spark.hadoop.fs.s3a.path.style.access       true
+    spark.hadoop.fs.s3a.connection.ssl.enabled  false
+    spark.hadoop.fs.s3a.impl                    org.apache.hadoop.fs.s3a.S3AFileSystem
+    spark.hadoop.fs.s3.impl                     org.apache.hadoop.fs.s3a.S3AFileSystem
+    spark.hadoop.fs.s3a.aws.credentials.provider org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
+    spark.hadoop.fs.s3a.fast.upload             true
 
-    # --- Hadoop S3A Configuration ---
+    # --- Spark 4.0 Duration/Timeout Fixes (Integers Required for S3A/Net) ---
+    # This prevents the NumberFormatException: "60s"
     spark.hadoop.fs.s3a.threads.keepalivetime    60
     spark.hadoop.fs.s3a.connection.timeout       200
     spark.hadoop.fs.s3a.connection.establish.timeout 30
     spark.hadoop.fs.s3a.connection.acquisition.timeout 60
+    spark.hadoop.fs.s3a.connection.idle.time     60
+    spark.hadoop.fs.s3a.connection.request.timeout 60
+    spark.hadoop.fs.s3a.connection.ttl           300
     spark.hadoop.fs.s3a.multipart.purge.age      86400
+    spark.hadoop.fs.s3a.paging.maximum           5000
 
-    # --- Executor & Driver Resources ---
-    spark.executor.cores             1
-    spark.executor.memory            2g
-    spark.driver.cores               1
-    spark.driver.memory              2g
+    # --- Warehouse Configuration ---
+    # Ensure these match your actual bucket structure
+    spark.sql.warehouse.dir                     s3a://test-bucket/warehouse
+    spark.hadoop.hive.metastore.warehouse.dir   s3a://test-bucket/warehouse
+
+    # --- Critical Hive Client Fixes (REMOVED IN-MEMORY DERBY) ---
+    spark.hadoop.datanucleus.autoCreateSchema         true
+    spark.hadoop.datanucleus.fixedDatastore           false
+    spark.hadoop.hive.metastore.schema.verification  false
+
+    # Prevents Spark from trying to force-sync full Delta schemas into Hive-native formats
+    spark.sql.hive.convertMetastoreParquet             false
+    spark.sql.hive.manageFilesourcePartitions         false
+    spark.sql.hive.caseSensitiveInferenceMode         NEVER_INFER
+
+    # This is the "Magic" flag for the error you saw:
+    # It forces Spark to use its own metadata format in Hive instead of standard Hive DDL
+    spark.sql.delta.alterTable.schemaCheck.enabled    false
+
+    # Increase the metadata string limit (helpful if your table has many columns)
+    spark.hadoop.hive.metastore.max.retries           3
+    spark.hadoop.hive.table.parameters.maxlen         10000
+
+    # --- Performance & Delta Tuning ---
+    spark.sql.shuffle.partitions                8
+    spark.sql.adaptive.enabled                  true
+    spark.sql.parquet.mergeSchema               false
+    spark.databricks.delta.universalFormat.enabledFormats none
+    spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version 2
+    spark.sql.ansi.enabled                       false
+
+    spark.databricks.delta.optimizeWrite.enabled   true
+    spark.databricks.delta.autoCompact.enabled     true
+
 
     # --- Metrics & Monitoring ---
-    spark.ui.prometheus.enabled      true
-    spark.metrics.namespace          spark
-
-    # --- SQL & Catalogs (Delta Lake & Hive) ---
-    spark.sql.extensions             io.delta.sql.DeltaSparkSessionExtension
-    spark.sql.defaultCatalog         spark_catalog
-    spark.sql.catalog.spark_catalog  org.apache.spark.sql.delta.catalog.DeltaCatalog
-    spark.sql.catalogImplementation  hive
-    spark.hadoop.hive.metastore.uris thrift://hive-metastore.default.svc.cluster.local:9083
-    spark.sql.warehouse.dir          s3a://warehouse/managed/
-
-    # --- S3 / MinIO Configuration ---
-    spark.hadoop.fs.s3a.impl                 org.apache.hadoop.fs.s3a.S3AFileSystem
-    spark.hadoop.fs.s3.impl                  org.apache.hadoop.fs.s3a.S3AFileSystem
-    spark.hadoop.fs.s3a.path.style.access    true
-    spark.hadoop.fs.s3a.connection.ssl.enabled false
-    spark.hadoop.fs.s3a.aws.credentials.provider org.apache.hadoop.fs.s3a.auth.EnvironmentVariableCredentialsProvider,org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
-    spark.hadoop.fs.s3a.endpoint             http://minio.default.svc.cluster.local:9000
-
-    # --- Networking & UI ---
-    # Bind to all interfaces for container/pod access
-    spark.ui.bindHost                        0.0.0.0
-    spark.ui.port                            4040
-    spark.driver.bindAddress                 0.0.0.0
+    spark.ui.prometheus.enabled                 true
+    spark.metrics.namespace                     spark-pipeline
 kind: ConfigMap
 metadata:
   name: spark-production-defaults
