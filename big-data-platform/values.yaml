@@ -129,6 +129,47 @@ global:
 
   # --- Storage ---
   storageClassName: "openebs-hostpath"
+  # Network-attached EBS (terraform-aws-k8s-ha: kubernetes_storage_class.ebs_gp3)
+  # — for the handful of things that must survive node replacement/Karpenter
+  # consolidation, unlike openebs-hostpath above which is tied to one node's
+  # local disk. Used by Prometheus/Thanos/Loki below, not the general default,
+  # since it costs real EBS $/GB-month vs. hostpath's free local disk.
+  storageClassNameEbs: "ebs-gp3"
+
+  # --- AWS Lakehouse S3 bucket (terraform-aws-k8s-ha: storage-s3-lakehouse.tf) ---
+  # The real AWS S3 bucket, NOT the MinIO endpoint above — this cluster is
+  # destroyed and rebuilt per benchmark run (see issues.md), so anything that
+  # needs to survive a full teardown (Thanos's Prometheus history) has to live
+  # here, not on MinIO's OpenEBS-hostpath PV. Every other workload that
+  # touches this bucket gets credentials from the node's instance-profile
+  # role via IMDS (aws_iam_policy.lakehouse_s3, granted on the whole
+  # bucket) — Thanos is the one exception, see thanosS3RoleArn below.
+  awsLakehouse:
+    bucket: "k8s-ha-cluster-lakehouse-419772658418"
+    region: "us-east-1"
+
+  # --- IRSA S3 roles (terraform-aws-k8s-ha: observability-irsa.tf) ---
+  # Thanos and Loki don't use the blanket node-role/IMDS pattern above —
+  # each gets its own IAM role, trusted only by its specific K8s
+  # ServiceAccount (via the OIDC provider already set up for Karpenter's
+  # own IRSA), scoped to only the S3 paths that one workload needs. Role
+  # ARNs are deterministic (IAM ARNs have no random suffix, unlike S3
+  # bucket names), so — like awsLakehouse.bucket above — they're hardcoded
+  # here rather than injected from Terraform at deploy time.
+  thanosS3RoleArn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-thanos-s3-writer"
+  lokiS3RoleArn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-loki-s3-writer"
+
+  # --- Loki's own dedicated S3 bucket (terraform-aws-k8s-ha:
+  # observability-irsa.tf: aws_s3_bucket.loki_logs) — NOT a prefix inside
+  # awsLakehouse.bucket like Thanos gets. Loki's storage_config.aws S3
+  # client treats the whole configured bucket as its flat storage root; it
+  # has no bucket-internal prefix option the way Thanos's objstore config
+  # does, so sharing the lakehouse bucket would mean Loki owns the entire
+  # thing. A small dedicated bucket keeps it out of the lakehouse
+  # namespace instead.
+  awsLoki:
+    bucket: "k8s-ha-cluster-loki-logs-419772658418"
+    region: "us-east-1"
 
   # --- PostgreSQL Connection (shared by Airflow, Superset, Gravitino) ---
   # host is CNPG's primary read-write service ("<cluster-name>-rw"), not a
@@ -1006,11 +1047,34 @@ kube-prometheus-stack:
       limits:
         cpu: "500m"
         memory: "512Mi"
+    # Thanos Query merges this same Prometheus's live data with historical S3
+    # data (see charts/thanos) into one endpoint — point Grafana at it too so
+    # dashboards keep working across the retention cutoff below without
+    # switching datasources.
+    additionalDataSources:
+      - name: Thanos
+        type: prometheus
+        access: proxy
+        url: http://thanos-query.default.svc.cluster.local:9090
+        isDefault: false
   alertmanager:
     alertmanagerSpec:
       nodeSelector:
         node-role.kubernetes.io/data-node: ""
   prometheus:
+    # IRSA — Thanos sidecar runs as a container inside this same Prometheus
+    # pod, so it inherits whatever ServiceAccount the pod uses. The chart
+    # auto-creates this SA and already wires it into the Prometheus CR's
+    # serviceAccountName; this annotation is the only thing needed for the
+    # EKS pod-identity webhook to inject AWS_ROLE_ARN/
+    # AWS_WEB_IDENTITY_TOKEN_FILE, which the sidecar's AWS SDK picks up
+    # automatically — no access/secret keys anywhere in the objstore config.
+    serviceAccount:
+      annotations:
+        # Literal, not .Values.global.thanosS3RoleArn — raw data handed to
+        # the subchart, not a Go template. Keep in sync with global.thanosS3RoleArn
+        # above by hand.
+        eks.amazonaws.com/role-arn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-thanos-s3-writer"
     prometheusSpec:
       serviceMonitorSelectorNilUsesHelmValues: false
       podMonitorSelectorNilUsesHelmValues: false
@@ -1023,6 +1087,52 @@ kube-prometheus-stack:
         limits:
           cpu: "2000m"
           memory: "4Gi"
+      # Was emptyDir (no storageSpec at all) — every pod reschedule (Karpenter
+      # consolidation, node replacement, AMI rollout) wiped ALL metrics
+      # history. This is a staging/buffer layer, not long-term storage: sized
+      # for a handful of completed 2h TSDB blocks plus compaction working
+      # space, not multi-day retention — Thanos (below) owns everything
+      # beyond that, and is what survives a full Prometheus pod replacement
+      # or cluster teardown, since even EBS gets deleted with the cluster.
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            # Literal, not .Values.global.storageClassNameEbs — this block is
+            # raw data handed to the kube-prometheus-stack subchart, not a
+            # Go template, so {{ }} would never render here. Keep in sync
+            # with global.storageClassNameEbs above by hand.
+            storageClassName: "ebs-gp3"
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 50Gi
+      # Short on purpose, and NOT shrinking the 2h TSDB block-duration
+      # default to match — the sidecar uploads each completed 2h block well
+      # before this window closes, so 6h covers the current in-progress
+      # block plus 2-3 already-uploaded ones as safety margin against
+      # upload lag, without accumulating real local history (that's what
+      # Thanos + S3 are for, not this disk).
+      retention: 6h
+      externalLabels:
+        cluster: k8s-ha-cluster
+      # Triggers prometheus-operator to inject a Thanos sidecar container
+      # into this same Prometheus pod — uploads blocks to S3 and serves the
+      # live-data StoreAPI that Thanos Query (charts/thanos) reads from.
+      thanos:
+        # Must match charts/thanos's own image tag below — Sidecar, Query,
+        # Store Gateway, and Compactor all speak the same gRPC StoreAPI, and
+        # mismatched versions across components risk protocol drift.
+        image: quay.io/thanos/thanos:v0.42.4
+        version: v0.42.4
+        objectStorageConfig:
+          # existingSecret, not secret — .secret would make this chart render
+          # its OWN separate objstore Secret from inline config; existingSecret
+          # instead points the sidecar at the one Secret charts/thanos already
+          # creates (thanos-objstore-secret), which Store Gateway and
+          # Compactor also mount — one objstore config, shared by all three.
+          existingSecret:
+            key: object-store.yaml
+            name: thanos-objstore-secret
   prometheus-node-exporter:
     fullnameOverride: "node-exporter"
     livenessProbe:
@@ -1073,6 +1183,28 @@ loki-stack:
     image:
       repository: grafana/loki
       tag: 2.9.3
+    # IRSA — Loki's own dedicated IAM role + S3 bucket (terraform-aws-k8s-ha:
+    # observability-irsa.tf), not the shared node role. The chart
+    # auto-creates this ServiceAccount and wires it into the StatefulSet
+    # already; this annotation is the only thing needed for the EKS
+    # pod-identity webhook to inject AWS_ROLE_ARN/AWS_WEB_IDENTITY_TOKEN_FILE,
+    # which Loki's S3 client picks up automatically — no access/secret keys
+    # anywhere in storage_config below.
+    serviceAccount:
+      annotations:
+        # Literal, not .Values.global.lokiS3RoleArn — raw data handed to the
+        # subchart, not a Go template. Keep in sync with global.lokiS3RoleArn
+        # above by hand.
+        eks.amazonaws.com/role-arn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-loki-s3-writer"
+    # Loki now ships chunks/index to S3 natively (storage_config below) —
+    # this PVC is WAL + not-yet-flushed in-memory chunks only (the ~10m
+    # ingester flush window below), not the long-term store. Before this it
+    # was emptyDir (no persistence block at all), so every pod reschedule
+    # silently dropped even that staging buffer with no error.
+    persistence:
+      enabled: true
+      storageClassName: "ebs-gp3"
+      size: 20Gi
     livenessProbe:
       httpGet:
         path: /ready
@@ -1088,23 +1220,51 @@ loki-stack:
       failureThreshold: 20
       initialDelaySeconds: 30
     config:
+      # 10m target: flush/upload to S3 often enough to bound how much log
+      # data only exists on the EBS WAL/staging buffer at any moment,
+      # without generating excessive S3 PUT volume. chunk_target_size
+      # (~1.5MB) can still trigger an earlier flush if a stream is busy
+      # enough to fill a chunk before either time-based trigger fires.
+      ingester:
+        chunk_idle_period: 10m
+        max_chunk_age: 10m
+        chunk_target_size: 1572864
+        wal:
+          enabled: true
+          dir: /data/loki/wal
+      # v11/boltdb-shipper/filesystem replaced outright, not layered as a
+      # second schema period — this cluster is destroyed/rebuilt per
+      # benchmark run (see issues.md), so there's no historical data on the
+      # old schema worth preserving continuity for.
       schema_config:
         configs:
-          - from: 2020-10-24
-            store: boltdb-shipper
-            object_store: filesystem
-            schema: v11
+          - from: 2024-01-01
+            store: tsdb
+            object_store: s3
+            schema: v13
             index:
               prefix: index_
               period: 24h
       storage_config:
-        boltdb_shipper:
-          active_index_directory: /data/loki/boltdb-shipper-active
-          cache_location: /data/loki/boltdb-shipper-cache
-          cache_ttl: 24h
-          shared_store: filesystem
-        filesystem:
-          directory: /data/loki/chunks
+        # Explicit null, not just omitted — Helm deep-merges map values, so
+        # without this the chart's own filesystem/boltdb_shipper defaults
+        # would still be here, unused but confusing next to the real S3/tsdb
+        # config below.
+        boltdb_shipper: null
+        filesystem: null
+        tsdb_shipper:
+          active_index_directory: /data/loki/tsdb-shipper-active
+          cache_location: /data/loki/tsdb-shipper-cache
+        aws:
+          s3: s3://k8s-ha-cluster-loki-logs-419772658418
+          region: us-east-1
+      # Loki's own internal compactor (retention/index compaction) is a
+      # separate concept from Thanos's Compactor (charts/thanos) — this one
+      # still defaulted to shared_store: filesystem, inconsistent with
+      # everything else above now pointing at S3.
+      compactor:
+        working_directory: /data/loki/compactor
+        shared_store: s3
   promtail:
     enabled: true
     fullnameOverride: "promtail"
@@ -1162,6 +1322,38 @@ headlamp:
 # =============================================================================
 monitoring:
   enabled: true
+
+# =============================================================================
+# THANOS (local sub-chart) — S3 long-term storage for Prometheus, see
+# charts/thanos for the full explanation of why this exists.
+# =============================================================================
+thanos:
+  enabled: true
+  # Must match kube-prometheus-stack.prometheus.prometheusSpec.thanos.image
+  # above — Sidecar/Query/Store Gateway/Compactor all speak the same gRPC
+  # StoreAPI.
+  image: "quay.io/thanos/thanos:v0.42.4"
+  # Compactor retention — raw kept a month for detailed shuffle/executor
+  # debugging (issues #38-#40 style investigations), then downsampled so a
+  # year of history doesn't cost a year of raw-resolution S3 storage.
+  retention:
+    raw: "30d"
+    fiveMin: "90d"
+    oneHour: "365d"
+  query:
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  storeGateway:
+    storageSize: "5Gi"
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "500m", memory: "1Gi" }
+  compactor:
+    storageSize: "20Gi"
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "1000m", memory: "2Gi" }
 
 # =============================================================================
 # NETWORKING EXTRAS (local sub-chart)
