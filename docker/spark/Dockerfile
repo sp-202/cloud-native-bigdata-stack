@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y wget curl
 
 # Base Spark arm64 build pulled from S3 by the workflow
 # (docker/spark/spark-3.5.8-comet-v1.tar.gz).
+# new comet jar added
 COPY spark-3.5.8-comet-v1.tar.gz /tmp/spark-comet.tar.gz
 
 RUN mkdir -p /tmp/spark-extract && \
