@@ -1078,3 +1078,17 @@ kubectl get pods -A | grep starrocks
     {{- toYaml . | nindent 4 }}
   {{- end }}
 ```
+
+---
+
+## ❌ Issue 15: TODO — Airflow DAGs PVC still on openebs-hostpath, not the provisioned EFS
+
+**Symptom**: None yet — currently masked. Found during observability/Thanos work (2026-08-31), not from a live failure.
+
+**Root Cause**: `terraform-aws-k8s-ha/storage-efs.tf` provisions a real AWS EFS filesystem plus an `efs-airflow-dags` StorageClass specifically because Airflow's scheduler, triggerer, webserver, and git-sync all mount the same DAGs directory concurrently, and a ReadWriteOnce volume can't be attached to more than one node at once. But `airflow-dags-shared-pvc` (`charts/persistence/templates/volumes.yaml`) is still bound to a `local:` hostPath PV on `openebs-hostpath`, via `global.storageClassName` — the EFS StorageClass is never referenced anywhere in this repo.
+
+**Why it hasn't broken yet**: `terraform-aws-k8s-ha/dev.tfvars` pins the core-node (GP tier) ASG to `core_node_count_min = core_node_count_max = 1`, so every GP pod always lands on the same single node — the "shared" hostPath directory happens to be reachable by all of them purely because there's only one node to land on. `prod.tfvars` sets `core_node_count_min = 3, max = 5`; the moment the core-node ASG actually scales past 1, whichever scheduler/triggerer/webserver pod doesn't land on the node holding that hostPath directory will get an empty DAGs folder.
+
+**Fix (not yet done)**: Point `airflow-dags-shared-pvc` (and its PV) at `storageClassName: efs-airflow-dags` instead of `openebs-hostpath`, with `accessModes: [ReadWriteMany]` (EFS supports RWX, unlike EBS/hostPath) — likely means dropping the manually-defined local PV entirely and letting the EFS CSI driver dynamically provision instead, since the `efs-airflow-dags` StorageClass is already `WaitForFirstConsumer`-free dynamic provisioning, not a static-PV pattern.
+
+**Status**: Deliberately left alone for now — instructed not to touch working config. Tracked here so it isn't lost.
