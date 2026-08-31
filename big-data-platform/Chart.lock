@@ -29,6 +29,9 @@ dependencies:
 - name: monitoring
   repository: file://./charts/monitoring
   version: 1.0.0
+- name: thanos
+  repository: file://./charts/thanos
+  version: 1.0.0
 - name: networking-extras
   repository: file://./charts/networking-extras
   version: 1.0.0
@@ -68,5 +71,5 @@ dependencies:
 - name: airflow-git-sync
   repository: file://./charts/airflow-git-sync
   version: 1.0.0
-digest: sha256:c894ce9e925a926f49ee66274dd9e0b795332a4c1ae5bf13e09321970a46c0d0
-generated: "2026-05-17T23:28:19.528233103+05:30"
+digest: sha256:61dc7e7beccb2a4740d985f81a44c4f0abd93468700606f32173ada71e7f662e
+generated: "2026-08-31T16:44:56.332641+05:30"

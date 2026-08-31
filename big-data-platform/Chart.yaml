@@ -60,6 +60,11 @@ dependencies:
     repository: "file://./charts/monitoring"
     condition: monitoring.enabled
 
+  - name: thanos
+    version: "1.0.0"
+    repository: "file://./charts/thanos"
+    condition: thanos.enabled
+
   - name: networking-extras
     version: "1.0.0"
     repository: "file://./charts/networking-extras"

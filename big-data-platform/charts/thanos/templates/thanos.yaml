@@ -1,0 +1,324 @@
+{{- if .Values.enabled }}
+# ------------------------------------------------------------------------------
+# Thanos — S3 long-term storage for kube-prometheus-stack's Prometheus
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Why this exists: kube-prometheus-stack's Prometheus (see values.yaml) had no
+# volumeClaimTemplate before this change, so it ran on emptyDir — every pod
+# reschedule (Karpenter consolidation, node replacement, AMI rollout) wiped
+# ALL metrics history. storageSpec.volumeClaimTemplate (ebs-gp3, network-
+# attached, survives node loss) fixes that for the *live* window, and the
+# Thanos sidecar injected via prometheus.prometheusSpec.thanos below uploads
+# each 2h TSDB block to S3 so history also survives a full Prometheus pod
+# replacement, not just individual node loss.
+#
+# Reuses the same AWS lakehouse S3 bucket as network-logs.tf (thanos/ prefix,
+# not a new bucket), but NOT the shared node-role/IMDS IAM pattern
+# everything else here uses. Auth is IRSA (terraform-aws-k8s-ha:
+# observability-irsa.tf): a dedicated thanos-s3-writer IAM role, trusted
+# only by the two ServiceAccounts below, scoped to only the thanos/ prefix
+# — least privilege per workload instead of "every pod on the node can
+# touch this bucket." The objstore Secret below carries no
+# access_key/secret_key either way; with IRSA the AWS SDK picks up
+# AWS_ROLE_ARN/AWS_WEB_IDENTITY_TOKEN_FILE (injected by the EKS
+# pod-identity webhook off each ServiceAccount's eks.amazonaws.com/role-arn
+# annotation) instead of the node's IMDS role.
+#
+# Components: Sidecar (injected into Prometheus itself, not deployed here —
+# its ServiceAccount annotation lives in values.yaml next to the rest of
+# kube-prometheus-stack's config) + Query (merges live sidecar data with
+# historical S3 data for one query endpoint) + Store Gateway (serves
+# historical blocks from S3) + Compactor (exactly one replica — running two
+# corrupts the block index; downsamples old data so a year of history
+# doesn't cost a year of raw-resolution storage). Store Gateway and
+# Compactor are separate pods, not sidecars, so they share a dedicated
+# thanos-s3 ServiceAccount (below) trusting the same IAM role.
+#
+# Managed via ArgoCD Sync Wave: 0 (same tier as the rest of monitoring)
+# ------------------------------------------------------------------------------
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: thanos-s3
+  namespace: default
+  annotations:
+    eks.amazonaws.com/role-arn: {{ .Values.global.thanosS3RoleArn }}
+    argocd.argoproj.io/sync-wave: "0"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: thanos-objstore-secret
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+stringData:
+  object-store.yaml: |
+    type: S3
+    config:
+      bucket: {{ .Values.global.awsLakehouse.bucket }}
+      endpoint: s3.{{ .Values.global.awsLakehouse.region }}.amazonaws.com
+      region: {{ .Values.global.awsLakehouse.region }}
+      prefix: thanos
+---
+# =============================================================================
+# Thanos Query — single endpoint over live (via Prometheus's sidecar) +
+# historical (via Store Gateway, below) data. This is what Grafana's "Thanos"
+# datasource (kube-prometheus-stack.grafana.additionalDataSources) points at.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thanos-query
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: thanos-query
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: thanos-query
+        app.kubernetes.io/part-of: thanos
+    spec:
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+      containers:
+        - name: thanos-query
+          image: {{ .Values.image }}
+          args:
+            - query
+            - --log.level=info
+            - --grpc-address=0.0.0.0:10901
+            - --http-address=0.0.0.0:9090
+            # Governing service name is fixed by prometheus-operator
+            # ("prometheus-operated") — not overridable via values here.
+            - --store=dnssrv+_grpc._tcp.prometheus-operated.default.svc.cluster.local:10901
+            - --store=dnssrv+_grpc._tcp.thanos-store-gateway.default.svc.cluster.local:10901
+          ports:
+            - containerPort: 9090
+              name: http-query
+            - containerPort: 10901
+              name: grpc
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 15
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+            initialDelaySeconds: 15
+            timeoutSeconds: 10
+          resources:
+            {{- toYaml .Values.query.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: thanos-query
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    app.kubernetes.io/name: thanos-query
+  ports:
+    - name: http-query
+      port: 9090
+      targetPort: 9090
+---
+# =============================================================================
+# Thanos Store Gateway — serves historical blocks straight from S3. Headless
+# (clusterIP: None) with a port literally named "grpc" because Thanos Query's
+# dnssrv+_grpc._tcp.* discovery above resolves via DNS SRV records, which
+# only headless services with named ports produce.
+# =============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: thanos-store-gateway
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  serviceName: thanos-store-gateway
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: thanos-store-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: thanos-store-gateway
+        app.kubernetes.io/part-of: thanos
+    spec:
+      serviceAccountName: thanos-s3
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+      containers:
+        - name: thanos-store-gateway
+          image: {{ .Values.image }}
+          args:
+            - store
+            - --log.level=info
+            - --grpc-address=0.0.0.0:10901
+            - --http-address=0.0.0.0:10902
+            - --data-dir=/var/thanos/store
+            - --objstore.config-file=/etc/thanos/objstore.yaml
+          ports:
+            - containerPort: 10901
+              name: grpc
+            - containerPort: 10902
+              name: http-metrics
+          volumeMounts:
+            - name: objstore-config
+              mountPath: /etc/thanos
+              readOnly: true
+            - name: store-data
+              mountPath: /var/thanos/store
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 10902
+            initialDelaySeconds: 15
+            timeoutSeconds: 10
+          resources:
+            {{- toYaml .Values.storeGateway.resources | nindent 12 }}
+      volumes:
+        - name: objstore-config
+          secret:
+            secretName: thanos-objstore-secret
+  volumeClaimTemplates:
+    - metadata:
+        name: store-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.global.storageClassNameEbs }}
+        resources:
+          requests:
+            storage: {{ .Values.storeGateway.storageSize }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: thanos-store-gateway
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: thanos-store-gateway
+  ports:
+    - name: grpc
+      port: 10901
+      targetPort: 10901
+    - name: http-metrics
+      port: 10902
+      targetPort: 10902
+---
+# =============================================================================
+# Thanos Compactor — exactly ONE replica, ever. Compacts/downsamples S3
+# blocks in the background and enforces retention (raw/5m/1h resolutions
+# below), so a year of history doesn't cost a year of raw-resolution S3
+# storage. Not in the query path (Query never talks to this directly).
+# =============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: thanos-compactor
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  serviceName: thanos-compactor
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: thanos-compactor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: thanos-compactor
+        app.kubernetes.io/part-of: thanos
+    spec:
+      serviceAccountName: thanos-s3
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+      containers:
+        - name: thanos-compactor
+          image: {{ .Values.image }}
+          args:
+            - compact
+            - --log.level=info
+            - --http-address=0.0.0.0:10902
+            - --data-dir=/var/thanos/compact
+            - --objstore.config-file=/etc/thanos/objstore.yaml
+            - --wait
+            - --retention.resolution-raw={{ .Values.retention.raw }}
+            - --retention.resolution-5m={{ .Values.retention.fiveMin }}
+            - --retention.resolution-1h={{ .Values.retention.oneHour }}
+            - --compact.concurrency=1
+            - --downsample.concurrency=1
+          ports:
+            - containerPort: 10902
+              name: http-metrics
+          volumeMounts:
+            - name: objstore-config
+              mountPath: /etc/thanos
+              readOnly: true
+            - name: compact-data
+              mountPath: /var/thanos/compact
+          resources:
+            {{- toYaml .Values.compactor.resources | nindent 12 }}
+      volumes:
+        - name: objstore-config
+          secret:
+            secretName: thanos-objstore-secret
+  volumeClaimTemplates:
+    - metadata:
+        name: compact-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.global.storageClassNameEbs }}
+        resources:
+          requests:
+            storage: {{ .Values.compactor.storageSize }}
+---
+# =============================================================================
+# Self-observability — scrape Thanos's own /metrics. Matches
+# charts/monitoring/templates/spark-service-monitor.yaml's "release" label
+# convention; costs nothing extra since Prometheus is already running.
+# =============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: thanos
+  namespace: default
+  labels:
+    release: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: thanos
+  podMetricsEndpoints:
+    - port: http-query
+      path: /metrics
+      interval: 30s
+    - port: http-metrics
+      path: /metrics
+      interval: 30s
+  namespaceSelector:
+    matchNames:
+      - default
+{{- end }}
