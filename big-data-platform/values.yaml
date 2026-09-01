@@ -1280,13 +1280,27 @@ loki-stack:
       # relief valve, and chunk cuts aligned so the flushes go out as a
       # batch instead of dribbling.
       #
-      # Why 15m and not less. Measured over the first hour of real traffic:
-      # 82 chunk objects, 702 KB total, average 8,773 bytes — 0.6% of
-      # chunk_target_size. At this log rate the size trigger never fires, so
-      # max_chunk_age alone sets the S3 PUT rate, and the relationship is
-      # inverse: every halving of this value doubles the request count and
-      # halves the object size. 10m -> 15m is roughly a third fewer PUTs at
-      # ~13 KB each, without pushing durability latency out too far.
+      # 10m, NOT the 15m an S3-cost argument alone would pick — this cluster
+      # is ephemeral. It is built to run a Spark benchmark and torn down
+      # ~10-20 min afterwards, and teardown deletes the PVC, so anything
+      # still sitting in the ingester and WAL at that moment is gone for
+      # good. The flush interval is therefore a DATA LOSS window, not a cost
+      # knob, and it has to be shorter than the gap between "benchmark ends"
+      # and "cluster dies".
+      #
+      # For the record, the cost argument it overrides: measured over the
+      # first hour of real traffic, 82 chunk objects, 702 KB total, average
+      # 8,773 bytes — 0.6% of chunk_target_size. The size trigger never fires
+      # at this rate, so max_chunk_age alone sets the S3 PUT rate and the
+      # relationship is inverse — 10m costs ~50% more PUTs than 15m at ~9 KB
+      # per object instead of ~13 KB. On a cluster that lives hours, that is
+      # a rounding error against losing the tail of a benchmark run.
+      #
+      # 10m still is not a guarantee on its own: a chunk created 1 minute
+      # before teardown has not aged out. flush_on_shutdown below closes
+      # that, and `curl -XPOST loki:3100/flush` (returns 204) forces every
+      # in-memory chunk out immediately — worth running as the last step
+      # before destroying the cluster.
       #
       # The two triggers are a floor/ceiling pair, not alternatives:
       #   max_chunk_age 15m   ceiling — a quiet stream still reaches S3
@@ -1328,11 +1342,16 @@ loki-stack:
       # recovered its full head from WAL). Pod reschedule and node loss are
       # covered; only losing the PVC itself would cost up to 15m of logs.
       ingester:
-        chunk_idle_period: 15m
-        max_chunk_age: 15m
+        chunk_idle_period: 10m
+        max_chunk_age: 10m
         chunk_target_size: 1572864
-        sync_period: 15m
+        sync_period: 10m
         sync_min_utilization: 0.5
+        # Flush everything still in memory when the pod terminates
+        # gracefully. On an ephemeral benchmark cluster this is the
+        # difference between keeping and losing the final chunks, since
+        # teardown takes the PVC (and therefore the WAL) with it.
+        flush_on_shutdown: true
         wal:
           enabled: true
           dir: /data/loki/wal
