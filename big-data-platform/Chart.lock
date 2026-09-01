@@ -68,5 +68,5 @@ dependencies:
 - name: airflow-git-sync
   repository: file://./charts/airflow-git-sync
   version: 1.0.0
-digest: sha256:0000000000000000000000000000000000000000000000000000000000000
-generated: "2026-09-01T00:00:00.000000+05:30"
+digest: sha256:e0ec9cb0ad92475ac1675f00cb11fbc2f5064b31c0c2090ef6f57b6caf9de693
+generated: "2026-09-01T16:07:11.431576+05:30"

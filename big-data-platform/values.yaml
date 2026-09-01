@@ -137,13 +137,16 @@ global:
   storageClassNameEbs: "ebs-gp3"
 
   # --- AWS Lakehouse S3 bucket (terraform-aws-k8s-ha: storage-s3-lakehouse.tf) ---
-  # The real AWS S3 bucket, NOT the MinIO endpoint above — this cluster is
-  # destroyed and rebuilt per benchmark run (see issues.md), so anything that
-  # needs to survive a full teardown (Thanos's Prometheus history) has to live
-  # here, not on MinIO's OpenEBS-hostpath PV. Every other workload that
-  # touches this bucket gets credentials from the node's instance-profile
-  # role via IMDS (aws_iam_policy.lakehouse_s3, granted on the whole
-  # bucket) — Thanos is the one exception, see thanosS3RoleArn below.
+  # The specific, named lakehouse bucket — global.s3 above is generic
+  # pathStyle/SSL connection settings shared by whatever S3 endpoint a given
+  # workload resolves to, not a bucket name itself. This cluster is
+  # destroyed and rebuilt per benchmark run (see issues.md), so anything
+  # that needs to survive a full teardown (Thanos's Prometheus history) has
+  # to live in this externally-managed bucket, not on any node-local
+  # OpenEBS-hostpath PV. Every other workload that touches this bucket gets
+  # credentials from the node's instance-profile role via IMDS
+  # (aws_iam_policy.lakehouse_s3, granted on the whole bucket) — Thanos is
+  # the one exception, see thanosS3RoleArn below.
   awsLakehouse:
     bucket: "k8s-ha-cluster-lakehouse-ap-south-1-419772658418"
     region: "ap-south-1"
