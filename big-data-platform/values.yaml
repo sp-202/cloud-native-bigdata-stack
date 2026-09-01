@@ -145,7 +145,7 @@ global:
   # role via IMDS (aws_iam_policy.lakehouse_s3, granted on the whole
   # bucket) — Thanos is the one exception, see thanosS3RoleArn below.
   awsLakehouse:
-    bucket: "k8s-ha-cluster-lakehouse-419772658418"
+    bucket: "k8s-ha-cluster-lakehouse-ap-south-1-419772658418"
     region: "ap-south-1"
 
   # --- IRSA S3 roles (terraform-aws-k8s-ha: observability-irsa.tf) ---
@@ -168,7 +168,7 @@ global:
   # thing. A small dedicated bucket keeps it out of the lakehouse
   # namespace instead.
   awsLoki:
-    bucket: "k8s-ha-cluster-loki-logs-419772658418"
+    bucket: "k8s-ha-cluster-loki-logs-ap-south-1-419772658418"
     region: "ap-south-1"
 
   # --- PostgreSQL Connection (shared by Airflow, Superset, Gravitino) ---
@@ -1256,7 +1256,7 @@ loki-stack:
           active_index_directory: /data/loki/tsdb-shipper-active
           cache_location: /data/loki/tsdb-shipper-cache
         aws:
-          s3: s3://k8s-ha-cluster-loki-logs-419772658418
+          s3: s3://k8s-ha-cluster-loki-logs-ap-south-1-419772658418
           region: ap-south-1
       # Loki's own internal compactor (retention/index compaction) is a
       # separate concept from Thanos's Compactor (charts/thanos) — this one
