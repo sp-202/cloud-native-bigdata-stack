@@ -1109,18 +1109,48 @@ kube-prometheus-stack:
             resources:
               requests:
                 storage: 50Gi
-      # Short on purpose, and NOT shrinking the 2h TSDB block-duration
-      # default to match — the sidecar uploads each completed 2h block well
-      # before this window closes, so 6h covers the current in-progress
-      # block plus 2-3 already-uploaded ones as safety margin against
-      # upload lag, without accumulating real local history (that's what
-      # Thanos + S3 are for, not this disk).
-      retention: 6h
+      # Still a staging buffer, NOT long-term history (Thanos + S3 own that),
+      # and still NOT shrinking the 2h TSDB block duration to match — see the
+      # thanos block below for why 2h is not tunable.
+      #
+      # Widened 6h -> 24h. This is a safety margin against a SILENTLY BROKEN
+      # sidecar, not against upload lag, and 6h was too short for that job: a
+      # bad objstore config uploads nothing while looking perfectly healthy,
+      # and this cluster shipped exactly that bug (prefix nested inside the S3
+      # config block — compactor and store-gateway crash-looped, and the
+      # sidecar would have silently written nothing). Anything past the
+      # retention window when the mistake is found is gone permanently.
+      #
+      # Costs almost nothing here. Measured on this cluster: 5,030 samples/s
+      # over 156k head series, ~2 bytes/sample compressed => ~870 MB/day,
+      # against a 50Gi volume sitting at 0% used (85 MB after the first hour).
+      # 24h is under 2% of the disk; 6h saved ~650 MB and bought one working
+      # day less to notice a problem.
+      retention: 24h
       externalLabels:
         cluster: k8s-ha-cluster
       # Triggers prometheus-operator to inject a Thanos sidecar container
       # into this same Prometheus pod — uploads blocks to S3 and serves the
       # live-data StoreAPI that Thanos Query (charts/thanos) reads from.
+      #
+      # Upload cadence is 2h and is NOT tunable. Asked periodically, so:
+      # the sidecar only ships *immutable, completed* TSDB blocks, and
+      # Prometheus cuts one every 2h. The sidecar already rescans every 30s,
+      # so the delay is block PRODUCTION, not upload — pointing a shorter
+      # interval at it changes nothing.
+      #
+      # Shrinking min/max-block-duration below 2h to force it is unsupported
+      # and actively harmful: equal 2h min/max is what keeps Prometheus's own
+      # local compaction disabled, which is the sidecar's core contract. Break
+      # it and Prometheus starts compacting underneath Thanos, producing
+      # overlapping blocks that the Compactor cannot reconcile.
+      #
+      # If sub-2h durability to S3 is ever a hard requirement, the answer is
+      # Thanos Receive (Prometheus remote_write -> Receive, data leaves the
+      # pod in seconds), not sidecar tuning. That is a real component with its
+      # own StatefulSet, PVC and replication factor — deliberately not run
+      # here, because the 50Gi EBS PVC above already survives pod reschedule
+      # and node loss, which is the failure mode that actually occurs.
       thanos:
         # Must match charts/thanos's own image tag below — Sidecar, Query,
         # Store Gateway, and Compactor all speak the same gRPC StoreAPI, and
@@ -1249,17 +1279,37 @@ loki-stack:
               prefix: index_
               period: 24h
       storage_config:
-        # Explicit null, not just omitted — Helm deep-merges map values, so
-        # without this the chart's own filesystem/boltdb_shipper defaults
-        # would still be here, unused but confusing next to the real S3/tsdb
-        # config below.
+        # These nulls are Helm-version dependent — do not rely on them.
+        # A local `helm template` (Helm 4) does strip both keys, but the
+        # Secret ArgoCD actually rendered for this same revision still
+        # contained the chart's boltdb_shipper (shared_store: filesystem) and
+        # filesystem (directory: /data/loki/chunks) defaults — ArgoCD 7.8.23
+        # bundles Helm 3, which is the likely difference.
+        # Harmless either way: schema v13 uses store: tsdb + object_store: s3,
+        # so neither key is ever consulted. Just don't read their absence in a
+        # local render as proof they are gone in the cluster.
         boltdb_shipper: null
         filesystem: null
         tsdb_shipper:
+          # Required. tsdb_shipper is the ACTIVE index shipper for schema v13
+          # (store: tsdb above); without a shared_store the index is only ever
+          # written to the local active_index_directory and never reaches S3.
+          shared_store: s3
           active_index_directory: /data/loki/tsdb-shipper-active
           cache_location: /data/loki/tsdb-shipper-cache
         aws:
-          s3: s3://k8s-ha-cluster-loki-logs-ap-south-1-419772658418
+          # MUST be `bucketnames`, not an `s3://<bucket>` URL. Loki takes the
+          # bucket from either `bucketnames` or the URL *path* — never the URL
+          # host, which it treats as an endpoint/region. So
+          # `s3: s3://<bucket>` parses to an EMPTY bucket and every S3 call
+          # fails the SDK's own validation before it leaves the pod:
+          #
+          #   InvalidParameter: minimum field size of 1, ListObjectsV2Input.Bucket
+          #   InvalidParameter: minimum field size of 1, DeleteObjectInput.Bucket
+          #
+          # Loki logs "uploading tables" every minute regardless, so this looks
+          # healthy from the outside while the bucket stays completely empty.
+          bucketnames: k8s-ha-cluster-loki-logs-ap-south-1-419772658418
           region: ap-south-1
       # Loki's own internal compactor (retention/index compaction) is a
       # separate concept from Thanos's Compactor (charts/thanos) — this one
@@ -1286,6 +1336,24 @@ loki-stack:
       failureThreshold: 20
       initialDelaySeconds: 15
     config:
+      # REQUIRED — do not delete. loki-stack's own values.yaml hardcodes
+      #
+      #   - url: http://{{ .Release.Name }}:3100/loki/api/v1/push
+      #
+      # which resolves to "big-data-platform" (the umbrella release name).
+      # The Loki Service is called "loki", because loki.fullnameOverride
+      # above renames it. Nothing reconciles those two names, so the chart
+      # default points promtail at a host that does not exist:
+      #
+      #   dial tcp: lookup big-data-platform on 172.20.0.10:53: no such host
+      #
+      # Every promtail pod then retries forever and Loki receives NOTHING —
+      # loki_ingester_memory_chunks stays 0 and the S3 bucket stays empty
+      # even when the storage config is perfectly correct. Loki itself looks
+      # healthy (1/1 Running, "uploading tables" every minute), which is what
+      # makes this worth the comment.
+      clients:
+        - url: http://loki:3100/loki/api/v1/push
       snippets:
         pipelineStages:
           - cri: {}
