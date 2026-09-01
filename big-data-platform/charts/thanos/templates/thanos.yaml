@@ -96,10 +96,16 @@ spec:
             - --log.level=info
             - --grpc-address=0.0.0.0:10901
             - --http-address=0.0.0.0:9090
+            # --endpoint, not --store — confirmed live (CrashLoopBackOff,
+            # "unknown long flag '--store'") and against the actual v0.42.4
+            # source (cmd/thanos/query.go): --store was renamed to
+            # --endpoint at some point before this version; --store no
+            # longer exists as a flag at all here.
+            #
             # Governing service name is fixed by prometheus-operator
             # ("prometheus-operated") — not overridable via values here.
-            - --store=dnssrv+_grpc._tcp.prometheus-operated.default.svc.cluster.local:10901
-            - --store=dnssrv+_grpc._tcp.thanos-store-gateway.default.svc.cluster.local:10901
+            - --endpoint=dnssrv+_grpc._tcp.prometheus-operated.default.svc.cluster.local:10901
+            - --endpoint=dnssrv+_grpc._tcp.thanos-store-gateway.default.svc.cluster.local:10901
           ports:
             - containerPort: 9090
               name: http-query
@@ -172,7 +178,14 @@ spec:
             - --grpc-address=0.0.0.0:10901
             - --http-address=0.0.0.0:10902
             - --data-dir=/var/thanos/store
-            - --objstore.config-file=/etc/thanos/objstore.yaml
+            # Must match the Secret's data key exactly (object-store.yaml,
+            # with the hyphen) — the volume mounts the Secret as a
+            # directory of files named after each key. Was
+            # /etc/thanos/objstore.yaml (no hyphen) here, which doesn't
+            # exist on disk under that name — confirmed live
+            # (CrashLoopBackOff, "open /etc/thanos/objstore.yaml: no such
+            # file or directory").
+            - --objstore.config-file=/etc/thanos/object-store.yaml
           ports:
             - containerPort: 10901
               name: grpc
@@ -261,7 +274,9 @@ spec:
             - --log.level=info
             - --http-address=0.0.0.0:10902
             - --data-dir=/var/thanos/compact
-            - --objstore.config-file=/etc/thanos/objstore.yaml
+            # Must match the Secret's data key exactly — see Store
+            # Gateway's args above for the full explanation.
+            - --objstore.config-file=/etc/thanos/object-store.yaml
             - --wait
             - --retention.resolution-raw={{ .Values.retention.raw }}
             - --retention.resolution-5m={{ .Values.retention.fiveMin }}
