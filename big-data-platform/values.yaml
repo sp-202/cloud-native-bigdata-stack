@@ -1090,6 +1090,42 @@ kube-prometheus-stack:
         limits:
           cpu: "2000m"
           memory: "4Gi"
+      # Enables POST /api/v1/admin/tsdb/snapshot, which is the ONLY way to get
+      # the current head into S3 on demand. This matters because the cluster
+      # is destroyed ~10-20 min after a benchmark finishes, and the sidecar
+      # can only ship SEALED blocks: Prometheus seals its first one about 3h
+      # in and every 2h after, so a benchmark run plus teardown inside that
+      # window uploads absolutely nothing. Verified on this cluster —
+      # prometheus_tsdb_blocks_loaded 0, thanos.shipper.json "uploaded": null,
+      # 1.8h after start.
+      #
+      # Shortening the block duration is NOT an option here, which is worth
+      # recording so nobody burns time on it: prometheus-operator manages
+      # those two flags itself whenever spec.thanos is set and rejects any
+      # attempt to override them via additionalArgs, erroring the whole
+      # StatefulSet reconcile with
+      #
+      #   can't set arguments which are already managed by the operator:
+      #   storage.tsdb.min-block-duration,storage.tsdb.max-block-duration
+      #
+      # (confirmed live against operator v0.71.2, then reverted).
+      #
+      # PRE-TEARDOWN PROCEDURE — run before destroying the cluster:
+      #   P=prometheus-kube-prometheus-stack-prometheus-0
+      #   kubectl exec -n default $P -c prometheus -- \
+      #     wget -qO- --post-data='' \
+      #     'http://127.0.0.1:9090/api/v1/admin/tsdb/snapshot?skip_head=false'
+      #   # then move the snapshot's block dirs into the TSDB root so the
+      #   # sidecar's shipper sees them as ordinary blocks:
+      #   kubectl exec -n default $P -c prometheus -- sh -c \
+      #     'mv /prometheus/snapshots/*/[0-9A-Z]* /prometheus/'
+      #   # sidecar rescans every 30s; confirm before teardown:
+      #   aws s3 ls s3://<lakehouse>/thanos/ --recursive
+      #
+      # skip_head=false is the whole point — it materialises the in-memory
+      # head as a real block, which is exactly the data a benchmark run
+      # produces and would otherwise lose.
+      enableAdminAPI: true
       # Was emptyDir (no storageSpec at all) — every pod reschedule (Karpenter
       # consolidation, node replacement, AMI rollout) wiped ALL metrics
       # history. This is a staging/buffer layer, not long-term storage: sized
