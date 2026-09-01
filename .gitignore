@@ -51,3 +51,5 @@ generated-manifests.yaml
 
 # graphify generated output (regenerate with 'graphify update .')
 big-data-platform/graphify-out/
+# Upstream charts pulled locally for schema reference (not deployed from here)
+vendor-charts/
