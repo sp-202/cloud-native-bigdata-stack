@@ -179,6 +179,19 @@ spec:
         app.kubernetes.io/part-of: thanos
     spec:
       serviceAccountName: thanos-s3
+      # The thanos image runs as UID 1001 (checked: config.User on
+      # quay.io/thanos/thanos:v0.42.4), but a freshly provisioned EBS volume
+      # is mounted root:root 0755, so the process cannot create its data dir:
+      #
+      #   mkdir /var/thanos/store/meta-syncer: permission denied
+      #
+      # fsGroup makes kubelet chown the volume to this GID on mount. This is
+      # only needed because the data dir moved from emptyDir to a PVC — an
+      # emptyDir is created owned by the pod, a fresh block volume is not.
+      securityContext:
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
       nodeSelector:
         {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
       containers:
@@ -276,6 +289,13 @@ spec:
         app.kubernetes.io/part-of: thanos
     spec:
       serviceAccountName: thanos-s3
+      # Same root-owned-PVC problem as the Store Gateway above — see there for
+      # the full explanation. Without this: mkdir /var/thanos/compact/meta-syncer:
+      # permission denied.
+      securityContext:
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
       nodeSelector:
         {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
       containers:
