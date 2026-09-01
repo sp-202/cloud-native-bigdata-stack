@@ -63,6 +63,42 @@ spec:
       honorLabels: true
       path: /metrics
 ---
+# cilium-operator owns ENI/IPAM: IP pool watermarks, allocation latency and
+# EC2 API errors — the numbers the ipamMinAllocate/ipamPreAllocate tuning in
+# cilium.tf is otherwise set blind. Selector and port copied verbatim from
+# Cilium 1.19.1 templates/cilium-operator/servicemonitor.yaml, same as the
+# others here.
+#
+# NOTE: both this and cilium-agent above match a Service that Cilium's chart
+# only publishes when prometheus.metricsService=true (the Service is gated on
+# `prometheus.enabled AND (serviceMonitor.enabled OR metricsService)`, and
+# serviceMonitor stays false for the CRD-ordering reason described above).
+# Missing that flag is silent: the ServiceMonitor exists, selects nothing,
+# and Prometheus simply has no cilium-agent/cilium-operator targets while
+# hubble scrapes fine. Set in terraform-aws-k8s-ha cilium.tf.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cilium-operator
+  namespace: kube-system
+  labels:
+    release: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    matchLabels:
+      io.cilium/app: operator
+      name: cilium-operator
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  endpoints:
+    - port: metrics
+      interval: 30s
+      honorLabels: true
+      path: /metrics
+---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
