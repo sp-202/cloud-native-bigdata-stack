@@ -1,0 +1,109 @@
+{{- if .Values.enabled }}
+# ------------------------------------------------------------------------------
+# Monitoring - Cilium/Hubble ServiceMonitors
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Description: Prometheus discovery for cilium-agent, Hubble, and Hubble
+# Relay metrics.
+#
+# These are defined HERE, not inside Cilium's own Helm chart
+# (terraform-aws-k8s-ha: cilium.tf), on purpose. Cilium's chart renders the
+# ServiceMonitor objects unconditionally whenever
+# prometheus.serviceMonitor.enabled / hubble.metrics.serviceMonitor.enabled
+# / hubble.relay.prometheus.serviceMonitor.enabled is true, with no check
+# for whether the monitoring.coreos.com/v1 CRD exists yet — and it doesn't:
+# Cilium installs via Terraform to bootstrap the cluster's own networking,
+# BEFORE ArgoCD ever runs, and kube-prometheus-stack (which provides that
+# CRD) is a dependency of THIS SAME umbrella chart. Confirmed live: leaving
+# those flags enabled on Cilium's own chart fails `helm_release.cilium`
+# outright with "no matches for kind ServiceMonitor in version
+# monitoring.coreos.com/v1" (trustCRDsExist=true only suppresses a
+# friendlier early warning about the same problem, not the actual apply
+# failure) — and since Cilium is the CNI, every downstream resource
+# needing pod networking (CoreDNS included) then hangs forever waiting for
+# Ready pods that can never get an IP without a working CNI.
+#
+# Defining these here instead works because of Helm's own CRD-first
+# ordering: kube-prometheus-stack bundles the Prometheus Operator CRDs as
+# part of the SAME umbrella-chart release these ServiceMonitors render
+# into, and Helm always applies a chart's own CRDs before its templates —
+# same reasoning already proven by spark-service-monitor.yaml (this same
+# file) working correctly under the identical constraint.
+#
+# Selectors/ports/namespace copied verbatim from Cilium 1.19.1's own
+# templates/cilium-agent/servicemonitor.yaml, templates/hubble/
+# servicemonitor.yaml, and templates/hubble-relay/servicemonitor.yaml
+# (pulled and read directly, not guessed) — cilium.tf enables the
+# underlying metrics endpoints (prometheus.enabled / hubble.metrics.enabled
+# / hubble.relay.prometheus.enabled) but not their ServiceMonitor objects.
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cilium-agent
+  namespace: kube-system
+  labels:
+    release: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cilium-agent
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  endpoints:
+    - port: metrics
+      interval: 30s
+      honorLabels: true
+      path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hubble
+  namespace: kube-system
+  labels:
+    release: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    matchLabels:
+      k8s-app: hubble
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  endpoints:
+    - port: hubble-metrics
+      interval: 30s
+      honorLabels: true
+      path: /metrics
+      scheme: http
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hubble-relay
+  namespace: kube-system
+  labels:
+    release: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    matchLabels:
+      k8s-app: hubble-relay
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+{{- end }}
