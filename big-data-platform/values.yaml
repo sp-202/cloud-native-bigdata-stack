@@ -1111,7 +1111,11 @@ kube-prometheus-stack:
                 storage: 50Gi
       # Still a staging buffer, NOT long-term history (Thanos + S3 own that),
       # and still NOT shrinking the 2h TSDB block duration to match — see the
-      # thanos block below for why 2h is not tunable.
+      # thanos block below for the cost trade-off behind keeping 2h.
+      #
+      # Upstream recommends retention >= 3x the block duration (so >= 6h),
+      # which is where the previous 6h came from — it was the documented
+      # floor, not an arbitrary pick. 24h keeps that floor and adds margin.
       #
       # Widened 6h -> 24h. This is a safety margin against a SILENTLY BROKEN
       # sidecar, not against upload lag, and 6h was too short for that job: a
@@ -1133,24 +1137,43 @@ kube-prometheus-stack:
       # into this same Prometheus pod — uploads blocks to S3 and serves the
       # live-data StoreAPI that Thanos Query (charts/thanos) reads from.
       #
-      # Upload cadence is 2h and is NOT tunable. Asked periodically, so:
-      # the sidecar only ships *immutable, completed* TSDB blocks, and
-      # Prometheus cuts one every 2h. The sidecar already rescans every 30s,
-      # so the delay is block PRODUCTION, not upload — pointing a shorter
-      # interval at it changes nothing.
+      # Upload cadence is 2h. Asked periodically ("can we make it 10m?"), so
+      # the reasoning is recorded here.
       #
-      # Shrinking min/max-block-duration below 2h to force it is unsupported
-      # and actively harmful: equal 2h min/max is what keeps Prometheus's own
-      # local compaction disabled, which is the sidecar's core contract. Break
-      # it and Prometheus starts compacting underneath Thanos, producing
-      # overlapping blocks that the Compactor cannot reconcile.
+      # The sidecar ships only *immutable, completed* TSDB blocks. Prometheus
+      # seals one roughly every 2h (its head compacts once it spans 1.5x the
+      # block duration, so ~3h in, then every 2h after). The sidecar already
+      # rescans every 30s, so the latency is block PRODUCTION, not upload —
+      # a shorter scan interval would change nothing.
       #
-      # If sub-2h durability to S3 is ever a hard requirement, the answer is
-      # Thanos Receive (Prometheus remote_write -> Receive, data leaves the
-      # pod in seconds), not sidecar tuning. That is a real component with its
-      # own StatefulSet, PVC and replication factor — deliberately not run
-      # here, because the 50Gi EBS PVC above already survives pod reschedule
-      # and node loss, which is the failure mode that actually occurs.
+      # What IS and ISN'T fixed here, precisely:
+      #
+      #   HARD requirement (thanos.io/tip/components/sidecar): min-block-
+      #   duration and max-block-duration must be EQUAL. That equality is
+      #   what disables Prometheus's internal compaction, "critical for data
+      #   consistency" — without it Prometheus rewrites blocks underneath
+      #   Thanos and the Compactor sees overlaps it cannot reconcile.
+      #
+      #   NOT fixed: the 2h value itself, which upstream only *recommends*.
+      #   min=max=10m would still satisfy the equality, so this is a cost
+      #   trade-off, not a prohibition.
+      #
+      # It is a bad trade at this scale. Each block carries a full index and
+      # meta.json regardless of how little data it holds, so 10m blocks mean
+      # ~12x the objects and ~12x the S3 PUTs for the same metrics, with a
+      # far worse index-to-data ratio, and Store Gateway memory grows with
+      # block COUNT because it holds an index header per block. It is also
+      # the exact opposite of the direction chosen for Loki's flush policy
+      # above, for the same reason: fewer, larger objects.
+      #
+      # If sub-2h durability is ever a hard requirement, the answer is Thanos
+      # Receive (Prometheus remote_write -> Receive, samples leave the pod in
+      # seconds and are replicated before any block exists), not shrinking
+      # blocks. That is a real component with its own StatefulSet, PVC and
+      # replication factor — deliberately not run here, because the 50Gi EBS
+      # PVC above already survives pod reschedule and node loss, which is the
+      # failure mode that actually occurs. Confirmed live: a restart replayed
+      # the full head from WAL with no gap.
       thanos:
         # Must match charts/thanos's own image tag below — Sidecar, Query,
         # Store Gateway, and Compactor all speak the same gRPC StoreAPI, and
