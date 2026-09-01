@@ -146,7 +146,7 @@ global:
   # bucket) — Thanos is the one exception, see thanosS3RoleArn below.
   awsLakehouse:
     bucket: "k8s-ha-cluster-lakehouse-419772658418"
-    region: "us-east-1"
+    region: "ap-south-1"
 
   # --- IRSA S3 roles (terraform-aws-k8s-ha: observability-irsa.tf) ---
   # Thanos and Loki don't use the blanket node-role/IMDS pattern above —
@@ -169,7 +169,7 @@ global:
   # namespace instead.
   awsLoki:
     bucket: "k8s-ha-cluster-loki-logs-419772658418"
-    region: "us-east-1"
+    region: "ap-south-1"
 
   # --- PostgreSQL Connection (shared by Airflow, Superset, Gravitino) ---
   # host is CNPG's primary read-write service ("<cluster-name>-rw"), not a
@@ -1257,7 +1257,7 @@ loki-stack:
           cache_location: /data/loki/tsdb-shipper-cache
         aws:
           s3: s3://k8s-ha-cluster-loki-logs-419772658418
-          region: us-east-1
+          region: ap-south-1
       # Loki's own internal compactor (retention/index compaction) is a
       # separate concept from Thanos's Compactor (charts/thanos) — this one
       # still defaulted to shared_store: filesystem, inconsistent with
