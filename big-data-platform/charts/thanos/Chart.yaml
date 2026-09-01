@@ -2,4 +2,4 @@ apiVersion: v2
 name: thanos
 description: Thanos — S3 long-term storage for kube-prometheus-stack's Prometheus
 type: application
-version: 1.0.0
+version: 1.0.1
