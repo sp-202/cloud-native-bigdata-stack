@@ -55,13 +55,25 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 stringData:
+  # `prefix` is a field of objstore's top-level BucketConfig, NOT of s3.Config —
+  # it must stay a sibling of `type`/`config`, never nested inside `config`.
+  # objstore parses this in two passes: it unmarshals the outer BucketConfig,
+  # then re-marshals the `config` map and strict-unmarshals that into s3.Config.
+  # A prefix inside `config` survives pass one and dies in pass two with
+  #
+  #   yaml: unmarshal errors: line 3: field prefix not found in type s3.Config
+  #
+  # which is doubly confusing: line 3 is not line 3 of this file, it is line 3
+  # of the re-marshaled sub-document with its keys sorted alphabetically
+  # (bucket, endpoint, prefix, region). Every Thanos component that opens the
+  # bucket crash-loops on it — compactor and store-gateway both.
   object-store.yaml: |
     type: S3
+    prefix: thanos
     config:
       bucket: {{ .Values.global.awsLakehouse.bucket }}
       endpoint: s3.{{ .Values.global.awsLakehouse.region }}.amazonaws.com
       region: {{ .Values.global.awsLakehouse.region }}
-      prefix: thanos
 ---
 # =============================================================================
 # Thanos Query — single endpoint over live (via Prometheus's sidecar) +
