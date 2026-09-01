@@ -1383,14 +1383,19 @@ loki-stack:
         chunk_target_size: 1572864
         sync_period: 10m
         sync_min_utilization: 0.5
-        # Flush everything still in memory when the pod terminates
-        # gracefully. On an ephemeral benchmark cluster this is the
-        # difference between keeping and losing the final chunks, since
-        # teardown takes the PVC (and therefore the WAL) with it.
-        flush_on_shutdown: true
         wal:
           enabled: true
           dir: /data/loki/wal
+          # Flush everything still in memory when the pod terminates
+          # gracefully. On an ephemeral benchmark cluster this is the
+          # difference between keeping and losing the final chunks, since
+          # teardown takes the PVC (and therefore the WAL) with it.
+          #
+          # Nests under ingester.wal, NOT ingester — it is a WAL setting.
+          # Putting it directly under ingester crash-loops Loki at startup
+          # with "field flush_on_shutdown not found in type ingester.Config",
+          # which is a hard config-parse failure, not a warning.
+          flush_on_shutdown: true
       # v11/boltdb-shipper/filesystem replaced outright, not layered as a
       # second schema period — this cluster is destroyed/rebuilt per
       # benchmark run (see issues.md), so there's no historical data on the
