@@ -101,12 +101,28 @@ spec:
 # Declarative Database CRs (CNPG >= 1.22) — creates each app's database owned
 # by its role, instead of the old postgres-init ConfigMap running raw SQL with
 # hardcoded passwords on first boot.
+#
+# These sit one wave AFTER the Cluster above (-1 vs -2), and must stay that way.
+# Each Database is owned by a role that the Cluster's spec.managed.roles block
+# creates, and CNPG only reconciles those roles once the primary is accepting
+# connections. Put both in the same wave and Argo applies them concurrently, so
+# the Database controller races the role reconciler and loses:
+#
+#   while creating database "gravitino": ERROR: role "gravitino" does not exist
+#
+# It is a race, not a consistent failure — whichever role happens to reconcile
+# first (airflow, in the run that surfaced this) succeeds while the rest fail.
+# That is what makes it expensive: the failed wave wedges the whole sync, so
+# none of the other ~290 resources are ever applied, and the app sits at
+# OutOfSync/Missing retrying a wave that has already silently healed underneath
+# it. A wave gap makes Argo block until the Cluster reports healthy, by which
+# point every managed role exists.
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
   name: airflow
   annotations:
-    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   name: airflow
   owner: airflow
@@ -118,7 +134,7 @@ kind: Database
 metadata:
   name: superset
   annotations:
-    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   name: superset
   owner: superset
@@ -131,7 +147,7 @@ kind: Database
 metadata:
   name: gravitino
   annotations:
-    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   name: gravitino
   owner: gravitino
@@ -146,7 +162,7 @@ kind: Database
 metadata:
   name: iceberg-catalog
   annotations:
-    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   name: iceberg_catalog
   owner: gravitino
