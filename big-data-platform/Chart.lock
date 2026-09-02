@@ -37,7 +37,7 @@ dependencies:
   version: 1.0.2
 - name: thanos
   repository: file://./charts/thanos
-  version: 1.0.3
+  version: 1.0.4
 - name: networking-extras
   repository: file://./charts/networking-extras
   version: 1.0.0
@@ -68,5 +68,5 @@ dependencies:
 - name: airflow-git-sync
   repository: file://./charts/airflow-git-sync
   version: 1.0.0
-digest: sha256:cf8eed475b86846e3aabfa73adc28963534f3c0a4ba9958c78a4b4de6763efa3
-generated: "2026-09-02T11:21:38.477983+05:30"
+digest: sha256:474410ffbbfdd7d5f6bf4f5fbb0e2686040abd7aadb6c34cea50cdf792b5e74e
+generated: "2026-09-02T12:47:45.582865+05:30"

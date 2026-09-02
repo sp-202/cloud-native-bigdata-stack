@@ -88,7 +88,12 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  replicas: 1
+  # 2, not 1 — stateless (Query holds no data of its own, just fans out to
+  # the sidecar/store-gateway StoreAPIs below and merges results), so this
+  # is a safe, no-coordination-needed HA bump, paired with Prometheus
+  # itself going to 2 replicas (values.yaml prometheusSpec.replicas).
+  # Unlike Compactor further down, which must stay at exactly 1 forever.
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: thanos-query
@@ -99,7 +104,13 @@ spec:
         app.kubernetes.io/part-of: thanos
     spec:
       nodeSelector:
-        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+        # Was .gp, a key that doesn't exist in global.nodeSelector (only
+        # core/data/spark do, post the tier-split refactor) — rendered as an
+        # empty/no-op nodeSelector rather than a template error, so this ran
+        # completely unconstrained until now. .data matches where the rest
+        # of kube-prometheus-stack's always-on pieces (Grafana, Alertmanager)
+        # already live.
+        {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
       containers:
         - name: thanos-query
           image: {{ .Values.image }}
@@ -108,6 +119,16 @@ spec:
             - --log.level=info
             - --grpc-address=0.0.0.0:10901
             - --http-address=0.0.0.0:9090
+            # Required now that Prometheus runs 2 replicas
+            # (values.yaml prometheusSpec.replicas: 2): prometheus-operator
+            # auto-injects an external label named exactly this
+            # (spec.replicaExternalLabelName, defaults to
+            # "prometheus_replica") on each replica specifically so
+            # federation/Thanos can tell "same series, different replica"
+            # apart from "actually different series" — without this flag,
+            # every metric would show doubled (both replicas' identical
+            # scrapes returned as separate series) instead of deduplicated.
+            - --query.replica-label=prometheus_replica
             # --endpoint, not --store — confirmed live (CrashLoopBackOff,
             # "unknown long flag '--store'") and against the actual v0.42.4
             # source (cmd/thanos/query.go): --store was renamed to
@@ -193,7 +214,7 @@ spec:
         runAsGroup: 1001
         fsGroup: 1001
       nodeSelector:
-        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+        {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
       containers:
         - name: thanos-store-gateway
           image: {{ .Values.image }}
@@ -297,7 +318,7 @@ spec:
         runAsGroup: 1001
         fsGroup: 1001
       nodeSelector:
-        {{- toYaml .Values.global.nodeSelector.gp | nindent 8 }}
+        {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
       containers:
         - name: thanos-compactor
           image: {{ .Values.image }}

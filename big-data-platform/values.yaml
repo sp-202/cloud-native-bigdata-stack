@@ -1079,6 +1079,25 @@ kube-prometheus-stack:
         # above by hand.
         eks.amazonaws.com/role-arn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-thanos-s3-writer"
     prometheusSpec:
+      # 2 independent replicas, each with its own StatefulSet-provisioned
+      # ebs-gp3 PVC (storageSpec below) and its own Thanos sidecar — no
+      # shared state, no ring, just two Prometheuses scraping the same
+      # targets so one dying doesn't drop metrics collection. Automatically
+      # gets a distinguishing "prometheus_replica" external label from
+      # prometheus-operator (spec.replicaExternalLabelName's default) —
+      # that's what charts/thanos's --query.replica-label flag uses to
+      # deduplicate the two replicas' otherwise-identical series back down
+      # to one, instead of Grafana showing everything doubled.
+      replicas: 2
+      # "hard": with exactly 2 data-nodes (data_node_count, a fixed count —
+      # not a min/max range), this guarantees one replica per node instead
+      # of merely preferring it — the whole point of doing this is
+      # surviving a single node loss, which "soft" doesn't actually
+      # guarantee. Tradeoff: if a data-node is ever down and not yet
+      # replaced, the second replica stays Pending rather than doubling up
+      # on the remaining node — accepted, since a doubled-up pair defeats
+      # the purpose being solved here anyway.
+      podAntiAffinity: "hard"
       serviceMonitorSelectorNilUsesHelmValues: false
       podMonitorSelectorNilUsesHelmValues: false
       nodeSelector:
