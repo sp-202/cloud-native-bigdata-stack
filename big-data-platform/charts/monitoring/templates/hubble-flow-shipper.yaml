@@ -1,0 +1,165 @@
+{{- if .Values.enabled }}
+# ------------------------------------------------------------------------------
+# Monitoring - Hubble Flow Log Shipper (Cilium DROPPED/ERROR flows -> S3)
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Implements steps 2-3 of terraform-aws-k8s-ha CHANGELOG.md's 1.3.0 "TODO —
+# ship Hubble per-flow network logs to S3" (step 1, the allowList/denyList
+# filter down to DROPPED/ERROR only, lives in cilium.tf). Without this,
+# Hubble's static exporter (cilium.tf: hubble.export.static) writes flows to
+# a node-local file that is lost at teardown, and the in-memory ring buffer
+# it also feeds was observed 100% full and overwriting at ~20s of history
+# (`cilium status`) — so a drop that happened 21 seconds before you look is
+# already gone, and gone for good once the cluster is destroyed.
+#
+# Why a separate DaemonSet, not a cilium-agent sidecar: cilium-agent is the
+# CNI — every other pod on a node is stuck NotReady until it comes up, so
+# anything added to ITS pod spec that misconfigures or crash-loops takes
+# down that node's networking bootstrap with it. This DaemonSet mounts the
+# exact same hostPath cilium-agent already writes to (`/var/run/cilium`,
+# confirmed against the actual chart: cilium-agent's own "cilium-run" volume
+# is a hostPath at Cilium's daemon.runPath value, default /var/run/cilium)
+# completely independently — if this misconfigures or crash-loops, Cilium
+# and every other workload is entirely unaffected.
+#
+# Why fluent-bit, not promtail (which already runs on every node for
+# container stdout): promtail tails `/var/log/pods/...`, never this path,
+# and CHANGELOG.md's TODO step 3 is explicit that Hubble flows should NOT be
+# parsed into Loki labels — one label per source/destination pod pair would
+# multiply Loki's stream count the same way the in-memory ring buffer
+# already showed this data can be high-volume, and that cardinality would
+# hurt far more than the data itself. fluent-bit's S3 output plugin ships
+# each flow as a raw JSON line straight to S3 (no Loki stream involved at
+# all) and its `upload_timeout` gives an actual periodic batch upload
+# (10 minutes here) as a first-class config option, rather than something
+# to hand-roll with a cron/sidecar loop.
+#
+# Credentials: no ServiceAccount annotation, deliberately — this reuses the
+# same shared node-role/IMDS path as VPC Flow Logs and the spark-events
+# marker (storage-s3-lakehouse.tf: aws_iam_policy.lakehouse_s3, granted on
+# the whole lakehouse bucket to every pod on every node), not Thanos/Loki's
+# per-workload IRSA pattern. Zero new Terraform IAM needed.
+#
+# Tolerates spark-only (karpenter-k8s.tf's Karpenter spark-node taint) even
+# though most workloads deliberately do NOT (see that file's own comment) —
+# that taint exists to stop non-Spark WORKLOADS from consuming expensive
+# Spark capacity, not to block per-node infra daemons; cilium-agent itself
+# tolerates it for the same reason (the CNI has to run everywhere). Spark
+# nodes are also the most interesting source for this data — shuffle
+# traffic is exactly where a DROPPED flow would show up.
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hubble-flow-shipper-config
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         5
+        Log_Level     info
+        Daemon        off
+
+    [INPUT]
+        Name              tail
+        Path              /var/run/cilium/hubble/events.log
+        Tag               hubble.flows
+        Refresh_Interval  5
+        Skip_Long_Lines   On
+        DB                /var/lib/fluent-bit/hubble-flows.db
+        Mem_Buf_Limit     10MB
+
+    # bucket/region: global.awsLakehouse (terraform-aws-k8s-ha:
+    # storage-s3-lakehouse.tf) — same externally-managed bucket
+    # network-logs.tf's VPC Flow Logs already use, own prefix within it.
+    # No access_key/secret_key: the S3 plugin falls back to the AWS SDK's
+    # default credential chain, which resolves to the node's IMDS role.
+    [OUTPUT]
+        Name                          s3
+        Match                         hubble.flows
+        bucket                        {{ .Values.global.awsLakehouse.bucket }}
+        region                        {{ .Values.global.awsLakehouse.region }}
+        total_file_size               10M
+        upload_timeout                10m
+        use_put_object                On
+        compression                   gzip
+        s3_key_format                 /network-logs/hubble-flows/${NODE_NAME}/%Y/%m/%d/%H/$UUID.json.gz
+        s3_key_format_tag_delimiters  .
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: hubble-flow-shipper
+  namespace: kube-system
+  labels:
+    app: hubble-flow-shipper
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    matchLabels:
+      app: hubble-flow-shipper
+  template:
+    metadata:
+      labels:
+        app: hubble-flow-shipper
+    spec:
+      # No nodeSelector — must run everywhere cilium-agent does (core-node,
+      # data-node, AND spark-node) to actually capture flows from all of
+      # them; only the toleration below is needed to reach the tainted pool.
+      tolerations:
+        - key: spark-only
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      containers:
+        - name: fluent-bit
+          # Verified this tag exists (HTTP 200 on Docker Hub's tags API)
+          # rather than assumed — pin the exact version, don't float on a
+          # moving `stable`/`latest` tag for something reading host data.
+          image: fluent/fluent-bit:3.2.5
+          args: ["-c", "/fluent-bit/etc/fluent-bit.conf"]
+          env:
+            # Interpolated directly into s3_key_format above — fluent-bit
+            # expands ${VAR} anywhere in the config file, not just in
+            # specific fields.
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: cilium-run
+              mountPath: /var/run/cilium
+              readOnly: true
+            - name: config
+              mountPath: /fluent-bit/etc
+            - name: positiondb
+              mountPath: /var/lib/fluent-bit
+      volumes:
+        - name: cilium-run
+          hostPath:
+            path: /var/run/cilium
+            type: DirectoryOrCreate
+        - name: config
+          configMap:
+            name: hubble-flow-shipper-config
+        # Position DB on emptyDir, not a PVC: losing it on a pod restart
+        # just means fluent-bit re-reads from the start of the current
+        # rotated file (a little duplicate data), not lost data — an
+        # acceptable tradeoff for a debug stream, not worth a PVC per node.
+        - name: positiondb
+          emptyDir: {}
+{{- end }}

@@ -1452,6 +1452,30 @@ loki-stack:
   promtail:
     enabled: true
     fullnameOverride: "promtail"
+    # REQUIRED — do not delete. All actual Spark driver/executor pods run on
+    # Karpenter's spark-node pool, which carries a `spark-only=true:NoSchedule`
+    # taint (karpenter-k8s.tf) specifically so no OTHER workload lands there
+    # by accident — Spark pods get a matching toleration on their own template
+    # (examples/spark-jobs/*.yaml). promtail is a DaemonSet, and a DaemonSet
+    # pod needs that same toleration on ITS OWN pod spec to schedule onto a
+    # tainted node — what Spark's pod template tolerates doesn't extend to
+    # promtail's. The chart's default tolerations
+    # (node-role.kubernetes.io/master / control-plane) don't cover this,
+    # since neither exists on managed EKS. Without this override, promtail
+    # only ever runs on core-node/data-node, and every multiline/labeling
+    # rule added above for spark_role/spark_app_selector processes zero real
+    # lines — the DaemonSet was never on the node producing them.
+    tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      - key: spark-only
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
     livenessProbe:
       httpGet:
         path: /ready
@@ -1486,8 +1510,88 @@ loki-stack:
       clients:
         - url: http://loki:3100/loki/api/v1/push
       snippets:
+        # Multi-line stack traces: promtail (via `cri: {}` above) still tails
+        # one *raw container log line* at a time, but a JVM/Python stack
+        # trace is many lines with no per-line timestamp of its own — each
+        # `at org.apache.spark...` frame lands as its own separate Loki
+        # entry, so a driver OOM reads as dozens of unrelated one-line
+        # events instead of one exception. `multiline` re-stitches everything
+        # between one line matching `firstline` and the next into a single
+        # entry. Scoped per-service via `match` because the timestamp shape
+        # differs per logger and a wrong regex silently stops stitching
+        # (worse: matches mid-trace and truncates it).
+        #
+        # spark-role/spark-app-selector aren't in promtail's default label
+        # set (only app/instance/component/namespace/pod/container are), so
+        # they're added via extraRelabelConfigs below. This is safe re:
+        # cardinality — unlike the Hubble-flow TODO (CHANGELOG.md) where a
+        # label per flow would explode the stream count, `pod` is already a
+        # label here (default relabeling), so every stream this touches
+        # already exists 1:1 per pod; these just add searchable dimensions
+        # to it (`{spark_role="driver"} |= "app-20260902..."` pulls one
+        # job's driver+executor logs together) rather than creating new ones.
         pipelineStages:
           - cri: {}
+          # Spark driver/executor (spark-role set by spark-submit itself).
+          # log4j default pattern layout is `%d{yy/MM/dd HH:mm:ss} ...`
+          # (verified against archive/misc/log4j.properties, the last known
+          # config before the image dropped a bundled log4j.properties) —
+          # e.g. "26/09/02 10:15:23 INFO ...".
+          - match:
+              selector: '{spark_role=~"driver|executor"}'
+              stages:
+                - multiline:
+                    firstline: '^\d{2}/\d{2}/\d{2}'
+                    max_wait_time: 3s
+          # Spark History Server — same Spark distribution, same log4j
+          # pattern as above, but its own long-running Deployment (no
+          # spark-role label), so it needs its own match on app (set via
+          # `labels: {app: spark-history-server}` in
+          # charts/spark-history-server/templates/deployment.yaml).
+          - match:
+              selector: '{app="spark-history-server"}'
+              stages:
+                - multiline:
+                    firstline: '^\d{2}/\d{2}/\d{2}'
+                    max_wait_time: 3s
+          # Airflow (scheduler/webserver/worker/triggerer/dag-processor) —
+          # every role carries `tier: airflow` (checked against the actual
+          # chart template, charts/airflow's scheduler-deployment.yaml etc.;
+          # `component` differs per role but `tier` doesn't, so relabel that
+          # one). Default log format is Airflow's own
+          # `[%(asctime)s] {file:line} LEVEL - msg`, not overridden anywhere
+          # in this values.yaml — e.g. "[2026-09-02 10:15:23,456] {...} ...".
+          - match:
+              selector: '{tier="airflow"}'
+              stages:
+                - multiline:
+                    firstline: '^\[\d{4}-\d{2}-\d{2}'
+                    max_wait_time: 3s
+          # Gravitino — resolves to app=gravitino-helm (no nameOverride set
+          # below, so promtail's default app-label chain falls through to
+          # the chart's own name, confirmed via its _helpers.tpl). Regex
+          # assumes Apache Gravitino's documented default log4j2 pattern
+          # (`%d{yyyy-MM-dd HH:mm:ss.SSS} ...`) — unlike the two Spark rules
+          # above, this was NOT checked against the actual running image's
+          # bundled log4j2.properties, only against Gravitino's typical
+          # default. Verify with `kubectl logs` on the next deploy; if the
+          # timestamp shape differs, fix the regex, don't drop the rule.
+          - match:
+              selector: '{app="gravitino-helm"}'
+              stages:
+                - multiline:
+                    firstline: '^\d{4}-\d{2}-\d{2}'
+                    max_wait_time: 3s
+        extraRelabelConfigs:
+          - action: replace
+            source_labels: [__meta_kubernetes_pod_label_spark_role]
+            target_label: spark_role
+          - action: replace
+            source_labels: [__meta_kubernetes_pod_label_spark_app_selector]
+            target_label: spark_app_selector
+          - action: replace
+            source_labels: [__meta_kubernetes_pod_label_tier]
+            target_label: tier
 
 # =============================================================================
 # CLOUDFLARED (local sub-chart) — spread across GP nodes for tunnel HA
