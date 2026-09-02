@@ -63,16 +63,29 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 data:
+  # Without Parser json below, tail's default behavior is to wrap each raw
+  # line as a STRING under a "log" key (confirmed live: shipped objects
+  # were {"date":"...","log":"{\"flow\":{...}}"} — the real flow JSON
+  # trapped inside an escaped string, not structured at all, so nothing
+  # queryable came out the other end no matter what the Athena/Presto
+  # schema declared on the far side). This parser decodes each line as
+  # JSON up front so `flow`/`time` land as real top-level fields.
+  parsers.conf: |
+    [PARSER]
+        Name    json
+        Format  json
   fluent-bit.conf: |
     [SERVICE]
         Flush         5
         Log_Level     info
         Daemon        off
+        Parsers_File  parsers.conf
 
     [INPUT]
         Name              tail
         Path              /var/run/cilium/hubble/events.log
         Tag               hubble.flows
+        Parser            json
         Refresh_Interval  5
         Skip_Long_Lines   On
         DB                /var/lib/fluent-bit/hubble-flows.db
