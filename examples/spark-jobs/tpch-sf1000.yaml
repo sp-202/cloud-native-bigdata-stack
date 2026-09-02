@@ -22,11 +22,21 @@
 # bucket was created outside Terraform (by hand) and is not referenced by
 # any other .tf resource, so `terraform destroy`/clean.sh can never touch it.
 #
-# Node sizing: 16 executors x (16 vCPU, 148Gi) + driver (5 vCPU, 26Gi) =
-# 261 vCPU / ~2.4TiB total. Each executor pod's 148Gi is 64Gi heap + 20Gi
-# memoryOverhead + 64Gi spark.memory.offHeap.size (K8s counts off-heap
-# into the pod's memory request too). On r7gd.12xlarge (48 vCPU/384Gi) two
-# fat executors fit per node (2x148=296Gi, 2x16=32 vCPU) -> ~8 nodes.
+# Node sizing: 14 executors x (20 vCPU, 185Gi) + driver (5 vCPU, 26Gi) =
+# 285 vCPU / ~2.6TiB total, on 7x r7gd.12xlarge (336 vCPU EC2 fleet total,
+# 24 vCPU under the 360 vCPU budget this was sized against). Each executor
+# pod's 185Gi is 80Gi heap + 25Gi memoryOverhead + 80Gi
+# spark.memory.offHeap.size (K8s counts off-heap into the pod's memory
+# request too). 8 vCPU / 10Gi per node reserved for cilium-agent/cilium-
+# envoy/promtail/hubble-flow-shipper/CSI drivers/kubelet, leaving 40 vCPU /
+# 374Gi usable per node -> exactly 2 fat executors/node (2x185=370Gi,
+# 2x20=40 vCPU), zero waste.
+#
+# r7gd.12xlarge chosen over r7gd.16xlarge (64 vCPU/512Gi, same family) at
+# the same ~360 vCPU budget specifically for aggregate network bandwidth,
+# given the paragraph below: 7x12xlarge = 7x22.5 = 157.5 Gbps aggregate vs.
+# 5x16xlarge = 5x30 = 150 Gbps aggregate — more, smaller nodes wins on the
+# exact axis that broke this job before, not just vCPU-per-dollar.
 #
 # NOTE (network): going from 4 thin -> 2 fat executors on the SAME node
 # count does NOT raise the per-node 22.5 Gbps ENA bandwidth ceiling (8
@@ -59,27 +69,62 @@ spec:
   mode: cluster
   image: "subhodeep2022/spark-bigdata:spark-3.5.8-v13-iceberg-gravitino"
   imagePullPolicy: IfNotPresent
-  mainApplicationFile: "s3a://tpch-sf100-419772658418/scripts/tpcbench.py"
+  mainApplicationFile: "s3://tpc-419772658418/scripts/tpcbench.py"
   arguments:
     - "--benchmark"
     - "tpch"
     - "--data"
-    - "s3a://tpch-sf100-419772658418/tpch_sf1000"
+    - "s3://tpc-419772658418/tpch-sf1000"
     - "--queries"
-    - "s3a://tpch-sf100-419772658418/tpch-queries"
+    - "s3a://tpc-419772658418/tpch-queries"
     - "--output"
-    - "s3a://tpch-sf100-419772658418/tpch-results"
+    - "s3a://tpc-419772658418/tpch-results"
   sparkVersion: "3.5.8"
   restartPolicy:
     type: Never
 
+  # Fixes the real reason CHANGELOG.md flagged Spark metrics scraping as
+  # "unverified": checked the actual spark-operator v2.4.0 CRD
+  # (sparkoperator.k8s.io_sparkapplications.yaml) — the driver UI Service's
+  # port defaults to "spark-driver-ui-port", not "spark-ui", and gets no
+  # "app: spark-ui" label unless set here. charts/monitoring/templates/
+  # spark-service-monitor.yaml's ServiceMonitor selects on exactly
+  # {matchLabels: {app: spark-ui}} + {port: spark-ui} — neither ever
+  # matched, so every prior run of this job produced zero scraped metrics
+  # despite spark.ui.prometheus.enabled=true below actually serving them
+  # correctly on the pod itself. Loki needs nothing extra here — promtail
+  # already tails every pod's stdout automatically (tier/component/
+  # spark_role/spark_app_selector labels come from cloud-native-bigdata-
+  # stack's promtail relabel config, not from anything in this file).
+  sparkUIOptions:
+    serviceLabels:
+      app: spark-ui
+    servicePortName: spark-ui
+
   sparkConf:
     "spark.local.dir": "/mnt/spark-nvme/spark-local"
-    "spark.kubernetes.executor.request.cores": "16"
+    "spark.kubernetes.executor.request.cores": "20"
     "spark.memory.fraction": "0.6"
     "spark.memory.storageFraction": "0.2"
     "spark.memory.offHeap.enabled": "true"
-    "spark.memory.offHeap.size": "64g"
+    "spark.memory.offHeap.size": "80g"
+
+    # ── Wait for the full spark-node fleet before scheduling any task ──────
+    # All 14 executors are requested up front (no dynamicAllocation), but
+    # Spark's default behavior starts dispatching tasks to whichever
+    # executors have registered SO FAR, not once all requested executors
+    # are up — with 7 spark-nodes provisioned from zero by Karpenter
+    # (EC2 launch + boot + kubelet-Ready + cilium-agent-Ready per node,
+    # not instant), the first stage could otherwise start on a fraction of
+    # the fleet and skew work across a partially-joined cluster.
+    # minRegisteredResourcesRatio=1.0 blocks stage scheduling until every
+    # requested executor has registered; maxRegisteredResourcesWaitingTime
+    # is the safety valve so a genuine capacity/scheduling problem fails
+    # with a clear timeout instead of hanging forever — 600s gives real
+    # margin for 7 nodes to come up in parallel, consistent with this job's
+    # existing generous timeouts elsewhere (spark.network.timeout=2000s).
+    "spark.scheduler.minRegisteredResourcesRatio": "1.0"
+    "spark.scheduler.maxRegisteredResourcesWaitingTime": "600s"
 
     "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
     "spark.hadoop.fs.s3.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
@@ -266,7 +311,7 @@ spec:
     # spark-submit script — nothing expands it inside a YAML manifest, so
     # it's the literal bucket name here instead.
     "spark.eventLog.enabled": "true"
-    "spark.eventLog.dir": "s3a://tpch-sf100-419772658418/spark-event-logs"
+    "spark.eventLog.dir": "s3a://tpc-419772658418/spark-event-logs"
     "spark.eventLog.compress": "true"
     "spark.eventLog.compression.codec": "zstd"
     "spark.eventLog.rolling.enabled": "true"
@@ -365,11 +410,11 @@ spec:
         mountPath: /opt/spark/log4j2-custom
 
   executor:
-    cores: 16
-    coreLimit: "16"
-    instances: 16
-    memory: "64g"
-    memoryOverhead: "20g"
+    cores: 20
+    coreLimit: "20"
+    instances: 14
+    memory: "80g"
+    memoryOverhead: "25g"
     # Same ndots rationale as the driver above — executors are the ones
     # actually issuing the high-volume S3 lookups Comet's native reader
     # generates, so this matters more here than on the driver.
