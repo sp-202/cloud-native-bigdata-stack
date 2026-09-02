@@ -1,12 +1,15 @@
 {{- if .Values.enabled }}
 # ------------------------------------------------------------------------------
-# Monitoring - Hubble Flow Log Shipper (Cilium DROPPED/ERROR flows -> S3)
+# Monitoring - Hubble Flow Log Shipper (Cilium network flows -> S3)
 # ------------------------------------------------------------------------------
 # Part of the Cloud-Native Big Data Platform (Umbrella Chart)
 #
 # Implements steps 2-3 of terraform-aws-k8s-ha CHANGELOG.md's 1.3.0 "TODO —
-# ship Hubble per-flow network logs to S3" (step 1, the allowList/denyList
-# filter down to DROPPED/ERROR only, lives in cilium.tf). Without this,
+# ship Hubble per-flow network logs to S3" (step 1, the denyList noise
+# filter, lives in cilium.tf — originally also verdict-restricted to
+# DROPPED/ERROR only, later widened to capture every flow for full network
+# visibility; see that file's own comment for the real volume/cost tradeoff
+# that choice carries). Without this,
 # Hubble's static exporter (cilium.tf: hubble.export.static) writes flows to
 # a node-local file that is lost at teardown, and the in-memory ring buffer
 # it also feeds was observed 100% full and overwriting at ~20s of history
