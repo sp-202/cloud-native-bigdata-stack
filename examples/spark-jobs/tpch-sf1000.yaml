@@ -22,15 +22,65 @@
 # bucket was created outside Terraform (by hand) and is not referenced by
 # any other .tf resource, so `terraform destroy`/clean.sh can never touch it.
 #
-# Node sizing: 14 executors x (20 vCPU, 185Gi) + driver (5 vCPU, 26Gi) =
-# 285 vCPU / ~2.6TiB total, on 7x r7gd.12xlarge (336 vCPU EC2 fleet total,
-# 24 vCPU under the 360 vCPU budget this was sized against). Each executor
-# pod's 185Gi is 80Gi heap + 25Gi memoryOverhead + 80Gi
-# spark.memory.offHeap.size (K8s counts off-heap into the pod's memory
-# request too). 8 vCPU / 10Gi per node reserved for cilium-agent/cilium-
-# envoy/promtail/hubble-flow-shipper/CSI drivers/kubelet, leaving 40 vCPU /
-# 374Gi usable per node -> exactly 2 fat executors/node (2x185=370Gi,
-# 2x20=40 vCPU), zero waste.
+# Node sizing: 14 executors x (20 vCPU, 170Gi) + driver (4 vCPU, 20Gi) =
+# 284 vCPU / ~2.3TiB total, on 7x r7gd.12xlarge. Each executor pod's 170Gi
+# is 74Gi heap + 16Gi memoryOverhead + 80Gi spark.memory.offHeap.size (K8s
+# counts off-heap into the pod's memory request too).
+#
+# These numbers are MEASURED off a live r7gd.12xlarge in this cluster, not
+# derived from the instance's spec sheet — the previous sizing (2x185Gi per
+# node) was arithmetically impossible and silently degraded the whole job to
+# 1 executor/node. What a spark-node actually offers:
+#
+#   capacity                 48 vCPU / 393216Mi
+#   allocatable              46 vCPU / 378785Mi   <- the only number that
+#                            counts. kubeReserved cpu=1 + systemReserved
+#                            cpu=1/memory=1Gi (scripts/worker-eks-bootstrap.sh)
+#                            plus the eviction threshold come off the top.
+#                            369.9Gi — ~4Gi BELOW the 374Gi assumed before.
+#
+# 2 x 185Gi = 378880Mi overshoots 378785Mi by 95Mi, and once the 877Mi of
+# daemonset requests are counted it misses by ~1Gi. Under one gibibyte —
+# which is why this never looked like a sizing bug. The scheduler simply fit
+# ONE executor per node, so 14 executors demanded 14 NODES. Karpenter got 7
+# up, hit the vCPU budget, and left the other 7 Pending forever; because
+# spark.scheduler.minRegisteredResourcesRatio is 1.0 (below), the driver then
+# sat in TaskSchedulerImpl.waitBackendReady for the full 600s having run zero
+# jobs. Confirmed live: 0 jobs, 6 idle executors, 8 Pending, Karpenter
+# logging "no instance type ... had enough resources".
+#
+# Sizing now leaves ~10Gi of allocatable UNREQUESTED on the tightest node,
+# deliberately. Daemonsets only request 877Mi but that is not what they can
+# grow to, and the scheduler reserves nothing beyond the request:
+#
+#   cilium-agent    requests 512Mi   limit 3Gi      (cilium.tf — the limit is
+#                   3Gi precisely because ~2M-entry BPF maps are memcg-
+#                   accounted to the agent under cgroup v2)
+#   cilium-envoy    requests 0       NO LIMIT       <- L7 datapath, unbounded
+#   node-local-dns  requests 5Mi     NO LIMIT
+#   efs-csi-node / node-auto-labeler / NTH          partly or wholly unbounded
+#   ---------------------------------------------------------------
+#   requests 877Mi total, bounded limits 3776Mi, real ceiling: open-ended
+#
+# Overcommitting that gap is how you get exit 137s that are really kubelet
+# evictions, not OOMKills — see issues.md #40, which cost a full debugging
+# cycle. 10Gi of slack covers the bounded limits ~2.6x with room for envoy.
+#
+# The driver's nodeSelector also pins it to a spark-node, and it does not fit
+# anywhere else (data-nodes have 2.5 free vCPU, core-nodes 2.9 — both under
+# the driver's 4), so it necessarily shares a node with 2 executors:
+#
+#   driver node    2x174080 + 20480 = 368640Mi vs 378785Mi  -> 10145Mi spare
+#                  2x20     + 4     = 44 vCPU  vs 46         -> 2 vCPU spare
+#   other 6 nodes  2x174080         = 348160Mi vs 378785Mi  -> 30625Mi spare
+#
+# Driver trimmed 5->4 vCPU / 26->20Gi for the vCPU half of that: at 5 vCPU the
+# driver node wanted 45 of 46, leaving nothing for the 1400m of daemonset CPU
+# limits. The driver only collects per-query timings here.
+#
+# vCPU: 7x48 = 336 spark + 30 core/data = 366 total, against a measured
+# ap-south-1 "Running On-Demand Standard" quota of 400. Drop instances to 12
+# (6 spark-nodes, 318 vCPU) if the fleet must stay under a 350 ceiling.
 #
 # r7gd.12xlarge chosen over r7gd.16xlarge (64 vCPU/512Gi, same family) at
 # the same ~360 vCPU budget specifically for aggregate network bandwidth,
@@ -128,7 +178,27 @@ spec:
 
     "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
     "spark.hadoop.fs.s3.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
-    "spark.hadoop.fs.s3a.endpoint.region": "us-east-1"
+    # MUST match the region of the bucket in --data/--queries/--output.
+    # tpc-419772658418 is in ap-south-1; this said us-east-1, left over from
+    # when this job read tpch-sf100-419772658418 (which really is us-east-1).
+    #
+    # hadoop-s3a survives the mismatch — it follows S3's 301 PermanentRedirect
+    # and re-signs for the right region, which is why the driver could still
+    # read tpcbench.py and write spark-event-logs. Comet's native reader does
+    # NOT: its Rust object_store issues a plain GET against
+    # s3.<region>.amazonaws.com and treats the 301 as fatal, since S3 answers
+    # a cross-region GET with a redirect that carries no Location header:
+    #
+    #   Generic S3 error: Error performing GET
+    #   https://s3.us-east-1.amazonaws.com/tpc-419772658418/tpch-sf1000/
+    #   lineitem.parquet/lineitem.104.parquet - Received redirect without
+    #   LOCATION, this normally indicates an incorrectly configured region
+    #
+    # surfacing as the very misleading "File is not a Parquet file". Confirmed
+    # live: every task in the first lineitem scan stage died this way, 4
+    # attempts each, aborting the job. Note this is also the difference
+    # between reading SF1000 in-region and dragging it across the planet.
+    "spark.hadoop.fs.s3a.endpoint.region": "ap-south-1"
     # No explicit aws.credentials.provider override — this image's
     # hadoop-aws still expects the SDK v1 AWSCredentialsProvider interface
     # (confirmed live: pointing this at the SDK v2
@@ -340,9 +410,12 @@ spec:
     "spark.executor.defaultJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -XX:+UseParallelGC -XX:InitiatingHeapOccupancyPercent=70 -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties"
 
   driver:
-    cores: 5
-    memory: "20g"
-    memoryOverhead: "6g"
+    # 4 vCPU / 20Gi (16g + 4g overhead). See the node-sizing block in the
+    # header: this shares a node with 2 executors, and every vCPU here comes
+    # straight out of that node's executor headroom.
+    cores: 4
+    memory: "16g"
+    memoryOverhead: "4g"
     serviceAccount: spark-operator-spark
     # ndots:5 (k8s default) makes every non-cluster hostname (s3.us-east-1.
     # amazonaws.com, etc.) get tried against 4 search-domain suffixes before
@@ -413,8 +486,14 @@ spec:
     cores: 20
     coreLimit: "20"
     instances: 14
-    memory: "80g"
-    memoryOverhead: "25g"
+    # 74g + 16g + 80g offHeap = 170Gi/pod, so two land on one r7gd.12xlarge
+    # (see header). Trimmed out of heap and overhead rather than offHeap:
+    # with Comet the real execution memory is the native off-heap pool
+    # (spark.comet.exec.memoryPool=fair_unified over spark.memory.offHeap.
+    # size), so shrinking that would cost query performance, while the JVM
+    # heap here mostly holds Spark's own bookkeeping.
+    memory: "74g"
+    memoryOverhead: "16g"
     # Same ndots rationale as the driver above — executors are the ones
     # actually issuing the high-volume S3 lookups Comet's native reader
     # generates, so this matters more here than on the driver.
