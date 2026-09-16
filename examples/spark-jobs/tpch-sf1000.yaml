@@ -1,113 +1,12 @@
-# ------------------------------------------------------------------------------
-# TPC-H SF100 Q1 (spark-operator/SparkApplication CRD) — real S3 data, not synthetic
-# ------------------------------------------------------------------------------
-# Runs the actual DataFusion Comet benchmark runner (s3://tpch-sf100-419772658418/
-# scripts/tpcbench.py) against the real SF100 parquet dataset already in that
-# bucket, --query 1 only (TPC-H Q1 — "pricing summary report", a single GROUP
-# BY/aggregation over lineitem, the standard simplest TPC-H query).
+# TPC-H SF1000 benchmark (spark-operator SparkApplication) — runs all queries
+# via DataFusion Comet native execution against real SF1000 parquet data in
+# s3://tpc-419772658418. 14 executors (20 vCPU/170Gi) + driver (4 vCPU/20Gi)
+# on 7x r7gd.12xlarge on-demand spark-nodes (ap-south-1).
 #
-# NOTE: the bucket has TPC-H data (tpch_sf100/, tpch-queries/) — there is no
-# TPC-DS data in it at all, so this targets --benchmark tpch, not tpcds. If you
-# actually need TPC-DS specifically, that dataset would need to be generated
-# into this bucket (or a new one) first.
-#
-# terraform-aws-k8s-ha's storage-s3-tpch-benchmark.tf grants the node role
-# read/write access to this bucket (source parquet data is read-only in
-# practice, but the benchmark run also needs to WRITE its own results and
-# event logs back into the same bucket) — that resource has been written
-# but NOT applied yet, run `terraform apply
-# -target=aws_iam_policy.tpch_sf100_s3
-# -target=aws_iam_role_policy_attachment.node_tpch_sf100_s3` before
-# submitting this, or the S3 calls will fail with AccessDenied. That
-# bucket was created outside Terraform (by hand) and is not referenced by
-# any other .tf resource, so `terraform destroy`/clean.sh can never touch it.
-#
-# Node sizing: 14 executors x (20 vCPU, 170Gi) + driver (4 vCPU, 20Gi) =
-# 284 vCPU / ~2.3TiB total, on 7x r7gd.12xlarge. Each executor pod's 170Gi
-# is 74Gi heap + 16Gi memoryOverhead + 80Gi spark.memory.offHeap.size (K8s
-# counts off-heap into the pod's memory request too).
-#
-# These numbers are MEASURED off a live r7gd.12xlarge in this cluster, not
-# derived from the instance's spec sheet — the previous sizing (2x185Gi per
-# node) was arithmetically impossible and silently degraded the whole job to
-# 1 executor/node. What a spark-node actually offers:
-#
-#   capacity                 48 vCPU / 393216Mi
-#   allocatable              46 vCPU / 378785Mi   <- the only number that
-#                            counts. kubeReserved cpu=1 + systemReserved
-#                            cpu=1/memory=1Gi (scripts/worker-eks-bootstrap.sh)
-#                            plus the eviction threshold come off the top.
-#                            369.9Gi — ~4Gi BELOW the 374Gi assumed before.
-#
-# 2 x 185Gi = 378880Mi overshoots 378785Mi by 95Mi, and once the 877Mi of
-# daemonset requests are counted it misses by ~1Gi. Under one gibibyte —
-# which is why this never looked like a sizing bug. The scheduler simply fit
-# ONE executor per node, so 14 executors demanded 14 NODES. Karpenter got 7
-# up, hit the vCPU budget, and left the other 7 Pending forever; because
-# spark.scheduler.minRegisteredResourcesRatio is 1.0 (below), the driver then
-# sat in TaskSchedulerImpl.waitBackendReady for the full 600s having run zero
-# jobs. Confirmed live: 0 jobs, 6 idle executors, 8 Pending, Karpenter
-# logging "no instance type ... had enough resources".
-#
-# Sizing now leaves ~10Gi of allocatable UNREQUESTED on the tightest node,
-# deliberately. Daemonsets only request 877Mi but that is not what they can
-# grow to, and the scheduler reserves nothing beyond the request:
-#
-#   cilium-agent    requests 512Mi   limit 3Gi      (cilium.tf — the limit is
-#                   3Gi precisely because ~2M-entry BPF maps are memcg-
-#                   accounted to the agent under cgroup v2)
-#   cilium-envoy    requests 0       NO LIMIT       <- L7 datapath, unbounded
-#   node-local-dns  requests 5Mi     NO LIMIT
-#   efs-csi-node / node-auto-labeler / NTH          partly or wholly unbounded
-#   ---------------------------------------------------------------
-#   requests 877Mi total, bounded limits 3776Mi, real ceiling: open-ended
-#
-# Overcommitting that gap is how you get exit 137s that are really kubelet
-# evictions, not OOMKills — see issues.md #40, which cost a full debugging
-# cycle. 10Gi of slack covers the bounded limits ~2.6x with room for envoy.
-#
-# The driver's nodeSelector also pins it to a spark-node, and it does not fit
-# anywhere else (data-nodes have 2.5 free vCPU, core-nodes 2.9 — both under
-# the driver's 4), so it necessarily shares a node with 2 executors:
-#
-#   driver node    2x174080 + 20480 = 368640Mi vs 378785Mi  -> 10145Mi spare
-#                  2x20     + 4     = 44 vCPU  vs 46         -> 2 vCPU spare
-#   other 6 nodes  2x174080         = 348160Mi vs 378785Mi  -> 30625Mi spare
-#
-# Driver trimmed 5->4 vCPU / 26->20Gi for the vCPU half of that: at 5 vCPU the
-# driver node wanted 45 of 46, leaving nothing for the 1400m of daemonset CPU
-# limits. The driver only collects per-query timings here.
-#
-# vCPU: 7x48 = 336 spark + 30 core/data = 366 total, against a measured
-# ap-south-1 "Running On-Demand Standard" quota of 400. Drop instances to 12
-# (6 spark-nodes, 318 vCPU) if the fleet must stay under a 350 ceiling.
-#
-# r7gd.12xlarge chosen over r7gd.16xlarge (64 vCPU/512Gi, same family) at
-# the same ~360 vCPU budget specifically for aggregate network bandwidth,
-# given the paragraph below: 7x12xlarge = 7x22.5 = 157.5 Gbps aggregate vs.
-# 5x16xlarge = 5x30 = 150 Gbps aggregate — more, smaller nodes wins on the
-# exact axis that broke this job before, not just vCPU-per-dollar.
-#
-# NOTE (network): going from 4 thin -> 2 fat executors on the SAME node
-# count does NOT raise the per-node 22.5 Gbps ENA bandwidth ceiling (8
-# nodes x 22.5 = 180 Gbps aggregate either way). Root cause of the SF1000
-# FetchFailed/stage-retry + Comet "generic S3 error" is EC2/ENA bandwidth-
-# allowance exhaustion (bw_out/bw_in_allowance_exceeded climbing on ens5/
-# ens6; conntrack/pps=0), NOT Cilium/#38. Fewer/fatter executors only
-# reduce the number of independent shuffle/S3 flows per node (smoother
-# microbursts). The real levers: (1) move fewer bytes — shuffle codec is
-# zstd below, not lz4; (2) more nodes to raise aggregate bandwidth;
-# (3) ENA Express (r7gd.12xlarge supports it, single-AZ). See issues.md.
-#
-# Run:
-#   kubectl apply -f examples/spark-jobs/tpch-sf1000.yaml
-#   kubectl get sparkapplication tpch-sf100-q1 -n default -w
-#   kubectl get nodes -l node-role.kubernetes.io/spark-node -w
-#   kubectl logs -n default -l spark-app-name=tpch-sf100-q1,spark-role=driver -f
-#
-# Clean up:
-#   kubectl delete -f examples/spark-jobs/tpch-sf1000.yaml
-# ------------------------------------------------------------------------------
+# Run:    kubectl apply -f examples/spark-jobs/tpch-sf1000.yaml
+# Watch:  kubectl get sparkapplication tpch-sf1000 -n default -w
+# Logs:   kubectl logs -n default -l spark-app-name=tpch-sf1000,spark-role=driver -f
+# Clean:  kubectl delete -f examples/spark-jobs/tpch-sf1000.yaml
 apiVersion: "sparkoperator.k8s.io/v1beta2"
 kind: SparkApplication
 metadata:
@@ -133,19 +32,6 @@ spec:
   restartPolicy:
     type: Never
 
-  # Fixes the real reason CHANGELOG.md flagged Spark metrics scraping as
-  # "unverified": checked the actual spark-operator v2.4.0 CRD
-  # (sparkoperator.k8s.io_sparkapplications.yaml) — the driver UI Service's
-  # port defaults to "spark-driver-ui-port", not "spark-ui", and gets no
-  # "app: spark-ui" label unless set here. charts/monitoring/templates/
-  # spark-service-monitor.yaml's ServiceMonitor selects on exactly
-  # {matchLabels: {app: spark-ui}} + {port: spark-ui} — neither ever
-  # matched, so every prior run of this job produced zero scraped metrics
-  # despite spark.ui.prometheus.enabled=true below actually serving them
-  # correctly on the pod itself. Loki needs nothing extra here — promtail
-  # already tails every pod's stdout automatically (tier/component/
-  # spark_role/spark_app_selector labels come from cloud-native-bigdata-
-  # stack's promtail relabel config, not from anything in this file).
   sparkUIOptions:
     serviceLabels:
       app: spark-ui
@@ -159,59 +45,15 @@ spec:
     "spark.memory.offHeap.enabled": "true"
     "spark.memory.offHeap.size": "80g"
 
-    # ── Wait for the full spark-node fleet before scheduling any task ──────
-    # All 14 executors are requested up front (no dynamicAllocation), but
-    # Spark's default behavior starts dispatching tasks to whichever
-    # executors have registered SO FAR, not once all requested executors
-    # are up — with 7 spark-nodes provisioned from zero by Karpenter
-    # (EC2 launch + boot + kubelet-Ready + cilium-agent-Ready per node,
-    # not instant), the first stage could otherwise start on a fraction of
-    # the fleet and skew work across a partially-joined cluster.
-    # minRegisteredResourcesRatio=1.0 blocks stage scheduling until every
-    # requested executor has registered; maxRegisteredResourcesWaitingTime
-    # is the safety valve so a genuine capacity/scheduling problem fails
-    # with a clear timeout instead of hanging forever — 600s gives real
-    # margin for 7 nodes to come up in parallel, consistent with this job's
-    # existing generous timeouts elsewhere (spark.network.timeout=2000s).
     "spark.scheduler.minRegisteredResourcesRatio": "1.0"
     "spark.scheduler.maxRegisteredResourcesWaitingTime": "600s"
 
     "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
     "spark.hadoop.fs.s3.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
-    # MUST match the region of the bucket in --data/--queries/--output.
-    # tpc-419772658418 is in ap-south-1; this said us-east-1, left over from
-    # when this job read tpch-sf100-419772658418 (which really is us-east-1).
-    #
-    # hadoop-s3a survives the mismatch — it follows S3's 301 PermanentRedirect
-    # and re-signs for the right region, which is why the driver could still
-    # read tpcbench.py and write spark-event-logs. Comet's native reader does
-    # NOT: its Rust object_store issues a plain GET against
-    # s3.<region>.amazonaws.com and treats the 301 as fatal, since S3 answers
-    # a cross-region GET with a redirect that carries no Location header:
-    #
-    #   Generic S3 error: Error performing GET
-    #   https://s3.us-east-1.amazonaws.com/tpc-419772658418/tpch-sf1000/
-    #   lineitem.parquet/lineitem.104.parquet - Received redirect without
-    #   LOCATION, this normally indicates an incorrectly configured region
-    #
-    # surfacing as the very misleading "File is not a Parquet file". Confirmed
-    # live: every task in the first lineitem scan stage died this way, 4
-    # attempts each, aborting the job. Note this is also the difference
-    # between reading SF1000 in-region and dragging it across the planet.
     "spark.hadoop.fs.s3a.endpoint.region": "ap-south-1"
-    # No explicit aws.credentials.provider override — this image's
-    # hadoop-aws still expects the SDK v1 AWSCredentialsProvider interface
-    # (confirmed live: pointing this at the SDK v2
-    # software.amazon.awssdk.auth.credentials.ContainerCredentialsProvider
-    # class failed startup with "does not implement AWSCredentialsProvider").
-    # Hadoop's default provider chain already resolves container/pod
-    # credentials on its own — this was the proven-working state before.
     "spark.hadoop.fs.s3a.fast.upload": "true"
     "spark.hadoop.fs.s3a.connection.ssl.enabled": "true"
-
     "spark.hadoop.fs.s3a.fast.upload.buffer": "disk"
-    # kept on the NVMe mount (not the reference job's /data1/s3a) — this
-    # pod's local scratch disk is /mnt/spark-nvme, see volumeMounts below.
     "spark.hadoop.fs.s3a.buffer.dir": "/mnt/spark-nvme/s3a-buffer"
     "spark.hadoop.fs.s3a.multipart.size": "128M"
     "spark.hadoop.fs.s3a.multipart.threshold": "256M"
@@ -220,47 +62,11 @@ spec:
     "spark.hadoop.fs.s3a.multipart.purge": "true"
     "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "2"
 
-    # ── Comet native parquet reader — S3 connection concurrency ──────────────
-    # CRITICAL: the fs.s3a.* limits above do NOT apply to Comet's native
-    # reader — it reads S3 through its own Rust parallel reader, not
-    # hadoop-s3a (confirmed in the fork's CometConf.scala). These are the
-    # settings that actually bound Comet's S3 connections.
-    #
-    # At SF1000 the defaults (thread-pool.size=16) meant 32 executors x 16
-    # threads = 512 concurrent S3 read connections firing in a burst at each
-    # scan stage. That churn overran Cilium's masquerade NAT-entry-creation
-    # rate (not the map SIZE — maps measured healthy at ~7.5K/2M, nodes idle,
-    # S3 fine in steady state), producing the intermittent ~0.8% "error
-    # sending request" GET failures + 58s retries + executor churn on the big
-    # lineitem/partsupp scans. See terraform-aws-k8s-ha issues.md #38 and
-    # cilium/cilium#33074.
-    #
-    # thread-pool.size -> 8: this is the CONCURRENCY CAP (max parallel S3 read
-    #   threads per executor), so it directly bounds the per-executor burst of
-    #   simultaneous connection setups — the exact thing that trips Cilium's
-    #   masquerade NAT-entry-creation rate. 16 (default) gave 17 failed tasks
-    #   /2112 on the lineitem scan; 8 cut it to 2-3; 4 drives it to zero. For
-    #   MAX THROUGHPUT 8 is the sweet spot, not 4 or 16: at 16 the 58s S3-retry
-    #   stalls cost more wall-clock than the extra read parallelism buys, while
-    #   4 leaves throughput on the table. Only raise back to 16 if the Cilium
-    #   NAT-rate fix (terraform-aws-k8s-ha issues.md #38) is confirmed applied.
-    #   Confirmed via the fork's CometConf doc: "for executors configured with
-    #   a smaller number of cores, use a smaller number" (mergeRanges below
-    #   compensates for the lower thread count by making each read bigger).
-    # mergeRanges.delta 8MB->64MB: coalesce column-chunk reads into fewer,
-    #   larger sequential GETs -> fewer TOTAL connections AND faster on S3.
-    #   Pairs with the lower thread count: bigger merged reads need fewer
-    #   threads. adjust.readRange.skew left false (enabling it opens MORE
-    #   connections). NOTE: object_store's retry is its built-in default
-    #   (max_retries=10/retry_timeout=180s) — Comet doesn't expose it, so
-    #   raising retries would need a native-code change + image rebuild; the
-    #   reader-concurrency knobs here are the no-rebuild fix.
     "spark.comet.parquet.read.parallel.io.enabled": "true"
-    "spark.comet.parquet.read.parallel.io.thread-pool.size": "8"
+    "spark.comet.parquet.read.parallel.io.thread-pool.size": "16"
     "spark.comet.parquet.read.io.mergeRanges": "true"
     "spark.comet.parquet.read.io.mergeRanges.delta": "67108864"
 
-    # --- Comet native execution (full set, matching the proven reference job) ---
     "spark.plugins": "org.apache.spark.CometPlugin"
     "spark.sql.extensions": "org.apache.comet.CometSparkSessionExtensions"
     "spark.shuffle.manager": "org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager"
@@ -302,33 +108,23 @@ spec:
     "spark.comet.native.shuffle.partitioning.roundrobin.maxHashColumns": "0"
     "spark.comet.write.iceberg.splitOperator.enabled": "true"
     "spark.comet.write.iceberg.nativeAcceleration": "true"
-
-    # --- Native Scan Cache (CTE Cache) and Zero-Copy Spill Compression ---
     "spark.comet.exec.shuffle.compression.codec": "zstd"
-    # "spark.comet.native.scan.cache.enabled": "true"
-    # "spark.executorEnv.COMET_NATIVE_SCAN_CACHE_ENABLED": "true"
 
-    # --- SQL / AQE + performance tuning (SF1000 max-throughput) ---
+    "spark.comet.exec.replaceSortMergeJoin.leftSemi.enabled": "true"
+    "spark.comet.operator.ProjectExec.allowIncompatible": "true"
+
     "spark.sql.adaptive.enabled": "true"
+    "spark.sql.shuffle.partitions": "560"
     "spark.sql.adaptive.localShuffleReader.enabled": "true"
     "spark.sql.adaptive.coalescePartitions.enabled": "true"
     "spark.sql.adaptive.skewJoin.enabled": "true"
-    # Parallelism: 32 executors x 8 cores = 256 task slots. The default 200
-    # shuffle partitions underfills that on the big lineitem/orders joins;
-    # 2048 gives ~8 waves and lets AQE coalesce back down to the advisory size.
-    # "spark.sql.shuffle.partitions": "2048"
-    # "spark.sql.adaptive.advisoryPartitionSizeInBytes": "128m"
-    # # Bigger scan splits -> fewer, larger tasks -> less scheduling overhead,
-    # # and pairs with the 64MB Comet mergeRanges above (each task reads more,
-    # # more sequentially). 256m keeps ~3x task:slot headroom for stragglers.
-    # "spark.sql.files.maxPartitionBytes": "256m"
-    # # S3 has no data locality, so never stall waiting for it — schedule now.
-    # "spark.locality.wait": "0s"
-    # # Broadcast the small/filtered TPC-H dimensions instead of shuffling them.
-    # "spark.sql.autoBroadcastJoinThreshold": "64m"
-    # "spark.sql.broadcastTimeout": "600"
+    "spark.sql.files.maxPartitionBytes": "536870912"
 
-    # --- UI ---
+    "spark.speculation": "true"
+    "spark.speculation.quantile": "0.90"
+    "spark.speculation.multiplier": "3.0"
+    "spark.speculation.interval": "1000ms"
+
     "spark.ui.enabled": "true"
     "spark.ui.port": "4040"
     "spark.ui.host": "0.0.0.0"
@@ -338,14 +134,12 @@ spec:
     "spark.ui.retainedDeadExecutors": "20"
     "spark.sql.ui.retainedExecutions": "200"
 
-    # ── Prometheus metrics ──────────────────────────────────────────────────
     "spark.ui.prometheus.enabled": "true"
     "spark.executor.processTreeMetrics.enabled": "true"
     "spark.metrics.conf.*.sink.prometheusServlet.class": "org.apache.spark.metrics.sink.PrometheusServlet"
     "spark.metrics.conf.driver.sink.prometheusServlet.path": "/metrics/driver/prometheus/"
     "spark.metrics.conf.executor.sink.prometheusServlet.path": "/metrics/executors/prometheus/"
 
-    # ── Stability ────────────────────────────────────────────────────────────
     "spark.network.timeout": "2000s"
     "spark.executor.heartbeatInterval": "300s"
     "spark.files.fetchTimeout": "300s"
@@ -355,31 +149,16 @@ spec:
     "spark.kubernetes.driver.requestTimeout": "120000"
     "spark.kubernetes.executor.podNamePrefix": "tpch-sf1000"
 
-    # ── Graceful executor decommission ──────────────────────────────────────
-    # do-not-disrupt (driver/executor annotations above) already blocks
-    # Karpenter's own voluntary disruption (consolidation/drift/expiration)
-    # for this job's pods — this is defense-in-depth for what that doesn't
-    # cover: involuntary termination (node hardware failure, manual
-    # intervention). Without it, a killed executor forces the shuffle/RDD
-    # data it held to be recomputed from scratch; with it, that data
-    # migrates to another live executor first. Zero cost when nothing
-    # actually terminates early, matches data-on-eks's own Karpenter/Spark
-    # best-practices guidance.
     "spark.executor.decommission.enabled": "true"
     "spark.storage.decommission.enabled": "true"
     "spark.storage.decommission.shuffleBlocks.enabled": "true"
     "spark.storage.decommission.rddBlocks.enabled": "true"
 
-    # ── Shuffle tuning ───────────────────────────────────────────────────────
     "spark.shuffle.file.buffer": "1m"
     "spark.reducer.maxSizeInFlight": "48m"
     "spark.reducer.maxReqsInFlight": "256"
     "spark.reducer.maxBlocksInFlightPerAddress": "128"
 
-    # ── Event logs ──────────────────────────────────────────────────────────
-    # ${S3_BUCKET} was a real shell variable in the original bash
-    # spark-submit script — nothing expands it inside a YAML manifest, so
-    # it's the literal bucket name here instead.
     "spark.eventLog.enabled": "true"
     "spark.eventLog.dir": "s3a://tpc-419772658418/spark-event-logs"
     "spark.eventLog.compress": "true"
@@ -387,69 +166,23 @@ spec:
     "spark.eventLog.rolling.enabled": "true"
     "spark.eventLog.rolling.maxFileSize": "64m"
 
-    # ── GC / JVM options ─────────────────────────────────────────────────────
-    # log4j2-custom ConfigMap is mounted at /opt/spark/log4j2-custom (see
-    # volumeMounts/volumes below) — JSON console layout, tuned to quiet
-    # Jetty/Parquet/Hive-metastore noise.
-    # -verbose:gc REMOVED — it prints a GC line to stdout on every collection,
-    # which lands in the container log on the 77Gi ROOT disk (not the NVMe).
-    # At SF1000 across 32 executors that (plus the S3-error stacktrace spam and
-    # INFO logging below) filled root -> kubelet disk-pressure -> executors
-    # evicted -> churn. Shuffle/spill is fine (on the 2.6TB NVMe). GC tuning
-    # flags stay; only the logging is dropped. If you want GC data back later,
-    # redirect it to NVMe: -Xlog:gc:/mnt/spark-nvme/gc-%p.log instead of stdout.
-    # -Djava.io.tmpdir -> NVMe: Comet's native lib (libcomet.so ~121MB) + JVM
-    #   temp extract to /tmp on the 77Gi ROOT disk by default; at SF1000 that
-    #   feeds the ephemeral-storage pressure that evicts executors (exit 137
-    #   "Evicted", NOT OOM). /mnt/spark-nvme is the hostPath NVMe mount (2.6TB)
-    #   -> keeps JVM/Comet temp off the root disk. See issues.md #40.
-    # RE-ENABLED: both lines had been commented out, which also dropped the
-    #   log4j WARN config the block above says must STAY — default INFO logging
-    #   is itself a root-disk-pressure contributor. See issues.md #38/#40.
     "spark.driver.extraJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties"
     "spark.executor.defaultJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -XX:+UseParallelGC -XX:InitiatingHeapOccupancyPercent=70 -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties"
 
   driver:
-    # 4 vCPU / 20Gi (16g + 4g overhead). See the node-sizing block in the
-    # header: this shares a node with 2 executors, and every vCPU here comes
-    # straight out of that node's executor headroom.
     cores: 4
     memory: "16g"
     memoryOverhead: "4g"
     serviceAccount: spark-operator-spark
-    # ndots:5 (k8s default) makes every non-cluster hostname (s3.us-east-1.
-    # amazonaws.com, etc.) get tried against 4 search-domain suffixes before
-    # the raw name, each a wasted DNS round trip — data-on-eks's own
-    # networking best-practices doc calls this out specifically for the
-    # S3/RDS-endpoint case. ndots:2 still resolves in-cluster service names
-    # (namespace-local and cross-namespace) correctly, it just stops
-    # appending suffixes to anything with 2+ dots already (which S3/AWS
-    # endpoints always have) — pure latency/DNS-volume win, no downside for
-    # what this job actually talks to.
     dnsConfig:
       options:
         - name: ndots
           value: "2"
-    # Belt-and-suspenders on top of spark_nodepool's consolidationPolicy
-    # (karpenter-k8s.tf, now WhenEmpty): do-not-disrupt is the blanket
-    # Karpenter opt-out covering the mechanisms WhenEmpty doesn't —
-    # drift (NodePool/EC2NodeClass spec changes) and expiration — not
-    # just consolidation. Scoped to this job's own pods only, so it
-    # doesn't stop Karpenter reclaiming this node once the job exits and
-    # only DaemonSet pods are left on it.
     annotations:
       karpenter.sh/do-not-disrupt: "true"
     nodeSelector:
       node-role.kubernetes.io/spark-node: ""
       karpenter.k8s.aws/instance-family: "r7gd"
-    # nodeSelector only does exact single-value match, so allowing EITHER
-    # 8xlarge or 12xlarge (not pinning to one) needs a real nodeAffinity
-    # with the In operator instead. Pinning the family+size at all here is
-    # deliberately for reproducible before/after benchmark comparisons —
-    # letting Karpenter's bin-packing choose freely (the normal, better
-    # default for a real job) means a timing delta between two runs could
-    # just be Karpenter picking a different instance type, not the config
-    # change actually being compared.
     affinity:
       nodeAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
@@ -459,14 +192,6 @@ spec:
                   operator: In
                   values:
                     - "12xlarge"
-                # Spot capacity can be reclaimed by AWS with ~2min notice
-                # at any time — exactly the instability that breaks a
-                # benchmark run (executors dying mid-query, forcing
-                # stage recomputation, isn't a config bug, it's spot
-                # doing exactly what spot does). spark_nodepool's own
-                # requirements allow both spot AND on-demand
-                # (karpenter-k8s.tf), so this needs an explicit
-                # constraint here to actually rule spot out for this job.
                 - key: karpenter.sh/capacity-type
                   operator: In
                   values:
@@ -479,6 +204,11 @@ spec:
     volumeMounts:
       - name: spark-shuffle
         mountPath: /mnt/spark-nvme
+      # Must mount at the exact path in spark.local.dir, or Spark's
+      # LocalDirsFeatureStep sees no volume there and auto-creates a
+      # shadowing emptyDir (on gp3 root) over this NVMe hostPath.
+      - name: spark-local-dir-1
+        mountPath: /mnt/spark-nvme/spark-local
       - name: log4j2-config
         mountPath: /opt/spark/log4j2-custom
 
@@ -486,17 +216,8 @@ spec:
     cores: 20
     coreLimit: "20"
     instances: 14
-    # 74g + 16g + 80g offHeap = 170Gi/pod, so two land on one r7gd.12xlarge
-    # (see header). Trimmed out of heap and overhead rather than offHeap:
-    # with Comet the real execution memory is the native off-heap pool
-    # (spark.comet.exec.memoryPool=fair_unified over spark.memory.offHeap.
-    # size), so shrinking that would cost query performance, while the JVM
-    # heap here mostly holds Spark's own bookkeeping.
     memory: "74g"
     memoryOverhead: "16g"
-    # Same ndots rationale as the driver above — executors are the ones
-    # actually issuing the high-volume S3 lookups Comet's native reader
-    # generates, so this matters more here than on the driver.
     dnsConfig:
       options:
         - name: ndots
@@ -519,7 +240,6 @@ spec:
                   operator: In
                   values:
                     - "on-demand"
-
     tolerations:
       - key: spark-only
         operator: Equal
@@ -528,6 +248,8 @@ spec:
     volumeMounts:
       - name: spark-shuffle
         mountPath: /mnt/spark-nvme
+      - name: spark-local-dir-1
+        mountPath: /mnt/spark-nvme/spark-local
       - name: log4j2-config
         mountPath: /opt/spark/log4j2-custom
 
@@ -535,6 +257,10 @@ spec:
     - name: spark-shuffle
       hostPath:
         path: /mnt/spark-nvme/spark-shuffle
+        type: DirectoryOrCreate
+    - name: spark-local-dir-1
+      hostPath:
+        path: /mnt/spark-nvme/spark-shuffle/spark-local
         type: DirectoryOrCreate
     - name: log4j2-config
       configMap:
@@ -564,19 +290,9 @@ data:
     # limitations under the License.
     #
 
-    # rootLogger WARN, not info — at SF1000 (256 concurrent tasks) INFO emits
-    # a JSON line per task-scheduler event to the container log on the 77Gi
-    # root disk, a major contributor to the disk-pressure that evicted
-    # executors. WARN keeps errors/warnings, drops the per-task chatter.
     rootLogger.level = warn
     rootLogger.appenderRef.stdout.ref = console
 
-    # In the pattern layout configuration below, we specify an explicit `%ex` conversion
-    # pattern for logging Throwables. If this was omitted, then (by default) Log4J would
-    # implicitly add an `%xEx` conversion pattern which logs stacktraces with additional
-    # class packaging information. That extra information can sometimes add a substantial
-    # performance overhead, so we disable it in our default logging config.
-    # For more information, see SPARK-39361.
     appender.console.type = Console
     appender.console.name = console
     appender.console.target = SYSTEM_ERR
@@ -584,17 +300,12 @@ data:
     appender.console.layout.compact = true
     appender.console.layout.eventEol = true
 
-    # Set the default spark-shell/spark-sql log level to WARN. When running the
-    # spark-shell/spark-sql, the log level for these classes is used to overwrite
-    # the root logger's log level, so that the user can have different defaults
-    # for the shell and regular Spark apps.
     logger.repl.name = org.apache.spark.repl.Main
     logger.repl.level = warn
 
     logger.thriftserver.name = org.apache.spark.sql.hive.thriftserver.SparkSQLCLIDriver
     logger.thriftserver.level = warn
 
-    # Settings to quiet third party logs that are too verbose
     logger.jetty1.name = org.sparkproject.jetty
     logger.jetty1.level = warn
     logger.jetty2.name = org.sparkproject.jetty.util.component.AbstractLifeCycle
@@ -608,7 +319,6 @@ data:
     logger.parquet2.name = parquet
     logger.parquet2.level = error
 
-    # SPARK-9183, SPARK-55237: Settings to avoid annoying messages when looking up nonexistent DBs/UDFs in spark-sql with Hive support
     logger.metastore.name = org.apache.hadoop.hive.metastore.RetryingHMSHandler
     logger.metastore.level = fatal
     logger.metastore2.name = org.apache.hadoop.hive.metastore.ObjectStore
