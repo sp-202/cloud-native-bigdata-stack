@@ -1246,6 +1246,25 @@ kube-prometheus-stack:
             name: thanos-objstore-secret
   prometheus-node-exporter:
     fullnameOverride: "node-exporter"
+    # Exposes ENA/Nitro allowance-exceeded counters (node_ethtool_*) on both
+    # ENIs so bandwidth/pps/conntrack throttling can be correlated against
+    # Spark stall windows. See ISSUES.md ens5/ens6 notes.
+    #
+    # Was ens5-only — missed the ENI that actually matters most: cilium.tf's
+    # eni.nodeSpec.firstInterfaceIndex=1 means Cilium never hands out pod
+    # IPs from the primary ENI (ens5) at all, only from ens6 onward, so
+    # every Spark pod's actual shuffle/S3 traffic rides on ens6, not ens5.
+    # device-include is a regex (confirmed against node_exporter's actual
+    # ethtool_linux.go source, not assumed), so "ens5|ens6" matches both.
+    #
+    # Confirmed via `aws ec2 describe-instance-types` (not assumed) that
+    # every instance type this cluster runs supports 2+ ENIs, so both
+    # devices genuinely exist to be matched: m6g.xlarge/m6g.2xlarge
+    # (core-node/data-node) max 4 ENIs each; r7gd.12xlarge (spark-node) max
+    # 8 ENIs.
+    extraArgs:
+      - --collector.ethtool
+      - --collector.ethtool.device-include=ens5|ens6
     livenessProbe:
       timeoutSeconds: 10
       failureThreshold: 20
