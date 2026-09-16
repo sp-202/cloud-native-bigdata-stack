@@ -98,5 +98,38 @@ spark.sql.gravitino.metalake enterprise_metalake\n\
 spark.sql.gravitino.uri http://gravitino.default.svc.cluster.local:8090\n\
 spark.sql.gravitino.enableIcebergSupport true\n" > $SPARK_HOME/conf/spark-defaults.conf
 
+# spark-env.sh — sets PYSPARK_PYTHON/LD_LIBRARY_PATH/LD_PRELOAD before the
+# JVM starts (must live here, not spark-defaults.conf: PyO3's
+# auto-initialize reads these at interpreter init, before
+# spark-defaults.conf is even parsed).
+#
+# python3 here is the system Python installed above via apt — no venv,
+# unlike local dev. pandas/pyarrow/numpy already live in its site-packages
+# (--break-system-packages pip install above), already on its default
+# sys.path, so no PYTHONPATH/VIRTUAL_ENV override is needed the way a venv
+# would require.
+#
+# aarch64-linux-gnu, not x86_64-linux-gnu: this image is arm64-only (see
+# the builder stage's base-image comment) — the multiarch lib path has to
+# match the actual architecture or LD_PRELOAD silently points at nothing.
+#
+# LD_PRELOAD forces libpython to load with RTLD_GLOBAL: PyO3 defaults to
+# RTLD_LOCAL, which hides Python's C API symbols (PyExc_ValueError etc.)
+# from the global symbol table. pyarrow's libarrow_python.so needs those
+# symbols visible globally for Comet's native PyO3 bridge to resolve them.
+#
+# NOT independently verified against this exact image (no running
+# container to exec into from here) — apt's python3-dev on Ubuntu Noble
+# should provide libpython3.12.so.1.0 at this path, but confirm with
+# `docker run --rm <image> find / -name "libpython3*"` before relying on
+# it if PyO3 init fails.
+RUN printf "#!/usr/bin/env bash\n\
+export PYSPARK_PYTHON=/usr/bin/python3\n\
+export PYSPARK_DRIVER_PYTHON=/usr/bin/python3\n\
+export COMET_NATIVE_SCAN_CACHE_ENABLED=false\n\
+export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/lib:\${LD_LIBRARY_PATH}\n\
+export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libpython3.12.so.1.0\n" > $SPARK_HOME/conf/spark-env.sh && \
+    chmod +x $SPARK_HOME/conf/spark-env.sh
+
 ENTRYPOINT ["/opt/entrypoint.sh"]
 CMD ["bash"]
