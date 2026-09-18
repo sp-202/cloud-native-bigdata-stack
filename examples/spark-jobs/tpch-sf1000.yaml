@@ -110,6 +110,9 @@ spec:
     "spark.comet.write.iceberg.nativeAcceleration": "true"
     "spark.comet.exec.shuffle.compression.codec": "zstd"
 
+    "spark.executorEnv.COMET_NATIVE_SCAN_CACHE_ENABLED": "false"
+    "spark.comet.native.scan.cache.enabled": "false"
+
     "spark.comet.exec.replaceSortMergeJoin.leftSemi.enabled": "true"
     "spark.comet.operator.ProjectExec.allowIncompatible": "true"
 
