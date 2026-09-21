@@ -25,9 +25,9 @@ spec:
     - "--data"
     - "s3://tpc-419772658418/tpch-sf1000"
     - "--queries"
-    - "s3a://tpc-419772658418/tpch-queries"
+    - "s3://tpc-419772658418/tpch-queries"
     - "--output"
-    - "s3a://tpc-419772658418/tpch-results"
+    - "s3://tpc-419772658418/tpch-results"
   sparkVersion: "3.5.8"
   restartPolicy:
     type: Never
