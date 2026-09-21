@@ -113,6 +113,63 @@ spec:
     "spark.executorEnv.COMET_NATIVE_SCAN_CACHE_ENABLED": "false"
     "spark.comet.native.scan.cache.enabled": "false"
 
+    # --- S3 range disk cache (raw object bytes on the instance NVMe) ---------------
+    # Complements the in-memory scan cache above, which is off because it keys on
+    # (file, projection, filters, limit) and caches decoded Arrow -- an SF1000 run
+    # measured 66,021 lookups and zero hits, since no two scans agree on all four.
+    # This caches raw bytes in fixed 8 MiB aligned blocks below Parquet decoding, so
+    # q1 reading l_shipdate and q9 reading l_suppkey share every block their ranges
+    # both touch.
+    #
+    # The directory sits inside the spark-shuffle hostPath, so it is on the r7gd's
+    # local NVMe and is SHARED BY BOTH EXECUTORS ON A NODE. Two consequences:
+    #   * cacheAffinity.level must be "host" (below), not "executor";
+    #   * capacity is enforced per executor process, not per directory.
+    # An executor accounts for what it adopted at startup plus what it wrote itself
+    # and never learns about a sibling's later writes, so the directory can exceed
+    # the value below -- measured at ~1.3x the N-executor sum on a 2-executor node.
+    # 128 GiB x 2 executors x ~1.3 bounds a node near 333 GiB. r7gd.12xlarge ships
+    # 2 x 1425 GB of NVMe, so that is comfortable even if only one device is mounted
+    # at /mnt/spark-nvme, alongside spark-local, the s3a buffer and java.io.tmpdir.
+    # (Worth checking which: `lsblk` on a spark-node. If both are RAID0'd there is
+    # 2850 GB and this could go higher still.)
+    #
+    # Sizing sanity check: SF1000 is ~396 GB over 7 nodes, so with placement on each
+    # node owns ~57 GB and each executor writes ~28 GB -- roughly 4.5x inside the cap,
+    # so the steady state should never evict. WITH PLACEMENT OFF every node converges
+    # on caching everything, 396 GB into ~333 GiB, so the baseline evicts mildly
+    # rather than thrashing. That is the fairer comparison: both arms mostly fit, so
+    # what is measured is placement rather than the difference between fitting and
+    # not. Drop this to 64 GiB (68719476736) if you want the thrashing baseline too.
+    #
+    # Unset fs.s3a.comet.range.cache.dir to disable the feature entirely.
+    # NOTE: the hostPath outlives the application, so blocks from a previous run are
+    # adopted at startup. Wipe /mnt/spark-nvme/spark-shuffle/comet-range-cache on the
+    # nodes first if you need a genuinely cold run.
+    "spark.hadoop.fs.s3a.comet.range.cache.dir": "/mnt/spark-nvme/comet-range-cache"
+    "spark.hadoop.fs.s3a.comet.range.cache.block.size": "8388608"
+    "spark.hadoop.fs.s3a.comet.range.cache.capacity": "137438953472"
+    # Lookups between progress lines on executor stderr: hits/misses, MiB from disk vs
+    # origin, origin request count, and misses deduped by single-flight. Read misses
+    # against requests -- misses are blocks that were absent, requests are the network
+    # calls they cost. 0 disables reporting.
+    "spark.executorEnv.COMET_RANGE_CACHE_REPORT_EVERY": "2048"
+
+    # --- cache-aware scan placement -----------------------------------------------
+    # Without this, scan tasks carry no locality at all: object stores report no block
+    # locations (S3AFileSystem inherits the default getFileBlockLocations, which names
+    # the host as literally "localhost"), so Spark places tasks wherever a slot frees
+    # first and a file cached by q1 on one node is refetched by q9 on another. Files
+    # are assigned a stable owner by rendezvous hashing and offered as a preference --
+    # a task still runs elsewhere when the owner is busy, taking a cache miss, so a
+    # stale assignment costs time and never correctness.
+    #
+    # "host" (NODE_LOCAL) because the cache directory is a shared hostPath: any
+    # executor on the owning node can serve the block. "executor" (PROCESS_LOCAL)
+    # would make Spark hold out for one specific JVM for no gain.
+    "spark.comet.scan.cacheAffinity.enabled": "true"
+    "spark.comet.scan.cacheAffinity.level": "host"
+
     "spark.comet.exec.replaceSortMergeJoin.leftSemi.enabled": "true"
     "spark.comet.operator.ProjectExec.allowIncompatible": "true"
 
@@ -321,6 +378,13 @@ data:
     logger.parquet1.level = error
     logger.parquet2.name = parquet
     logger.parquet2.level = error
+
+    # rootLogger is warn, which would hide the one line that says whether cache
+    # affinity actually engaged and how the partitions were spread across targets.
+    # A spread piling most partitions onto one target is a failure mode that looks
+    # identical to success from the config alone.
+    logger.cometCacheAffinity.name = org.apache.spark.sql.comet.CometCacheAffinity
+    logger.cometCacheAffinity.level = info
 
     logger.metastore.name = org.apache.hadoop.hive.metastore.RetryingHMSHandler
     logger.metastore.level = fatal
