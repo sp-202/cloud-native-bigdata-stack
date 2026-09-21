@@ -28,6 +28,8 @@ spec:
     - "s3://tpc-419772658418/tpch-queries"
     - "--output"
     - "s3://tpc-419772658418/tpch-results"
+    # - "--iterations"
+    # - "3"
   sparkVersion: "3.5.8"
   restartPolicy:
     type: Never
