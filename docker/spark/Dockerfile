@@ -13,7 +13,7 @@ ENV SPARK_VERSION=3.5.8 \
     SEDONA_VERSION=1.8.1 \
     GEOTOOLS_WRAPPER_VERSION=1.8.1-33.1 \
     H3_VERSION=4.0.1 \
-    COMET_VERSION=0.17.0-SNAPSHOT \
+    COMET_VERSION=1.0.0-preview \
     SPARK_HOME=/opt/spark
 
 RUN apt-get update && apt-get install -y wget curl
