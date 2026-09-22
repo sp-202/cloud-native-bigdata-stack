@@ -92,8 +92,21 @@ RUN cp $SPARK_HOME/kubernetes/dockerfiles/spark/entrypoint.sh /opt/entrypoint.sh
 #
 # Comet's native S3 store reads the same fs.s3a.* keys and also treats bare integers as
 # milliseconds (get_config_duration_ms in native/core/src/parquet/objectstore/s3.rs), so these
-# values reach the native reader too. Suffix anything Spark accepts a suffix for; give the
-# Hadoop keys explicit millisecond values.
+# values reach the native reader too. Suffix anything Spark accepts a suffix for.
+#
+# fs.s3a.connection.timeout and fs.s3a.connection.establish.timeout are deliberately NOT set.
+# The key is shared by two readers that want different values, and neither ships a default in
+# a *-default.xml -- each applies its own in code when the key is absent, which is the only way
+# both get what they need:
+#   hadoop-aws  -> 200000ms request / 5000ms connect. Sized for 128MB multipart part uploads
+#                  (fs.s3a.multipart.size), where a tight deadline would abort a healthy upload.
+#   Comet native-> 15000ms request / 3000ms connect. Sized for merged column ranges, which
+#                  complete in well under a second on a healthy connection.
+# Setting the key globally forces one number on both. In particular `200000` (the hadoop-aws
+# figure) gives the native reader a 200s whole-request deadline, so a GET that goes silent
+# mid-transfer under ENA inbound-bandwidth shaping holds its task slot for 200s instead of
+# failing over at 15s -- which is precisely the stall this deployment is trying to bound.
+# Per-bucket overrides cannot separate them here either: both readers hit the same bucket.
 #
 # fs.s3a.connection.acquisition.timeout is dropped: it is a Hadoop 3.4+ key, ignored by the
 # 3.3.4 hadoop-aws bundled here, but still picked up by Comet's native reader.
@@ -107,8 +120,6 @@ RUN cp $SPARK_HOME/kubernetes/dockerfiles/spark/entrypoint.sh /opt/entrypoint.sh
 RUN printf "spark.network.timeout 120s\n\
 spark.files.fetchTimeout 60s\n\
 spark.executor.heartbeatInterval 10s\n\
-spark.hadoop.fs.s3a.connection.timeout 200000\n\
-spark.hadoop.fs.s3a.connection.establish.timeout 5000\n\
 spark.hadoop.fs.s3a.threads.keepalivetime 60\n\
 spark.hadoop.fs.s3a.multipart.purge.age 86400\n\
 spark.serializer org.apache.spark.serializer.KryoSerializer\n\
