@@ -79,21 +79,40 @@ RUN cp $SPARK_HOME/kubernetes/dockerfiles/spark/entrypoint.sh /opt/entrypoint.sh
     chmod +x /opt/entrypoint.sh
 
 # Baseline spark-defaults.conf — executor defaults (no ConfigMap mounted on executors).
-# GravitinoSparkPlugin on the driver broadcasts catalog registrations to executors,
-# so no per-catalog config is needed here. Plugin + metalake refs are included so
-# executor-side plugin init (if any) can reach Gravitino directly.
-RUN printf "spark.network.timeout 120\n\
-spark.files.fetchTimeout 60\n\
-spark.executor.heartbeatInterval 10\n\
-spark.hadoop.fs.s3a.connection.timeout 60\n\
-spark.hadoop.fs.s3a.connection.establish.timeout 30\n\
-spark.hadoop.fs.s3a.connection.acquisition.timeout 60\n\
+#
+# UNITS. Spark and Hadoop disagree on the default unit per key, so a bare integer means
+# different things on adjacent lines:
+#   spark.network.timeout, spark.files.fetchTimeout  -> timeConf(SECONDS)
+#   spark.executor.heartbeatInterval                 -> timeConf(MILLISECONDS), default "10s"
+#   fs.s3a.*.timeout                                 -> milliseconds (Hadoop 3.3.4)
+# This block previously read `heartbeatInterval 10` (10ms, not 10s), `connection.timeout 60`
+# (60ms against a Hadoop default of 200000) and `connection.establish.timeout 30` (30ms against
+# a default of 5000). Sub-second S3 deadlines make nearly every read time out and retry, which
+# looks like network trouble rather than configuration.
+#
+# Comet's native S3 store reads the same fs.s3a.* keys and also treats bare integers as
+# milliseconds (get_config_duration_ms in native/core/src/parquet/objectstore/s3.rs), so these
+# values reach the native reader too. Suffix anything Spark accepts a suffix for; give the
+# Hadoop keys explicit millisecond values.
+#
+# fs.s3a.connection.acquisition.timeout is dropped: it is a Hadoop 3.4+ key, ignored by the
+# 3.3.4 hadoop-aws bundled here, but still picked up by Comet's native reader.
+#
+# spark.plugins and spark.sql.extensions are deliberately NOT set here. Neither is additive: a
+# job that sets either in its SparkConf (as the TPC-H SparkApplication does, for Comet) replaces
+# this value outright rather than adding to it, so baking them creates the illusion that
+# Gravitino/Sedona/Iceberg are active when they have been silently dropped. Declare the full
+# list per job instead, e.g.
+#   spark.plugins: "org.apache.spark.CometPlugin,org.apache.gravitino.spark.connector.plugin.GravitinoSparkPlugin"
+RUN printf "spark.network.timeout 120s\n\
+spark.files.fetchTimeout 60s\n\
+spark.executor.heartbeatInterval 10s\n\
+spark.hadoop.fs.s3a.connection.timeout 200000\n\
+spark.hadoop.fs.s3a.connection.establish.timeout 5000\n\
 spark.hadoop.fs.s3a.threads.keepalivetime 60\n\
 spark.hadoop.fs.s3a.multipart.purge.age 86400\n\
 spark.serializer org.apache.spark.serializer.KryoSerializer\n\
 spark.kryo.registrator org.apache.sedona.core.serde.SedonaKryoRegistrator\n\
-spark.sql.extensions org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions\n\
-spark.plugins org.apache.gravitino.spark.connector.plugin.GravitinoSparkPlugin\n\
 spark.sql.gravitino.metalake enterprise_metalake\n\
 spark.sql.gravitino.uri http://gravitino.default.svc.cluster.local:8090\n\
 spark.sql.gravitino.enableIcebergSupport true\n" > $SPARK_HOME/conf/spark-defaults.conf
