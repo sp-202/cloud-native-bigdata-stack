@@ -29,7 +29,7 @@ spec:
     - "--output"
     - "s3://tpc-419772658418/tpch-results"
     # - "--iterations"
-    # - "3"
+    # - "2"
   sparkVersion: "3.5.8"
   restartPolicy:
     type: Never
@@ -65,7 +65,7 @@ spec:
     "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "2"
 
     "spark.comet.parquet.read.parallel.io.enabled": "true"
-    "spark.comet.parquet.read.parallel.io.thread-pool.size": "16"
+    "spark.comet.parquet.read.parallel.io.thread-pool.size": "12"
     "spark.comet.parquet.read.io.mergeRanges": "true"
     "spark.comet.parquet.read.io.mergeRanges.delta": "67108864"
 
