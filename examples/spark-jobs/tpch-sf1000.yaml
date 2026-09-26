@@ -280,6 +280,21 @@ spec:
     instances: 14
     memory: "74g"
     memoryOverhead: "16g"
+    # REQUIRED, and easy to miss: without this, executors run under the
+    # namespace's `default` ServiceAccount, NOT the driver's. Only
+    # spark-operator-spark carries the eks.amazonaws.com/role-arn
+    # annotation, so `default` gets no IRSA token projected — and the
+    # credential failure this fixes happened on EXECUTOR tasks
+    # ("Executor task launch worker for task 199.0 in stage 72.0"), not the
+    # driver. Setting it on the driver alone fixes nothing here.
+    #
+    # Nothing else is needed for IRSA: the EKS pod-identity webhook injects
+    # AWS_ROLE_ARN + AWS_WEB_IDENTITY_TOKEN_FILE and the token file itself
+    # off this annotation. Do NOT add spark.executorEnv.AWS_* by hand (the
+    # token file is what matters, and only the webhook can create it), and
+    # do NOT set spark.hadoop.fs.s3a.aws.credentials.provider — forcing a
+    # provider class there already broke startup once.
+    serviceAccount: spark-operator-spark
     dnsConfig:
       options:
         - name: ndots

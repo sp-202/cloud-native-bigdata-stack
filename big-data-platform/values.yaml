@@ -161,6 +161,16 @@ global:
   # here rather than injected from Terraform at deploy time.
   thanosS3RoleArn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-thanos-s3-writer"
   lokiS3RoleArn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-loki-s3-writer"
+  # Spark is the third IRSA consumer, added for a different reason than the
+  # two above (which exist for least-privilege). Spark already had S3 access
+  # via the node role/IMDS and it worked for the JVM side — but Comet's
+  # native Rust reader runs its own credential chain, and that chain failed
+  # intermittently at benchmark START ("no providers in chain provided
+  # credentials"): 14 executors x N reader threads all making their first
+  # IMDS credential fetch simultaneously, hitting IMDS's per-instance rate
+  # limit. IRSA's token is a local file, so that cold-start burst has
+  # nothing to throttle. See terraform-aws-k8s-ha storage-s3-tpch-benchmark.tf.
+  sparkS3RoleArn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-spark-s3"
 
   # --- Loki's own dedicated S3 bucket (terraform-aws-k8s-ha:
   # observability-irsa.tf: aws_s3_bucket.loki_logs) — NOT a prefix inside
@@ -756,6 +766,16 @@ spark-operator:
     serviceAccount:
       create: true
       name: "spark-operator-spark"
+      # This annotation is what makes the EKS pod-identity webhook project
+      # AWS_ROLE_ARN + AWS_WEB_IDENTITY_TOKEN_FILE and the token itself into
+      # every driver/executor pod. Without it, setting those env vars by
+      # hand in a SparkApplication does nothing useful — the token FILE
+      # wouldn't exist, so the provider resolves to nothing. Literal ARN,
+      # not .Values.global.sparkS3RoleArn: this block is raw data handed to
+      # the spark-operator subchart, not Go-templated. Keep in sync with
+      # global.sparkS3RoleArn above by hand.
+      annotations:
+        eks.amazonaws.com/role-arn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-spark-s3"
 
 # =============================================================================
 # SUPERSET (external dependency)
