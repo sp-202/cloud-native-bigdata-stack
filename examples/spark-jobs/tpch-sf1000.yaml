@@ -190,11 +190,11 @@ spec:
     "spark.ui.enabled": "true"
     "spark.ui.port": "4040"
     "spark.ui.host": "0.0.0.0"
-    "spark.ui.retainedJobs": "200"
-    "spark.ui.retainedStages": "200"
+    "spark.ui.retainedJobs": "1000"
+    "spark.ui.retainedStages": "1000"
     "spark.ui.retainedTasks": "100000"
     "spark.ui.retainedDeadExecutors": "20"
-    "spark.sql.ui.retainedExecutions": "200"
+    "spark.sql.ui.retainedExecutions": "1000"
 
     "spark.ui.prometheus.enabled": "true"
     "spark.executor.processTreeMetrics.enabled": "true"
@@ -228,8 +228,19 @@ spec:
     "spark.eventLog.rolling.enabled": "true"
     "spark.eventLog.rolling.maxFileSize": "64m"
 
-    "spark.driver.extraJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties"
-    "spark.executor.defaultJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -XX:+UseParallelGC -XX:InitiatingHeapOccupancyPercent=70 -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties"
+    # -Xlog:safepoint is the decisive instrument for the freeze. Grep the resulting
+    # file for "Total time for which application threads were stopped". If a 60 s
+    # stall has NO matching safepoint, the pause is below the JVM -- native code
+    # holding a lock -- which is the hypothesis to confirm. That negative result is
+    # as informative as a positive one, so capture it on driver and executors alike.
+    #
+    # AsyncLoggerContextSelector keeps the loggers raised above off the hot path:
+    # without it every raised logger is a synchronised handoff on the appender.
+    #
+    # (-XX:InitiatingHeapOccupancyPercent is a G1 flag and is inert under
+    # -XX:+UseParallelGC. Left in place so this diff stays about diagnostics.)
+    "spark.driver.extraJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-driver-%p.log:time,uptime,level,tags:filecount=5,filesize=64M"
+    "spark.executor.defaultJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -XX:+UseParallelGC -XX:InitiatingHeapOccupancyPercent=70 -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-exec-%p.log:time,uptime,level,tags:filecount=5,filesize=64M"
 
   driver:
     cores: 4
@@ -367,8 +378,17 @@ data:
     # limitations under the License.
     #
 
+    # rootLogger stays at WARN deliberately. At SF1000, INFO turns on TaskSetManager
+    # and Executor at ~2 lines per task across 46k tasks, all funnelled through a
+    # SYNCHRONIZED Console appender: 20 task threads serialising on one SYSTEM_ERR
+    # lock, with a JsonLayout allocating per event. The symptom under investigation is
+    # whole-process freezes, so a process-wide logging lock would either mask the
+    # freeze or manufacture a new one -- and it would shift the very timings being
+    # measured. Name the loggers that answer the question instead; see the
+    # diagnostics block below.
     rootLogger.level = warn
     rootLogger.appenderRef.stdout.ref = console
+    rootLogger.appenderRef.diag.ref = diag
 
     appender.console.type = Console
     appender.console.name = console
@@ -376,6 +396,22 @@ data:
     appender.console.layout.type = JsonLayout
     appender.console.layout.compact = true
     appender.console.layout.eventEol = true
+
+    # Diagnostics land on the instance NVMe instead of stderr, so raising a logger
+    # does not push extra volume through the kubelet and Loki. PatternLayout, not
+    # JsonLayout: this file is read with grep and awk, and JsonLayout allocates per
+    # event precisely as event count is being raised.
+    appender.diag.type = RollingFile
+    appender.diag.name = diag
+    appender.diag.fileName = /mnt/spark-nvme/diag.log
+    appender.diag.filePattern = /mnt/spark-nvme/diag-%i.log
+    appender.diag.layout.type = PatternLayout
+    appender.diag.layout.pattern = %d{ISO8601} %-5p [%t] %c{1}: %m%n
+    appender.diag.policies.type = Policies
+    appender.diag.policies.size.type = SizeBasedTriggeringPolicy
+    appender.diag.policies.size.size = 64MB
+    appender.diag.strategy.type = DefaultRolloverStrategy
+    appender.diag.strategy.max = 5
 
     logger.repl.name = org.apache.spark.repl.Main
     logger.repl.level = warn
@@ -407,3 +443,63 @@ data:
     logger.metastore.level = fatal
     logger.metastore2.name = org.apache.hadoop.hive.metastore.ObjectStore
     logger.metastore2.level = error
+
+    # ---------------------------------------------------------------------------
+    # Freeze diagnostics. The 22 Sep run lost 929 s to overhead that was not query
+    # execution: 351 s before the first query, 275 s reading tiny .sql files between
+    # queries, 303 s inside the driver's stopwatch but outside SQL execution. The
+    # loggers below are the ones that can say where that time went.
+    # ---------------------------------------------------------------------------
+
+    # "It took N ms to list leaf files for M paths" -- the single most useful line
+    # for the 351 s setup phase and for any per-query re-listing.
+    # additivity = false on these four: they go to the NVMe file ONLY, not to stderr.
+    # Without it they would reach both, and the whole point of the file appender --
+    # keeping raised volume out of the kubelet and Loki -- would be lost.
+    logger.fileIndex.name = org.apache.spark.sql.execution.datasources.InMemoryFileIndex
+    logger.fileIndex.level = info
+    logger.fileIndex.additivity = false
+    logger.fileIndex.appenderRef.diag.ref = diag
+    logger.pafi.name = org.apache.spark.sql.execution.datasources.PartitioningAwareFileIndex
+    logger.pafi.level = info
+    logger.pafi.additivity = false
+    logger.pafi.appenderRef.diag.ref = diag
+    # "Pruning directories with:", "Pushed Filters:", "Post-Scan Filters:",
+    # "Output Data Schema:" -- bounds the planning phase per query.
+    logger.fileSource.name = org.apache.spark.sql.execution.datasources.FileSourceStrategy
+    logger.fileSource.level = info
+    logger.fileSource.additivity = false
+    logger.fileSource.appenderRef.diag.ref = diag
+
+    # Job and stage boundaries with durations. Per stage, not per task, so the volume
+    # is bounded -- and it brackets the wholeTextFiles jobs that took 60 s to read a
+    # few hundred bytes.
+    logger.dag.name = org.apache.spark.scheduler.DAGScheduler
+    logger.dag.level = info
+    logger.dag.additivity = false
+    logger.dag.appenderRef.diag.ref = diag
+
+    # Comet Scala side: rules, fallbacks, and the affinity spread. Left ADDITIVE on
+    # purpose -- these keep reaching stderr and therefore Loki, so the cache-affinity
+    # spread stays queryable where it already is. Superset of the cometCacheAffinity
+    # entry above, which is kept because it documents why that line matters.
+    logger.comet.name = org.apache.comet
+    logger.comet.level = info
+    logger.cometSql.name = org.apache.spark.sql.comet
+    logger.cometSql.level = info
+
+    # --- explicitly held down -------------------------------------------------
+    # Per-task chatter. All of this is already in the event log with timestamps, so
+    # logging it again only adds contention on the appender.
+    logger.tsm.name = org.apache.spark.scheduler.TaskSetManager
+    logger.tsm.level = warn
+    logger.executor.name = org.apache.spark.executor.Executor
+    logger.executor.level = warn
+    logger.storage.name = org.apache.spark.storage
+    logger.storage.level = warn
+    # Do NOT raise these two: per-request S3 logging at SF1000 buries the signal and
+    # adds real CPU on the path being measured.
+    logger.s3a.name = org.apache.hadoop.fs.s3a
+    logger.s3a.level = warn
+    logger.awsreq.name = com.amazonaws.request
+    logger.awsreq.level = warn
