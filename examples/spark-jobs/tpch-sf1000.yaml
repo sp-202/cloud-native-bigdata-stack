@@ -148,7 +148,7 @@ spec:
     # NOTE: the hostPath outlives the application, so blocks from a previous run are
     # adopted at startup. Wipe /mnt/spark-nvme/spark-shuffle/comet-range-cache on the
     # nodes first if you need a genuinely cold run.
-    "spark.hadoop.fs.s3a.comet.range.cache.dir": "/mnt/spark-nvme/comet-range-cache"
+    "spark.hadoop.fs.s3a.comet.range.cache.dir": "/mnt/spark-nvme/comet-range-cache-baseline-8mb"
     "spark.hadoop.fs.s3a.comet.range.cache.block.size": "8388608"
     "spark.hadoop.fs.s3a.comet.range.cache.capacity": "137438953472"
     # Lookups between progress lines on executor stderr: hits/misses, MiB from disk vs
