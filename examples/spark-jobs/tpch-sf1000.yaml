@@ -64,6 +64,11 @@ spec:
     "spark.hadoop.fs.s3a.multipart.purge": "true"
     "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "2"
 
+    # INERT on this fork -- kept only so their absence is not mistaken for an
+    # oversight. All four are defined in CometConf and read by NO production code
+    # (the only reference outside the config is a test asserting the value reaches
+    # the Hadoop conf). Read size is therefore a property of the data, not of these
+    # settings: SF1000's 441 MiB files produce large reads on their own.
     "spark.comet.parquet.read.parallel.io.enabled": "true"
     "spark.comet.parquet.read.parallel.io.thread-pool.size": "12"
     "spark.comet.parquet.read.io.mergeRanges": "true"
@@ -74,6 +79,8 @@ spec:
     "spark.shuffle.manager": "org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager"
     "spark.comet.enabled": "true"
     "spark.comet.exec.enabled": "true"
+    # Also inert: no such key exists in CometConf on this fork. spark.comet.exec.enabled
+    # above is the live one.
     "spark.comet.exec.all.enabled": "true"
     "spark.comet.exec.replaceSortMergeJoin": "true"
     "spark.comet.exec.hashJoin.enabled": "true"
@@ -151,6 +158,42 @@ spec:
     "spark.hadoop.fs.s3a.comet.range.cache.dir": "/mnt/spark-nvme/comet-range-cache-baseline-8mb"
     "spark.hadoop.fs.s3a.comet.range.cache.block.size": "8388608"
     "spark.hadoop.fs.s3a.comet.range.cache.capacity": "137438953472"
+
+    # Largest single origin request, in BYTES. Deliberately not the older
+    # max.run.length.blocks key, whose effect moved with the block size: 4 blocks
+    # meant 32 MiB at an 8 MiB block and silently became 8 MiB at 2 MiB, which is
+    # what a measured run hit (8.45 MiB average over 51,227 requests) while paying
+    # four times the intended requests and LRU updates per byte moved.
+    "spark.hadoop.fs.s3a.comet.range.cache.max.run.bytes": "33554432"
+
+    # Origin bytes in flight per executor, and the size of one request.
+    #
+    # This is the knob that matters for ENA, and it is bytes rather than request
+    # count because burst size is what the allowance polices -- a run averaging
+    # 0.5 Gbps per node still tripped bw_in_allowance 21.7M times. Spark throttles
+    # remote shuffle fetches the same way (ShuffleBlockFetcherIterator).
+    #
+    # Sized from Little's law, not taste: throughput is in-flight bytes over RTT,
+    # so 22.5 Gbps at ~15 ms is saturated by ~42 MiB, and two executors per node
+    # want about half that each. Request size is a fifth of the budget, copying
+    # Spark's own reasoning ("to allow multiple, parallel fetches"), so a 32 MiB
+    # run goes out as ~2-3 concurrent connections rather than one large GET --
+    # which is also AWS's guidance, since per-connection throughput is the ceiling.
+    #
+    # Side effect worth knowing: this bounds concurrent S3 connections to roughly
+    # budget/request-size, about 5 per executor. Every pod->S3 connection is
+    # masqueraded by Cilium and costs a conntrack entry plus a NAT entry, so this
+    # also relieves the map pressure behind issues.md #38.
+    "spark.hadoop.fs.s3a.comet.range.cache.max.bytes.in.flight": "67108864"
+    "spark.hadoop.fs.s3a.comet.range.cache.fetch.part.bytes": "13421772"
+
+    # Block files are flushed and dropped from the page cache after write and read.
+    # Defaults to true, stated here because it is load-bearing: a measured run
+    # served 1,258 GiB of hits while the NVMe counters recorded 4.93 MiB of reads,
+    # so every hit came from page cache and 423 GiB of blocks were written through
+    # it -- on nodes already committing ~340 GiB of 384 GiB to heap and off-heap.
+    # Set to false only to measure the difference.
+    "spark.hadoop.fs.s3a.comet.range.cache.drop.page.cache": "true"
     # Lookups between progress lines on executor stderr: hits/misses, MiB from disk vs
     # origin, origin request count, and misses deduped by single-flight. Read misses
     # against requests -- misses are blocks that were absent, requests are the network
@@ -386,7 +429,11 @@ data:
     # freeze or manufacture a new one -- and it would shift the very timings being
     # measured. Name the loggers that answer the question instead; see the
     # diagnostics block below.
-    rootLogger.level = warn
+    # info, not warn. At warn the driver log is completely silent through a 60s
+    # stall, which is why diagnosing the last one took event-log arithmetic rather
+    # than reading. If the volume becomes a problem, narrow it with per-logger
+    # levels below rather than muting the root again.
+    rootLogger.level = info
     rootLogger.appenderRef.stdout.ref = console
     rootLogger.appenderRef.diag.ref = diag
 
