@@ -1,16 +1,59 @@
-# TPC-H SF1000 benchmark (spark-operator SparkApplication) — runs all queries
-# via DataFusion Comet native execution against real SF1000 parquet data in
-# s3://tpc-419772658418. 14 executors (20 vCPU/170Gi) + driver (4 vCPU/20Gi)
-# on 7x r7gd.12xlarge on-demand spark-nodes (ap-south-1).
+# TPC-H SF1000 benchmark — Comet, MORE, SMALLER EXECUTORS (28 x 10 cores).
+# Variant of tpch-sf1000.yaml: same engine, same data, same config, same EC2
+# claim; only the executor shape changes, to measure what executor size does
+# to a Comet run. Head-to-head with tpch-sf1000.yaml (14 x 20) and
+# tpch-sf1000-vanilla.yaml (56 x 5).
 #
-# Run:    kubectl apply -f examples/spark-jobs/tpch-sf1000.yaml
-# Watch:  kubectl get sparkapplication tpch-sf1000 -n default -w
-# Logs:   kubectl logs -n default -l spark-app-name=tpch-sf1000,spark-role=driver -f
-# Clean:  kubectl delete -f examples/spark-jobs/tpch-sf1000.yaml
+#                       tpch-sf1000 (base)        this file
+#   executors           14 x 20 cores             28 x 10 cores
+#   per-executor pod    74g heap + 16g overhead   37g heap + 8g overhead
+#                       + 80g off-heap = 170Gi    + 40g off-heap = 85Gi
+#   executors total     280 CPU, 2380Gi           280 CPU, 2380Gi
+#   driver              4 CPU, 20Gi               4 CPU, 20Gi (identical)
+#   per node            2 pods: 40 CPU, 340Gi     4 pods: 40 CPU, 340Gi
+#   driver's node       44 CPU, 360Gi             44 CPU, 360Gi
+#
+# Same 7x r7gd.12xlarge. Measured allocatable is 46 CPU / 369.9Gi with ~0.8
+# CPU / 1Gi of DaemonSets, so a 5th 85Gi executor never fits a node: 4 per
+# node by construction.
+#
+# Why 4 per node and not 42 executors (6 per node): each node's claim is 40
+# cores, and only 1, 2, 4, 5, 8 or 10 executors divide 40. Six per node means
+# 36 cores (10% less compute than the base) or 42 (over the claim, and no room
+# beside the driver).
+#
+# How the split was chosen — the only variable is executor size:
+#   * memory is exactly half of each base executor's (37g heap, 8g overhead,
+#     40g off-heap), so every per-node total is identical to the base: heap
+#     148g, overhead 32g, Comet's native pool 160g — and native memory per
+#     task is the same 4g (40g / 10 tasks = 80g / 20 tasks).
+#   * S3 bytes in flight is per executor, so it is halved (64MiB -> 32MiB) to
+#     keep the node total at 128MiB. Request size stays 12.8MiB, as in the
+#     base, so the node also keeps the same ~10 concurrent S3 connections;
+#     halving it too would double the connections for the same bytes.
+#   * range cache capacity stays 128GiB per executor, NOT halved. Executors
+#     adopt everything already in the shared node directory at startup and
+#     count it against their own capacity, so on a reused node four 64GiB
+#     executors would each see the whole ~60GiB directory as theirs and
+#     evict each other's blocks. A node only ever caches ~60GiB (423GiB
+#     fetched per run / 7 nodes), so the cap never binds on a fresh node;
+#     the worst case, 4 x 128GiB x 1.3 + ~185GiB of shuffle over two
+#     iterations, is ~850GiB against md0's ~2.6TiB (RAID0 of both NVMe).
+#   * its own range-cache directory, so it never adopts blocks the base run
+#     left on a reused node — both variants start equally cold.
+#   * GC logs named %p-%t: four executors share each node's /mnt/spark-nvme,
+#     and container PIDs repeat across pods.
+#   * all 28 executor pods requested in one batch (Spark's default is 10 per
+#     second), so Karpenter sizes the node pool from the whole request at once.
+#
+# Run:    kubectl apply -f examples/spark-jobs/tpch-sf1000-28x10.yaml
+# Watch:  kubectl get sparkapplication tpch-sf1000-28x10 -n default -w
+# Logs:   kubectl logs -n default -l spark-app-name=tpch-sf1000-28x10,spark-role=driver -f
+# Clean:  kubectl delete -f examples/spark-jobs/tpch-sf1000-28x10.yaml
 apiVersion: "sparkoperator.k8s.io/v1beta2"
 kind: SparkApplication
 metadata:
-  name: tpch-sf1000
+  name: tpch-sf1000-28x10
   namespace: default
 spec:
   type: Python
@@ -27,7 +70,7 @@ spec:
     - "--queries"
     - "s3://tpc-419772658418/tpch-queries"
     - "--output"
-    - "s3://tpc-419772658418/tpch-results"
+    - "s3://tpc-419772658418/tpch-results-28x10"
     - "--iterations"
     - "2"
   sparkVersion: "3.5.8"
@@ -41,11 +84,12 @@ spec:
 
   sparkConf:
     "spark.local.dir": "/mnt/spark-nvme/spark-local"
-    "spark.kubernetes.executor.request.cores": "20"
+    "spark.kubernetes.executor.request.cores": "10"
+    "spark.kubernetes.allocation.batch.size": "28"
     "spark.memory.fraction": "0.6"
     "spark.memory.storageFraction": "0.2"
     "spark.memory.offHeap.enabled": "true"
-    "spark.memory.offHeap.size": "80g"
+    "spark.memory.offHeap.size": "40g"
 
     "spark.scheduler.minRegisteredResourcesRatio": "1.0"
     "spark.scheduler.maxRegisteredResourcesWaitingTime": "600s"
@@ -155,7 +199,7 @@ spec:
     # NOTE: the hostPath outlives the application, so blocks from a previous run are
     # adopted at startup. Wipe /mnt/spark-nvme/spark-shuffle/comet-range-cache on the
     # nodes first if you need a genuinely cold run.
-    "spark.hadoop.fs.s3a.comet.range.cache.dir": "/mnt/spark-nvme/comet-range-cache-baseline-8mb"
+    "spark.hadoop.fs.s3a.comet.range.cache.dir": "/mnt/spark-nvme/comet-range-cache-28x10"
     "spark.hadoop.fs.s3a.comet.range.cache.block.size": "8388608"
     "spark.hadoop.fs.s3a.comet.range.cache.capacity": "137438953472"
 
@@ -184,7 +228,7 @@ spec:
     # budget/request-size, about 5 per executor. Every pod->S3 connection is
     # masqueraded by Cilium and costs a conntrack entry plus a NAT entry, so this
     # also relieves the map pressure behind issues.md #38.
-    "spark.hadoop.fs.s3a.comet.range.cache.max.bytes.in.flight": "67108864"
+    "spark.hadoop.fs.s3a.comet.range.cache.max.bytes.in.flight": "33554432"
     "spark.hadoop.fs.s3a.comet.range.cache.fetch.part.bytes": "13421772"
 
     # Block files are flushed and dropped from the page cache after write and read.
@@ -252,7 +296,7 @@ spec:
     "spark.kubernetes.submission.requestTimeout": "120000"
     "spark.kubernetes.driver.connectionTimeout": "120000"
     "spark.kubernetes.driver.requestTimeout": "120000"
-    "spark.kubernetes.executor.podNamePrefix": "tpch-sf1000"
+    "spark.kubernetes.executor.podNamePrefix": "tpch-sf1000-28x10"
 
     "spark.executor.decommission.enabled": "true"
     "spark.storage.decommission.enabled": "true"
@@ -282,8 +326,8 @@ spec:
     #
     # (-XX:InitiatingHeapOccupancyPercent is a G1 flag and is inert under
     # -XX:+UseParallelGC. Left in place so this diff stays about diagnostics.)
-    "spark.driver.extraJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-driver-%p.log:time,uptime,level,tags:filecount=5,filesize=64M"
-    "spark.executor.defaultJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -XX:+UseParallelGC -XX:InitiatingHeapOccupancyPercent=70 -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-exec-%p.log:time,uptime,level,tags:filecount=5,filesize=64M"
+    "spark.driver.extraJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-28x10-driver-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
+    "spark.executor.defaultJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -XX:+UseParallelGC -XX:InitiatingHeapOccupancyPercent=70 -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-28x10-exec-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
 
   driver:
     cores: 4
@@ -329,11 +373,11 @@ spec:
         mountPath: /opt/spark/log4j2-custom
 
   executor:
-    cores: 20
-    coreLimit: "20"
-    instances: 14
-    memory: "74g"
-    memoryOverhead: "16g"
+    cores: 10
+    coreLimit: "10"
+    instances: 28
+    memory: "37g"
+    memoryOverhead: "8g"
     # REQUIRED, and easy to miss: without this, executors run under the
     # namespace's `default` ServiceAccount, NOT the driver's. Only
     # spark-operator-spark carries the eks.amazonaws.com/role-arn

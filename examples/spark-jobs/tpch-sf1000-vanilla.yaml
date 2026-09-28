@@ -1,0 +1,364 @@
+# TPC-H SF1000 benchmark — VANILLA Spark baseline (no Comet), the control for
+# tpch-sf1000.yaml. Same data, same queries, same script, same cluster budget;
+# only the engine and the executor shape differ.
+#
+# Resource budget, matched to the Comet job on the same 7x r7gd.12xlarge:
+#
+#                       Comet (tpch-sf1000)       Vanilla (this file)
+#   executors           14 x 20 cores             56 x 5 cores
+#   total cores         280                       280
+#   per-executor pod    74g heap + 16g overhead   30g heap + 4.5g overhead
+#                       + 80g off-heap = 170Gi    + 8g off-heap = 42.5Gi
+#   executors total     280 CPU, 2380Gi           280 CPU, 2380Gi
+#   driver              4 CPU, 20Gi               4 CPU, 20Gi (identical)
+#   per node            2 pods: 40 CPU, 340Gi     8 pods: 40 CPU, 340Gi
+#   driver's node       44 CPU, 360Gi             44 CPU, 360Gi
+#
+# The claim is identical to the Comet job's, pod requests and all, so both
+# engines get the same 7 nodes and the same footprint on each: 8 CPU and ~44Gi
+# left on every executor-only node, 4 CPU and 24Gi on the driver's (the same
+# headroom the Comet run has there). Measured allocatable on r7gd.12xlarge is
+# 46 CPU / 369.9Gi with ~0.8 CPU / 1Gi of DaemonSets, so a 9th 42.5Gi executor
+# never fits a node — the packing is 8 per node by construction, not by luck.
+#
+# Why the shape changes: Comet's engine is native, so its JVM heap mostly idles
+# and the big off-heap pool is where the work happens. Vanilla Spark does its
+# work on the JVM heap, where a 74g ParallelGC heap under 20 concurrent tasks
+# means long stop-the-world collections. Smaller executors bound that:
+#   * 30g heap stays under 32g, so the JVM keeps compressed oops (object
+#     references stay 4 bytes; at 32g+ they double and the heap effectively
+#     shrinks).
+#   * G1 instead of ParallelGC: pause-time targeted and region-based, the usual
+#     choice for Spark heaps in this range.
+#   * 5 cores per executor: fewer threads allocating into one heap, and the
+#     common guidance for S3A/HDFS client throughput per JVM.
+#   * 8g off-heap for Tungsten (sort, aggregate, hash join buffers), which takes
+#     that memory out of the collector's reach entirely.
+#
+# Deliberately kept identical to the Comet job so the comparison is fair:
+# shuffle partitions, AQE, maxPartitionBytes, speculation, S3A connection
+# settings, shuffle/NVMe placement, event log, timeouts, and zstd compression
+# (Comet's shuffle uses zstd, so vanilla's spark.io.compression.codec does too —
+# equal shuffle bytes on the wire).
+#
+# Everything Comet-specific is removed: plugin, extensions, shuffle manager,
+# spark.comet.*, the S3 range disk cache and cache affinity. Vanilla reads
+# Parquet through S3AFileSystem; fadvise=random is the S3A read policy for
+# columnar formats (seek-heavy footers and column chunks, not sequential scans).
+#
+# Results go to their own prefix, tpch-results-vanilla/. tpcbench.py writes
+# "engine": "datafusion-comet" into every result JSON regardless — the saved
+# spark_conf in the JSON (no spark.plugins) is what identifies a vanilla run.
+#
+# Run:    kubectl apply -f examples/spark-jobs/tpch-sf1000-vanilla.yaml
+# Watch:  kubectl get sparkapplication tpch-sf1000-vanilla -n default -w
+# Logs:   kubectl logs -n default -l spark-app-name=tpch-sf1000-vanilla,spark-role=driver -f
+# Clean:  kubectl delete -f examples/spark-jobs/tpch-sf1000-vanilla.yaml
+apiVersion: "sparkoperator.k8s.io/v1beta2"
+kind: SparkApplication
+metadata:
+  name: tpch-sf1000-vanilla
+  namespace: default
+spec:
+  type: Python
+  pythonVersion: "3"
+  mode: cluster
+  image: "subhodeep2022/spark-bigdata:spark-3.5.8-v13-iceberg-gravitino"
+  imagePullPolicy: IfNotPresent
+  mainApplicationFile: "s3://tpc-419772658418/scripts/tpcbench.py"
+  arguments:
+    - "--benchmark"
+    - "tpch"
+    - "--data"
+    - "s3://tpc-419772658418/tpch-sf1000"
+    - "--queries"
+    - "s3://tpc-419772658418/tpch-queries"
+    - "--output"
+    - "s3://tpc-419772658418/tpch-results-vanilla"
+    # 2 iterations, as in tpch-sf1000.yaml and tpch-sf1000-28x10.yaml.
+    - "--iterations"
+    - "2"
+  sparkVersion: "3.5.8"
+  restartPolicy:
+    type: Never
+
+  sparkUIOptions:
+    serviceLabels:
+      app: spark-ui
+    servicePortName: spark-ui
+
+  sparkConf:
+    "spark.app.name": "TPC-H SF1000 vanilla Spark baseline"
+    # Comet explicitly off, so nothing can switch it on for this run.
+    "spark.comet.enabled": "false"
+    "spark.comet.exec.enabled": "false"
+    "spark.comet.exec.shuffle.enabled": "false"
+    "spark.local.dir": "/mnt/spark-nvme/spark-local"
+    "spark.kubernetes.executor.request.cores": "5"
+    "spark.memory.fraction": "0.6"
+    "spark.memory.storageFraction": "0.2"
+    "spark.memory.offHeap.enabled": "true"
+    "spark.memory.offHeap.size": "8g"
+
+    # 56 executors must all register before the first task, as the Comet job's
+    # 14 do — otherwise the first stage runs on a partial cluster.
+    "spark.scheduler.minRegisteredResourcesRatio": "1.0"
+    "spark.scheduler.maxRegisteredResourcesWaitingTime": "600s"
+
+    "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
+    "spark.hadoop.fs.s3.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
+    "spark.hadoop.fs.s3a.endpoint.region": "ap-south-1"
+    "spark.hadoop.fs.s3a.fast.upload": "true"
+    "spark.hadoop.fs.s3a.connection.ssl.enabled": "true"
+    "spark.hadoop.fs.s3a.fast.upload.buffer": "disk"
+    "spark.hadoop.fs.s3a.buffer.dir": "/mnt/spark-nvme/s3a-buffer"
+    "spark.hadoop.fs.s3a.multipart.size": "128M"
+    "spark.hadoop.fs.s3a.multipart.threshold": "256M"
+    "spark.hadoop.fs.s3a.threads.max": "50"
+    "spark.hadoop.fs.s3a.connection.maximum": "200"
+    "spark.hadoop.fs.s3a.multipart.purge": "true"
+    "spark.hadoop.fs.s3a.experimental.input.fadvise": "random"
+    "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "2"
+
+    "spark.io.compression.codec": "zstd"
+
+    "spark.sql.adaptive.enabled": "true"
+    "spark.sql.shuffle.partitions": "560"
+    "spark.sql.adaptive.localShuffleReader.enabled": "true"
+    "spark.sql.adaptive.coalescePartitions.enabled": "true"
+    "spark.sql.adaptive.skewJoin.enabled": "true"
+    "spark.sql.files.maxPartitionBytes": "536870912"
+
+    "spark.speculation": "true"
+    "spark.speculation.quantile": "0.90"
+    "spark.speculation.multiplier": "3.0"
+    "spark.speculation.interval": "1000ms"
+
+    "spark.ui.enabled": "true"
+    "spark.ui.port": "4040"
+    "spark.ui.host": "0.0.0.0"
+    "spark.ui.retainedJobs": "1000"
+    "spark.ui.retainedStages": "1000"
+    "spark.ui.retainedTasks": "100000"
+    "spark.ui.retainedDeadExecutors": "20"
+    "spark.sql.ui.retainedExecutions": "1000"
+
+    "spark.ui.prometheus.enabled": "true"
+    "spark.executor.processTreeMetrics.enabled": "true"
+    "spark.metrics.conf.*.sink.prometheusServlet.class": "org.apache.spark.metrics.sink.PrometheusServlet"
+    "spark.metrics.conf.driver.sink.prometheusServlet.path": "/metrics/driver/prometheus/"
+    "spark.metrics.conf.executor.sink.prometheusServlet.path": "/metrics/executors/prometheus/"
+
+    "spark.network.timeout": "2000s"
+    "spark.executor.heartbeatInterval": "300s"
+    "spark.files.fetchTimeout": "300s"
+    "spark.kubernetes.submission.connectionTimeout": "120000"
+    "spark.kubernetes.submission.requestTimeout": "120000"
+    "spark.kubernetes.driver.connectionTimeout": "120000"
+    "spark.kubernetes.driver.requestTimeout": "120000"
+    "spark.kubernetes.executor.podNamePrefix": "tpch-sf1000-vanilla"
+
+    "spark.executor.decommission.enabled": "true"
+    "spark.storage.decommission.enabled": "true"
+    "spark.storage.decommission.shuffleBlocks.enabled": "true"
+    "spark.storage.decommission.rddBlocks.enabled": "true"
+
+    "spark.shuffle.file.buffer": "1m"
+    "spark.reducer.maxSizeInFlight": "48m"
+    "spark.reducer.maxReqsInFlight": "256"
+    "spark.reducer.maxBlocksInFlightPerAddress": "128"
+
+    "spark.eventLog.enabled": "true"
+    "spark.eventLog.dir": "s3a://tpc-419772658418/spark-event-logs"
+    "spark.eventLog.compress": "true"
+    "spark.eventLog.compression.codec": "zstd"
+    "spark.eventLog.rolling.enabled": "true"
+    "spark.eventLog.rolling.maxFileSize": "64m"
+
+    # GC/safepoint logs as in the Comet job, so pauses can be compared directly.
+    # %p-%t, not %p alone: eight executors share each node's /mnt/spark-nvme
+    # hostPath, and container PIDs repeat across pods, so a PID alone would let
+    # them overwrite each other's logs.
+    "spark.driver.extraJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-vanilla-driver-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
+    "spark.executor.defaultJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -XX:+UseG1GC -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-vanilla-exec-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
+
+  driver:
+    cores: 4
+    memory: "16g"
+    memoryOverhead: "4g"
+    serviceAccount: spark-operator-spark
+    dnsConfig:
+      options:
+        - name: ndots
+          value: "2"
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
+    nodeSelector:
+      node-role.kubernetes.io/spark-node: ""
+      karpenter.k8s.aws/instance-family: "r7gd"
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: karpenter.k8s.aws/instance-size
+                  operator: In
+                  values:
+                    - "12xlarge"
+                - key: karpenter.sh/capacity-type
+                  operator: In
+                  values:
+                    - "on-demand"
+    tolerations:
+      - key: spark-only
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+    volumeMounts:
+      - name: spark-shuffle
+        mountPath: /mnt/spark-nvme
+      - name: spark-local-dir-1
+        mountPath: /mnt/spark-nvme/spark-local
+      - name: log4j2-config
+        mountPath: /opt/spark/log4j2-custom
+
+  executor:
+    cores: 5
+    coreLimit: "5"
+    instances: 56
+    memory: "30g"
+    # 4.5g, not 4g: 30g + 4.5g + 8g off-heap = 42.5Gi per pod, which makes
+    # 56 executors claim exactly the Comet job's 2380Gi.
+    memoryOverhead: "4608m"
+    # Same IRSA ServiceAccount as the Comet job — see tpch-sf1000.yaml for why
+    # it must be set on executors, not only the driver.
+    serviceAccount: spark-operator-spark
+    dnsConfig:
+      options:
+        - name: ndots
+          value: "2"
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
+    nodeSelector:
+      node-role.kubernetes.io/spark-node: ""
+      karpenter.k8s.aws/instance-family: "r7gd"
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: karpenter.k8s.aws/instance-size
+                  operator: In
+                  values:
+                    - "12xlarge"
+                - key: karpenter.sh/capacity-type
+                  operator: In
+                  values:
+                    - "on-demand"
+    tolerations:
+      - key: spark-only
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+    volumeMounts:
+      - name: spark-shuffle
+        mountPath: /mnt/spark-nvme
+      - name: spark-local-dir-1
+        mountPath: /mnt/spark-nvme/spark-local
+      - name: log4j2-config
+        mountPath: /opt/spark/log4j2-custom
+
+  volumes:
+    - name: spark-shuffle
+      hostPath:
+        path: /mnt/spark-nvme/spark-shuffle
+        type: DirectoryOrCreate
+    - name: spark-local-dir-1
+      hostPath:
+        path: /mnt/spark-nvme/spark-shuffle/spark-local
+        type: DirectoryOrCreate
+    - name: log4j2-config
+      configMap:
+        name: spark-log4j2-config-vanilla
+---
+# Own ConfigMap, not the Comet job's spark-log4j2-config: applying either file
+# must not rewrite the other job's logging. Same levels as the Comet job minus
+# the org.apache.comet loggers, and the diagnostics file is named per executor
+# — eight executors share each node's /mnt/spark-nvme, and one shared diag.log
+# would interleave them.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-log4j2-config-vanilla
+  namespace: default
+data:
+  log4j2.properties: |
+    rootLogger.level = info
+    rootLogger.appenderRef.stdout.ref = console
+    rootLogger.appenderRef.diag.ref = diag
+
+    appender.console.type = Console
+    appender.console.name = console
+    appender.console.target = SYSTEM_ERR
+    appender.console.layout.type = JsonLayout
+    appender.console.layout.compact = true
+    appender.console.layout.eventEol = true
+
+    appender.diag.type = RollingFile
+    appender.diag.name = diag
+    appender.diag.fileName = /mnt/spark-nvme/diag-vanilla-${env:SPARK_EXECUTOR_ID:-driver}.log
+    appender.diag.filePattern = /mnt/spark-nvme/diag-vanilla-${env:SPARK_EXECUTOR_ID:-driver}-%i.log
+    appender.diag.layout.type = PatternLayout
+    appender.diag.layout.pattern = %d{ISO8601} %-5p [%t] %c{1}: %m%n
+    appender.diag.policies.type = Policies
+    appender.diag.policies.size.type = SizeBasedTriggeringPolicy
+    appender.diag.policies.size.size = 64MB
+    appender.diag.strategy.type = DefaultRolloverStrategy
+    appender.diag.strategy.max = 5
+
+    logger.repl.name = org.apache.spark.repl.Main
+    logger.repl.level = warn
+    logger.thriftserver.name = org.apache.spark.sql.hive.thriftserver.SparkSQLCLIDriver
+    logger.thriftserver.level = warn
+    logger.jetty1.name = org.sparkproject.jetty
+    logger.jetty1.level = warn
+    logger.jetty2.name = org.sparkproject.jetty.util.component.AbstractLifeCycle
+    logger.jetty2.level = error
+    logger.parquet1.name = org.apache.parquet
+    logger.parquet1.level = error
+    logger.parquet2.name = parquet
+    logger.parquet2.level = error
+    logger.metastore.name = org.apache.hadoop.hive.metastore.RetryingHMSHandler
+    logger.metastore.level = fatal
+    logger.metastore2.name = org.apache.hadoop.hive.metastore.ObjectStore
+    logger.metastore2.level = error
+
+    # Same diagnostics as the Comet job, to the per-executor NVMe file only.
+    logger.fileIndex.name = org.apache.spark.sql.execution.datasources.InMemoryFileIndex
+    logger.fileIndex.level = info
+    logger.fileIndex.additivity = false
+    logger.fileIndex.appenderRef.diag.ref = diag
+    logger.pafi.name = org.apache.spark.sql.execution.datasources.PartitioningAwareFileIndex
+    logger.pafi.level = info
+    logger.pafi.additivity = false
+    logger.pafi.appenderRef.diag.ref = diag
+    logger.fileSource.name = org.apache.spark.sql.execution.datasources.FileSourceStrategy
+    logger.fileSource.level = info
+    logger.fileSource.additivity = false
+    logger.fileSource.appenderRef.diag.ref = diag
+    logger.dag.name = org.apache.spark.scheduler.DAGScheduler
+    logger.dag.level = info
+    logger.dag.additivity = false
+    logger.dag.appenderRef.diag.ref = diag
+
+    # Per-task chatter held down, as in the Comet job.
+    logger.tsm.name = org.apache.spark.scheduler.TaskSetManager
+    logger.tsm.level = warn
+    logger.executor.name = org.apache.spark.executor.Executor
+    logger.executor.level = warn
+    logger.storage.name = org.apache.spark.storage
+    logger.storage.level = warn
+    logger.s3a.name = org.apache.hadoop.fs.s3a
+    logger.s3a.level = warn
+    logger.awsreq.name = com.amazonaws.request
+    logger.awsreq.level = warn
