@@ -1686,6 +1686,14 @@ headlamp:
 # =============================================================================
 monitoring:
   enabled: true
+  # S3 handshake capture per node -> s3://<lakehouse>/network-logs/packet-capture/
+  # (charts/monitoring/templates/packet-capture-shipper.yaml). Headers of
+  # SYN/SYN-ACK/RST on :443 only, plus a 60 s ip addr/rule/route snapshot.
+  packetCapture:
+    enabled: true
+    rotateSeconds: 300
+    maxLocalFiles: 400
+    localSizeLimit: "2Gi"
 
 # =============================================================================
 # THANOS (local sub-chart) — S3 long-term storage for Prometheus, see

@@ -1,0 +1,199 @@
+{{- if and .Values.enabled (.Values.packetCapture).enabled }}
+# ------------------------------------------------------------------------------
+# Monitoring - Packet Capture Shipper (S3 connection handshakes -> S3)
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Why this exists: the 2026-09-22 SF1000 run lost ~16 min to ~60 s stalls that
+# no existing telemetry could explain on its own. The cause only surfaced by
+# joining three sources after the fact: VPC Flow Logs showed 60,566 pod->S3
+# SYNs leaving ens5 carrying the POD IP (pkt-srcaddr) and never answered; the
+# cilium-agent log showed those same pod IPs configured as host addresses on
+# ens6; Hubble could not show it because its fieldMask drops IPs. The OS
+# managing Cilium's ENIs was the root cause (fixed in the golden AMI,
+# terraform-aws-k8s-ha packer/common-ami.sh 5b). This keeps the direct
+# evidence for the next run instead of reconstructing it:
+#
+#   * handshake packets only — SYN, SYN-ACK and RST on port 443 to/from
+#     outside 10.0.0.0/8 (S3 via the Gateway endpoint), plus ICMP
+#     "fragmentation needed" for the MTU question. Headers only (snaplen 128),
+#     so a whole SF1000 run is tens of MB per node, not a full packet dump.
+#   * `-i any`, so each pod SYN appears twice: on its lxc device with the pod
+#     IP, and on ens5 after Cilium's SNAT with the node IP. A SYN on ens5 with
+#     a pod source IP is the 09-22 bug; a SYN with no SYN-ACK is a black hole.
+#   * a snapshot of addresses, links, rules and routes every 60 s — the
+#     "pod IPs on ens6" state that caused 09-22, and the ifindex -> name map
+#     needed to read `-i any` captures (LINUX_SLL2 records the ifindex).
+#
+# Reading a capture:  tcpdump -nn -r X.pcap 'tcp[tcpflags] & tcp-syn != 0'
+# then match the ifindex against the net-state-*.txt taken at the same time.
+#
+# Same shape and credentials as hubble-flow-shipper.yaml: a separate
+# DaemonSet so a failure here never touches Cilium, the node IMDS role for
+# the lakehouse bucket (no new IAM), and the spark-only toleration because
+# the spark nodes are the point. hostNetwork is required to see ens5/ens6;
+# NET_RAW/NET_ADMIN are the only capabilities tcpdump needs. Nothing here
+# changes node networking — it only reads.
+#
+# Disk: captures land on a size-limited emptyDir and are deleted once
+# uploaded; if S3 is unreachable the oldest files are dropped past the cap
+# rather than filling the node.
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: packet-capture-shipper-scripts
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  capture.sh: |
+    #!/bin/bash
+    set -u
+    OUT=/captures
+    FILTER='(tcp port 443 and (tcp[tcpflags] & (tcp-syn|tcp-rst) != 0) and not (src net 10.0.0.0/8 and dst net 10.0.0.0/8)) or (icmp[0] = 3 and icmp[1] = 4)'
+    # -G rotates every ROTATE_SECONDS; strftime in the name keeps files ordered.
+    tcpdump -i any -nn -s 128 -B 4096 -G "${ROTATE_SECONDS}" -Z root \
+      -w "${OUT}/%Y%m%dT%H%M%SZ-${NODE_NAME}.pcap" "${FILTER}" &
+    TD=$!
+    trap 'kill -TERM $TD 2>/dev/null; wait $TD; exit 0' TERM INT
+    while kill -0 "$TD" 2>/dev/null; do
+      TS=$(date -u +%Y%m%dT%H%M%SZ)
+      {
+        echo "### $TS $NODE_NAME"
+        echo "### ip -o link";          ip -o link show
+        echo "### ip -o -4 addr";       ip -o -4 addr show
+        echo "### ip rule";             ip rule show
+        echo "### ip route table all";  ip -4 route show table all
+      } > "${OUT}/.net-state-${TS}.tmp" && mv "${OUT}/.net-state-${TS}.tmp" "${OUT}/net-state-${TS}-${NODE_NAME}.txt"
+      sleep 60 & wait $!
+    done
+    echo "tcpdump exited" >&2
+    exit 1
+  upload.sh: |
+    #!/bin/bash
+    set -u
+    OUT=/captures
+    DEST="s3://${BUCKET}/network-logs/packet-capture/${NODE_NAME}"
+    upload() {  # $1 = file; key partitioned by the timestamp in its name
+      local f=$1 b ts
+      b=$(basename "$f"); ts=$(echo "$b" | grep -oE '[0-9]{8}T[0-9]{4}' | head -1)
+      [ -z "$ts" ] && ts=$(date -u +%Y%m%dT%H%M)
+      aws s3 cp --only-show-errors "$f" \
+        "${DEST}/${ts:0:4}/${ts:4:2}/${ts:6:2}/${ts:9:2}/${b}" && rm -f "$f"
+    }
+    sweep() {   # $1 = minimum age in seconds before a file counts as complete
+      local now f; now=$(date +%s)
+      for f in "$OUT"/*.pcap "$OUT"/net-state-*.txt; do
+        [ -e "$f" ] || continue
+        [ $(( now - $(stat -c %Y "$f") )) -ge "$1" ] && upload "$f"
+      done
+      # Cap: if uploads keep failing, drop the oldest rather than fill the disk.
+      local n; n=$(ls -1 "$OUT" | wc -l)
+      [ "$n" -gt "${MAX_FILES}" ] && ls -1tr "$OUT"/* | head -n $(( n - MAX_FILES )) | xargs -r rm -f
+    }
+    # On shutdown the capture container flushes its last file; give it a
+    # moment, then ship everything regardless of age.
+    trap 'sleep 5; sweep 0; exit 0' TERM INT
+    while true; do
+      # A pcap is complete once tcpdump has rotated past it: older than one
+      # rotation plus slack.
+      sweep $(( ROTATE_SECONDS + 30 ))
+      sleep 60 & wait $!
+    done
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: packet-capture-shipper
+  namespace: kube-system
+  labels:
+    app: packet-capture-shipper
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    matchLabels:
+      app: packet-capture-shipper
+  template:
+    metadata:
+      labels:
+        app: packet-capture-shipper
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      terminationGracePeriodSeconds: 90
+      tolerations:
+        - key: spark-only
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      containers:
+        - name: capture
+          # Pinned, verified on Docker Hub's tags API (arm64 present).
+          image: nicolaka/netshoot:v0.16
+          command: ["/bin/bash", "/scripts/capture.sh"]
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: ROTATE_SECONDS
+              value: {{ (.Values.packetCapture).rotateSeconds | default 300 | quote }}
+          securityContext:
+            runAsUser: 0
+            capabilities:
+              add: ["NET_RAW", "NET_ADMIN"]
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          volumeMounts:
+            - name: captures
+              mountPath: /captures
+            - name: scripts
+              mountPath: /scripts
+        - name: uploader
+          # Pinned, verified on Docker Hub's tags API (arm64 present).
+          image: amazon/aws-cli:2.37.4
+          command: ["/bin/bash", "/scripts/upload.sh"]
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: ROTATE_SECONDS
+              value: {{ (.Values.packetCapture).rotateSeconds | default 300 | quote }}
+            - name: MAX_FILES
+              value: {{ (.Values.packetCapture).maxLocalFiles | default 400 | quote }}
+            - name: BUCKET
+              value: {{ .Values.global.awsLakehouse.bucket | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.global.awsLakehouse.region | quote }}
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: captures
+              mountPath: /captures
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: captures
+          emptyDir:
+            sizeLimit: {{ (.Values.packetCapture).localSizeLimit | default "2Gi" }}
+        - name: scripts
+          configMap:
+            name: packet-capture-shipper-scripts
+            defaultMode: 0755
+{{- end }}
