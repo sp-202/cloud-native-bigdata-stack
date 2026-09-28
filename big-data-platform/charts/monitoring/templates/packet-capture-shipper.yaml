@@ -32,7 +32,7 @@
 # DaemonSet so a failure here never touches Cilium, the node IMDS role for
 # the lakehouse bucket (no new IAM), and the spark-only toleration because
 # the spark nodes are the point. hostNetwork is required to see ens5/ens6;
-# NET_RAW/NET_ADMIN are the only capabilities tcpdump needs. Nothing here
+# NET_RAW/NET_ADMIN to capture, SETUID/SETGID for its user switch. Nothing here
 # changes node networking — it only reads.
 #
 # Disk: captures land on a size-limited emptyDir and are deleted once
@@ -145,7 +145,11 @@ spec:
           securityContext:
             runAsUser: 0
             capabilities:
-              add: ["NET_RAW", "NET_ADMIN"]
+              # SETUID/SETGID: tcpdump switches user after opening the
+              # capture socket (-Z root here, or its built-in "tcpdump"
+              # user without it); with ALL dropped that setuid/setgroups
+              # call fails with "Operation not permitted" and tcpdump exits.
+              add: ["NET_RAW", "NET_ADMIN", "SETUID", "SETGID"]
               drop: ["ALL"]
           resources:
             requests:
