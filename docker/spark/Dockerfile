@@ -79,7 +79,7 @@ RUN cp $SPARK_HOME/kubernetes/dockerfiles/spark/entrypoint.sh /opt/entrypoint.sh
     chmod +x /opt/entrypoint.sh
 
 # Baseline spark-defaults.conf — executor defaults (no ConfigMap mounted on executors).
-#
+# new line added for comet jar
 # UNITS. Spark and Hadoop disagree on the default unit per key, so a bare integer means
 # different things on adjacent lines:
 #   spark.network.timeout, spark.files.fetchTimeout  -> timeConf(SECONDS)
