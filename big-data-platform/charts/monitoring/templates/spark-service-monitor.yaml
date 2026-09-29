@@ -4,8 +4,24 @@
 # ------------------------------------------------------------------------------
 # Part of the Cloud-Native Big Data Platform (Umbrella Chart)
 #
-# Description: Prometheus discovery for Spark drivers and executors metrics.
+# Description: Prometheus discovery for Spark driver and executor metrics.
 # For configuration, see: big-data-platform/values.yaml
+#
+# Both are scraped from the DRIVER's UI Service (spark-ui, port 4040):
+#   /metrics/prometheus/            the driver's own metrics system
+#                                   (PrometheusServlet sink, spark.metrics.conf)
+#   /metrics/executors/prometheus/  every executor's metrics, aggregated by the
+#                                   driver (spark.ui.prometheus.enabled=true);
+#                                   each series carries executor_id
+#
+# There is no per-executor scrape: executors run no HTTP server. The former
+# PodMonitor pointed at the executor's blockmanager port (7079), which is Netty
+# RPC, so every executor target was permanently down.
+#
+# node / host_ip / pod_ip are the driver pod's, attached so Spark series join
+# kube_pod_info, Loki and the network logs on the same keys as everything else.
+# Executor-level node placement comes from kube_pod_info (pod -> node, pod_ip),
+# joined on label_spark_exec_id via kube-state-metrics' label allowlist.
 #
 # Managed via ArgoCD Sync Wave: 0
 # ------------------------------------------------------------------------------
@@ -29,34 +45,28 @@ spec:
     path: /metrics/prometheus/
     interval: 10s
     honorLabels: true
-  namespaceSelector:
-    matchNames:
-      - default
----
-# Executor metrics in K8s mode are not served on blockmanager port (7079).
-# They are aggregated by the driver and exposed at the driver's Spark UI
-# (/metrics/prometheus/ on port 4040). No per-executor scrape needed.
-# This PodMonitor exists as a placeholder for if executor HTTP servers are
-# enabled in future (spark.executor.metrics.fileSystemSchemes etc).
-apiVersion: monitoring.coreos.com/v1
-kind: PodMonitor
-metadata:
-  name: spark-executor-pod-monitor
-  namespace: default
-  labels:
-    release: kube-prometheus-stack
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-spec:
-  jobLabel: spark-executor
-  selector:
-    matchLabels:
-      spark-role: executor
-  podMetricsEndpoints:
-  - port: blockmanager
-    path: /metrics/prometheus/
+    relabelings:
+      - sourceLabels: [__meta_kubernetes_pod_node_name]
+        targetLabel: node
+      - sourceLabels: [__meta_kubernetes_pod_host_ip]
+        targetLabel: host_ip
+      - sourceLabels: [__meta_kubernetes_pod_ip]
+        targetLabel: pod_ip
+      - sourceLabels: [__meta_kubernetes_pod_label_spark_app_selector]
+        targetLabel: spark_app_selector
+  - port: spark-ui
+    path: /metrics/executors/prometheus/
     interval: 15s
     honorLabels: true
+    relabelings:
+      - sourceLabels: [__meta_kubernetes_pod_node_name]
+        targetLabel: node
+      - sourceLabels: [__meta_kubernetes_pod_host_ip]
+        targetLabel: host_ip
+      - sourceLabels: [__meta_kubernetes_pod_ip]
+        targetLabel: pod_ip
+      - sourceLabels: [__meta_kubernetes_pod_label_spark_app_selector]
+        targetLabel: spark_app_selector
   namespaceSelector:
     matchNames:
       - default

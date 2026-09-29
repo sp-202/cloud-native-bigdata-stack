@@ -62,6 +62,17 @@ spec:
       interval: 30s
       honorLabels: true
       path: /metrics
+      # node / host_ip / pod_ip on every series: Cilium and Hubble are
+      # per-node DaemonSets, and these three are the keys that join them to
+      # kube_pod_info, Loki (node_name, host_ip, pod_ip), VPC Flow Logs
+      # (srcaddr = node IP) and the packet captures.
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_pod_host_ip]
+          targetLabel: host_ip
+        - sourceLabels: [__meta_kubernetes_pod_ip]
+          targetLabel: pod_ip
 ---
 # cilium-operator owns ENI/IPAM: IP pool watermarks, allocation latency and
 # EC2 API errors — the numbers the ipamMinAllocate/ipamPreAllocate tuning in
@@ -98,6 +109,17 @@ spec:
       interval: 30s
       honorLabels: true
       path: /metrics
+      # node / host_ip / pod_ip on every series: Cilium and Hubble are
+      # per-node DaemonSets, and these three are the keys that join them to
+      # kube_pod_info, Loki (node_name, host_ip, pod_ip), VPC Flow Logs
+      # (srcaddr = node IP) and the packet captures.
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_pod_host_ip]
+          targetLabel: host_ip
+        - sourceLabels: [__meta_kubernetes_pod_ip]
+          targetLabel: pod_ip
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -121,6 +143,17 @@ spec:
       honorLabels: true
       path: /metrics
       scheme: http
+      # node / host_ip / pod_ip on every series: Cilium and Hubble are
+      # per-node DaemonSets, and these three are the keys that join them to
+      # kube_pod_info, Loki (node_name, host_ip, pod_ip), VPC Flow Logs
+      # (srcaddr = node IP) and the packet captures.
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_pod_host_ip]
+          targetLabel: host_ip
+        - sourceLabels: [__meta_kubernetes_pod_ip]
+          targetLabel: pod_ip
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -142,4 +175,15 @@ spec:
     - port: metrics
       interval: 30s
       path: /metrics
+      # node / host_ip / pod_ip on every series: Cilium and Hubble are
+      # per-node DaemonSets, and these three are the keys that join them to
+      # kube_pod_info, Loki (node_name, host_ip, pod_ip), VPC Flow Logs
+      # (srcaddr = node IP) and the packet captures.
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_pod_host_ip]
+          targetLabel: host_ip
+        - sourceLabels: [__meta_kubernetes_pod_ip]
+          targetLabel: pod_ip
 {{- end }}

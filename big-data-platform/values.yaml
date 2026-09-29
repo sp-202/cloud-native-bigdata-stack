@@ -1302,6 +1302,13 @@ kube-prometheus-stack:
         memory: "128Mi"
   kube-state-metrics:
     fullnameOverride: "kube-state-metrics"
+    # kube_pod_info already carries namespace, pod, pod_ip, host_ip and node —
+    # the table every other signal joins on. This adds the Spark pod labels
+    # to kube_pod_labels (as label_spark_role, label_spark_app_selector,
+    # label_spark_exec_id), so an executor_id in Spark's metrics resolves to
+    # its pod, and through kube_pod_info to its IP and node.
+    metricLabelsAllowlist:
+      - pods=[spark-role,spark-app-selector,spark-exec-id,app,tier]
     nodeSelector:
       node-role.kubernetes.io/data-node: ""
     livenessProbe:
@@ -1595,11 +1602,19 @@ loki-stack:
           # (verified against archive/misc/log4j.properties, the last known
           # config before the image dropped a bundled log4j.properties) —
           # e.g. "26/09/02 10:15:23 INFO ...".
+          #
+          # The SparkApplications log through log4j2 JsonLayout (compact,
+          # eventEol — examples/spark-jobs/tpch-sf1000*.yaml), so each event is
+          # one line starting with '{', stack trace included in the JSON. With
+          # only the date pattern, no JSON line ever matched firstline and the
+          # multiline stage merged every event into its predecessor: on the
+          # 22 Sep run, events spanning 12:11-12:42 UTC landed as ONE Loki
+          # entry stamped 12:08:58. firstline now accepts both shapes.
           - match:
               selector: '{spark_role=~"driver|executor"}'
               stages:
                 - multiline:
-                    firstline: '^\d{2}/\d{2}/\d{2}'
+                    firstline: '^(\{|\d{2}/\d{2}/\d{2})'
                     max_wait_time: 3s
           # Spark History Server — same Spark distribution, same log4j
           # pattern as above, but its own long-running Deployment (no
@@ -1650,6 +1665,16 @@ loki-stack:
           - action: replace
             source_labels: [__meta_kubernetes_pod_label_tier]
             target_label: tier
+          # pod_ip / host_ip: the join keys to Hubble flows (IP), VPC Flow
+          # Logs (pkt-srcaddr = pod IP, srcaddr = node IP), the packet
+          # captures and kube_pod_info. Both are 1:1 with a pod / node, and
+          # pod and node_name are already labels, so this adds no streams.
+          - action: replace
+            source_labels: [__meta_kubernetes_pod_ip]
+            target_label: pod_ip
+          - action: replace
+            source_labels: [__meta_kubernetes_pod_host_ip]
+            target_label: host_ip
 
 # =============================================================================
 # CLOUDFLARED (local sub-chart) — spread across GP nodes for tunnel HA
