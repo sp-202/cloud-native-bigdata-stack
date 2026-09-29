@@ -42,7 +42,7 @@ spec:
       app: spark-ui
   endpoints:
   - port: spark-ui
-    path: /metrics/prometheus/
+    path: /metrics/driver/prometheus/
     interval: 10s
     honorLabels: true
     relabelings:

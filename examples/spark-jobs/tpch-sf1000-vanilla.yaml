@@ -179,8 +179,8 @@ spec:
     # %p-%t, not %p alone: eight executors share each node's /mnt/spark-nvme
     # hostPath, and container PIDs repeat across pods, so a PID alone would let
     # them overwrite each other's logs.
-    "spark.driver.extraJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-vanilla-driver-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
-    "spark.executor.defaultJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -XX:+UseG1GC -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-vanilla-exec-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
+    "spark.driver.extraJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-vanilla-driver-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
+    "spark.executor.defaultJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -XX:+UseG1GC -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-vanilla-exec-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
 
   driver:
     cores: 4

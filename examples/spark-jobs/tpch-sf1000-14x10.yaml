@@ -312,8 +312,8 @@ spec:
     #
     # (-XX:InitiatingHeapOccupancyPercent is a G1 flag and is inert under
     # -XX:+UseParallelGC. Left in place so this diff stays about diagnostics.)
-    "spark.driver.extraJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-14x10-driver-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
-    "spark.executor.defaultJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -XX:+UseParallelGC -XX:InitiatingHeapOccupancyPercent=70 -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Dlog4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-14x10-exec-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
+    "spark.driver.extraJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-14x10-driver-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
+    "spark.executor.defaultJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -XX:+UseParallelGC -XX:InitiatingHeapOccupancyPercent=70 -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-14x10-exec-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
 
   driver:
     cores: 4
