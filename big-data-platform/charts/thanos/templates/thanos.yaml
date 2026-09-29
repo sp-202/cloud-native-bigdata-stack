@@ -336,6 +336,11 @@ spec:
             - --retention.resolution-1h={{ .Values.retention.oneHour }}
             - --compact.concurrency=1
             - --downsample.concurrency=1
+            # flush-all-to-s3.sh run on a cluster that keeps running uploads a
+            # head block that the later 2h block overlaps (same replica
+            # labels). Without this the compactor halts on the overlap;
+            # with it, it merges them (identical samples deduplicated).
+            - --compact.enable-vertical-compaction
           ports:
             - containerPort: 10902
               name: http-metrics
