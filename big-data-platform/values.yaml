@@ -1636,11 +1636,14 @@ loki-stack:
     serviceMonitor:
       enabled: true
     # Node journal for the journal scrape below. machine-id is how the
-    # journal reader finds /var/log/journal/<machine-id>/.
+    # journal reader finds <journal dir>/<machine-id>/. The nodes' journald
+    # runs with volatile storage — /run/log/journal; checked live, the
+    # persistent /var/log/journal is empty — so that is the path to read.
+    # (promtail ships it continuously, so volatility costs nothing here.)
     extraVolumes:
       - name: journal
         hostPath:
-          path: /var/log/journal
+          path: /run/log/journal
       - name: machine-id
         hostPath:
           path: /etc/machine-id
@@ -1654,7 +1657,7 @@ loki-stack:
           type: DirectoryOrCreate
     extraVolumeMounts:
       - name: journal
-        mountPath: /var/log/journal
+        mountPath: /run/log/journal
         readOnly: true
       - name: machine-id
         mountPath: /etc/machine-id
@@ -1783,6 +1786,13 @@ loki-stack:
               expression: '^\d{2}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} (?P<level>[A-Z]+) '
           - regex:
               expression: '^(?P<level>[IWEF])\d{4} \d{2}:\d{2}:\d{2}'
+          # fluent-bit "[2026/09/29 06:26:33] [ info] ..." and structlog
+          # (Airflow 3) "2026-09-29T06:22:55Z [info     ] ...": both seen
+          # live without a level before these two were added.
+          - regex:
+              expression: '^\[\d{4}/\d{2}/\d{2} [\d:]+\] \[ *(?P<level>[a-z]+)\]'
+          - regex:
+              expression: '^\S+ \[(?P<level>[a-z]+) *\] '
           - regex:
               expression: '(?:^|\s)level=(?P<level>[A-Za-z]+)'
           - regex:
@@ -1859,7 +1869,7 @@ loki-stack:
         extraScrapeConfigs: |
           - job_name: systemd-journal
             journal:
-              path: /var/log/journal
+              path: /run/log/journal
               max_age: 12h
               labels:
                 job: systemd-journal
