@@ -1133,6 +1133,92 @@ kube-prometheus-stack:
         limits:
           cpu: "2000m"
           memory: "8Gi"
+      # Periodic head backup — so a cluster shorter than ~3 h never loses its
+      # metrics again (29 Sep: a 2 h cluster, no sealed block, nothing in
+      # Thanos, and the EBS volumes deleted with the cluster).
+      #
+      # The Thanos sidecar ships only SEALED 2 h blocks; the operator pins
+      # block duration to 2 h when Thanos is on, and the head is sealed only
+      # once it spans ~3 h. This container, every INTERVAL (900 s):
+      #   1. POST /api/v1/admin/tsdb/snapshot?skip_head=false (admin API on)
+      #   2. uploads only the snapshot's HEAD block(s) — any block dir not
+      #      already persisted in /prometheus; sealed blocks are Thanos's job
+      #   3. to s3://<lakehouse>/thanos/periodic-snapshots/<pod>/<UTC ts>/<ULID>/
+      #   4. keeps the newest 2 per replica, deletes the local snapshot
+      # and once more on SIGTERM (pod shutdown, e.g. cluster teardown).
+      #
+      # Under thanos/ because the pod's IRSA role (thanos-s3-writer) is scoped
+      # to thanos/*; Thanos itself only reads ULID dirs directly under
+      # thanos/, so periodic-snapshots/ is ignored — no overlapping blocks for
+      # the compactor. To restore after a lost cluster, copy the newest
+      #   thanos/periodic-snapshots/<pod>/<ts>/<ULID>/  ->  thanos/<ULID>/
+      # (one replica is enough) and thanos-store picks it up.
+      #
+      # Runs as the pod's user (1000, fsGroup 2000), so it can remove the
+      # snapshots Prometheus wrote. No curl dependency: the admin call uses
+      # bash's /dev/tcp. Volume name/subPath are prometheus-operator's
+      # (prometheus-<CR name>-db, subPath prometheus-db).
+      containers:
+        - name: tsdb-head-backup
+          image: amazon/aws-cli:2.37.4
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -u
+              DB=/prometheus
+              DEST="s3://${BUCKET}/thanos/periodic-snapshots/${POD_NAME}"
+              snap() {
+                exec 3<>/dev/tcp/127.0.0.1/9090 || { echo "prometheus not reachable"; return 1; }
+                printf 'POST /api/v1/admin/tsdb/snapshot?skip_head=false HTTP/1.0\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n' >&3
+                local resp name ts n=0 b u
+                resp=$(cat <&3); exec 3<&-
+                name=$(printf '%s' "$resp" | sed -n 's/.*"name": *"\([^"]*\)".*/\1/p')
+                [ -n "$name" ] || { echo "snapshot failed: ${resp: -200}"; return 1; }
+                ts=$(date -u +%Y%m%dT%H%M%SZ)
+                for b in "$DB/snapshots/$name"/*/; do
+                  u=$(basename "$b")
+                  [ -f "$b/meta.json" ] || continue
+                  [ -d "$DB/$u" ] && continue
+                  aws s3 cp --recursive --only-show-errors "$b" "$DEST/$ts/$u/" && n=$((n+1))
+                done
+                rm -rf "$DB/snapshots/$name"
+                echo "$ts: uploaded $n head block(s) to $DEST/$ts/"
+                if [ "$n" -gt 0 ]; then
+                  aws s3 ls "$DEST/" | awk '{print $2}' | sort -r | awk 'NR>2' | while read -r old; do
+                    aws s3 rm --recursive --only-show-errors "$DEST/$old"
+                  done
+                fi
+              }
+              trap 'echo "SIGTERM: final snapshot"; snap; exit 0' TERM INT
+              sleep 120 & wait $!
+              while true; do
+                snap
+                sleep "${INTERVAL}" & wait $!
+              done
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: BUCKET
+              value: "k8s-ha-cluster-lakehouse-ap-south-1-419772658418"
+            - name: AWS_REGION
+              value: "ap-south-1"
+            - name: INTERVAL
+              value: "900"
+            - name: HOME
+              value: /tmp
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: prometheus-kube-prometheus-stack-prometheus-db
+              mountPath: /prometheus
+              subPath: prometheus-db
       # Enables POST /api/v1/admin/tsdb/snapshot, which is the ONLY way to get
       # the current head into S3 on demand. This matters because the cluster
       # is destroyed ~10-20 min after a benchmark finishes, and the sidecar
