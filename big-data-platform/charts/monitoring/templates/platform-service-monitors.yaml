@@ -15,11 +15,18 @@
 # Karpenter (terraform-aws-k8s-ha karpenter-k8s.tf, chart 1.13.0, namespace
 # karpenter): node launches, disruption and consolidation decisions, pod
 # scheduling latency. The chart's Service exposes port "http-metrics" (8080).
+#
+# The ServiceMonitor itself lives in kube-system, not karpenter: the ArgoCD
+# AppProject "big-data-platform" only permits default, cloudflare,
+# kubernetes-dashboard, cert-manager, kube-system and argocd, and one object
+# in a forbidden namespace fails the WHOLE sync ("namespace karpenter is not
+# permitted in project"), blocking every other change with it. The
+# namespaceSelector below still points it at the karpenter namespace.
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: karpenter
-  namespace: karpenter
+  namespace: kube-system
   labels:
     release: kube-prometheus-stack
   annotations:
