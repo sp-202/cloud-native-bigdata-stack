@@ -1610,6 +1610,12 @@ loki-stack:
     # otherwise evict or block it silently.
     tolerations:
       - operator: Exists
+    # Stopped in the last (critical) phase of kubelet graceful node shutdown
+    # (terraform-aws-k8s-ha scripts/worker-eks-bootstrap.sh), after the
+    # workload, so its final batch — the pod's last lines — is pushed to
+    # Loki before the node is gone, whether Karpenter removed it for being
+    # empty, underutilised, expired or reclaimed.
+    priorityClassName: system-node-critical
     livenessProbe:
       httpGet:
         path: /ready
@@ -2004,13 +2010,13 @@ monitoring:
   # tails them into Loki (spark-node-files job).
   sparkNodeLogs:
     enabled: true
-    intervalSeconds: 300
+    intervalSeconds: 60
   # S3 handshake capture per node -> s3://<lakehouse>/network-logs/packet-capture/
   # (charts/monitoring/templates/packet-capture-shipper.yaml). Headers of
   # SYN/SYN-ACK/RST on :443 only, plus a 60 s ip addr/rule/route snapshot.
   packetCapture:
     enabled: true
-    rotateSeconds: 300
+    rotateSeconds: 60
     maxLocalFiles: 400
     localSizeLimit: "2Gi"
 

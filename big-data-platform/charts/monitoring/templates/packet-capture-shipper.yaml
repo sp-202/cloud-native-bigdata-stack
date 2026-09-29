@@ -137,7 +137,10 @@ data:
     }
 
     # -G rotates every ROTATE_SECONDS; strftime in the name keeps files ordered.
-    tcpdump -i any -nn -s 128 -B 8192 -G "${ROTATE_SECONDS}" -Z root \
+    # -U: write each packet as it arrives, so a file still being written is
+    # a valid pcap up to its last packet — what the flush script and a node
+    # shutdown upload.
+    tcpdump -i any -nn -s 128 -B 8192 -U -G "${ROTATE_SECONDS}" -Z root \
       -w "${OUT}/%Y%m%dT%H%M%SZ-${NODE_NAME}.pcap" "${FILTER}" &
     TD=$!
     trap 'kill -TERM $TD 2>/dev/null; wait $TD; exit 0' TERM INT
@@ -168,18 +171,26 @@ data:
       [ -f "$OUT/.node-meta" ] && . "$OUT/.node-meta"
       echo "node=${NODE_NAME},host-ip=${HOST_IP},instance-id=${INSTANCE_ID},instance-type=${INSTANCE_TYPE},az=${AZ}"
     }
-    upload() {  # $1 = file; key partitioned by the timestamp in its name
+    upload() {  # $1 = file, $2 = "keep" to leave it in place; key partitioned
+                # by the timestamp in its name
       local f=$1 b ts
       b=$(basename "$f"); ts=$(echo "$b" | grep -oE '[0-9]{8}T[0-9]{4}' | head -1)
       [ -z "$ts" ] && ts=$(date -u +%Y%m%dT%H%M)
       aws s3 cp --only-show-errors --metadata "$(meta)" "$f" \
-        "${DEST}/${ts:0:4}/${ts:4:2}/${ts:6:2}/${ts:9:2}/${b}" && rm -f "$f"
+        "${DEST}/${ts:0:4}/${ts:4:2}/${ts:6:2}/${ts:9:2}/${b}" || return 1
+      [ "${2:-}" = keep ] || rm -f "$f"
     }
     sweep() {   # $1 = minimum age in seconds before a pcap counts as complete
       local now f; now=$(date +%s)
       for f in "$OUT"/*.pcap; do
         [ -e "$f" ] || continue
-        [ $(( now - $(stat -c %Y "$f") )) -ge "$1" ] && upload "$f"
+        if [ $(( now - $(stat -c %Y "$f") )) -ge "$1" ]; then
+          upload "$f"
+        elif [ "${ONCE:-0}" = 1 ]; then
+          # --once: ship the file tcpdump is still writing too, but leave it
+          # in place — deleting an open file would lose everything after it.
+          upload "$f" keep
+        fi
       done
       # Snapshots are written complete (tmp + mv), so ship them as they appear.
       for f in "$OUT"/net-state-*.txt "$OUT"/pods-*.jsonl; do
@@ -189,14 +200,20 @@ data:
       local n; n=$(ls -1 "$OUT" | wc -l)
       [ "$n" -gt "${MAX_FILES}" ] && ls -1tr "$OUT"/* | head -n $(( n - MAX_FILES )) | xargs -r rm -f
     }
-    # On shutdown the capture container flushes its last file; give it a
-    # moment, then ship everything regardless of age.
+    # --once: used by flush/flush-all-to-s3.sh before teardown — ship every
+    # file now, including the pcap in progress, and exit.
+    if [ "${1:-}" = "--once" ]; then
+      ONCE=1 sweep $(( ROTATE_SECONDS + 30 )); exit 0
+    fi
+    # On shutdown (node removal, with kubelet graceful shutdown) the capture
+    # container flushes its last file; give it a moment, then ship
+    # everything regardless of age.
     trap 'sleep 5; sweep 0; exit 0' TERM INT
     while true; do
       # A pcap is complete once tcpdump has rotated past it: older than one
-      # rotation plus slack.
+      # rotation plus slack. 30 s cycles keep what is at risk small.
       sweep $(( ROTATE_SECONDS + 30 ))
-      sleep 60 & wait $!
+      sleep 30 & wait $!
     done
 ---
 apiVersion: apps/v1
@@ -218,9 +235,13 @@ spec:
         app: packet-capture-shipper
     spec:
       serviceAccountName: packet-capture-shipper
+      # Stopped in the critical phase of kubelet graceful node shutdown (the
+      # last 60 s, after the workload), so the final sweep runs; 60 s is that
+      # phase's budget.
+      priorityClassName: system-node-critical
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
-      terminationGracePeriodSeconds: 90
+      terminationGracePeriodSeconds: 60
       tolerations:
         - key: spark-only
           operator: Equal
@@ -242,7 +263,7 @@ spec:
                 fieldRef:
                   fieldPath: status.hostIP
             - name: ROTATE_SECONDS
-              value: {{ (.Values.packetCapture).rotateSeconds | default 300 | quote }}
+              value: {{ (.Values.packetCapture).rotateSeconds | default 60 | quote }}
             {{- with (.Values.packetCapture).filter }}
             - name: CAPTURE_FILTER
               value: {{ . | quote }}
@@ -282,7 +303,7 @@ spec:
                 fieldRef:
                   fieldPath: status.hostIP
             - name: ROTATE_SECONDS
-              value: {{ (.Values.packetCapture).rotateSeconds | default 300 | quote }}
+              value: {{ (.Values.packetCapture).rotateSeconds | default 60 | quote }}
             - name: MAX_FILES
               value: {{ (.Values.packetCapture).maxLocalFiles | default 400 | quote }}
             - name: BUCKET

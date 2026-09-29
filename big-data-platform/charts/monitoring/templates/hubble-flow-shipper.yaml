@@ -77,6 +77,9 @@ data:
   fluent-bit.conf: |
     [SERVICE]
         Flush         5
+        # Seconds fluent-bit keeps flushing (incl. the S3 upload) after
+        # SIGTERM; default 5 is too short for a final S3 PUT.
+        Grace         30
         Log_Level     info
         Daemon        off
         Parsers_File  parsers.conf
@@ -102,7 +105,9 @@ data:
         bucket                        {{ .Values.global.awsLakehouse.bucket }}
         region                        {{ .Values.global.awsLakehouse.region }}
         total_file_size               10M
-        upload_timeout                10m
+        # 1m, not 10m: a spark node is removed 180 s after its job, and with
+        # 10m most of a run's flows were still buffered on the node.
+        upload_timeout                1m
         use_put_object                On
         compression                   gzip
         s3_key_format                 /network-logs/hubble-flows/${NODE_NAME}/%Y/%m/%d/%H/$UUID.json.gz
@@ -129,6 +134,10 @@ spec:
       # No nodeSelector — must run everywhere cilium-agent does (core-node,
       # data-node, AND spark-node) to actually capture flows from all of
       # them; only the toleration below is needed to reach the tainted pool.
+      # Last phase of kubelet graceful node shutdown, so buffered flows are
+      # uploaded after the workload has stopped (Grace 30 above).
+      priorityClassName: system-node-critical
+      terminationGracePeriodSeconds: 45
       tolerations:
         - key: spark-only
           operator: Equal

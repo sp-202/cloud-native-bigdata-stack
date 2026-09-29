@@ -22,7 +22,9 @@
 # Only the top-level gc-* / diag* files are read, by glob — never a recursive
 # walk: the same directory holds the range cache and shuffle files, tens of
 # thousands of them. A file is re-uploaded only when its size or mtime changed,
-# every INTERVAL seconds, and everything once more on SIGTERM. The date in the
+# every INTERVAL seconds (60), and everything once more on SIGTERM. Karpenter
+# removes an empty spark node 180 s after its last Spark pod exits, so at
+# least two cycles run after the last write even without graceful shutdown. The date in the
 # key is the upload day (UTC), so a file still growing past midnight lands
 # under both days.
 #
@@ -58,6 +60,8 @@ data:
         fi
       done
     }
+    # --once: used by flush/flush-all-to-s3.sh before teardown.
+    if [ "${1:-}" = "--once" ]; then ship; exit 0; fi
     trap 'ship; exit 0' TERM INT
     while true; do
       ship
@@ -89,7 +93,10 @@ spec:
           operator: Equal
           value: "true"
           effect: NoSchedule
-      terminationGracePeriodSeconds: 120
+      # Stopped in the critical phase of kubelet graceful node shutdown (the
+      # last 60 s, after the Spark pods), so the final upload runs.
+      priorityClassName: system-node-critical
+      terminationGracePeriodSeconds: 60
       containers:
         - name: shipper
           # Pinned, verified on Docker Hub's tags API (arm64 present).
@@ -109,7 +116,7 @@ spec:
             - name: AWS_REGION
               value: {{ .Values.global.awsLakehouse.region | quote }}
             - name: INTERVAL
-              value: {{ (.Values.sparkNodeLogs).intervalSeconds | default 300 | quote }}
+              value: {{ (.Values.sparkNodeLogs).intervalSeconds | default 60 | quote }}
           resources:
             requests:
               cpu: 10m
