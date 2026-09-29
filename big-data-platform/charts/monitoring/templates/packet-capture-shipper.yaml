@@ -1,6 +1,6 @@
 {{- if and .Values.enabled (.Values.packetCapture).enabled }}
 # ------------------------------------------------------------------------------
-# Monitoring - Packet Capture Shipper (S3 connection handshakes -> S3)
+# Monitoring - Packet Capture Shipper (connection lifecycle + pod map -> S3)
 # ------------------------------------------------------------------------------
 # Part of the Cloud-Native Big Data Platform (Umbrella Chart)
 #
@@ -9,31 +9,51 @@
 # joining three sources after the fact: VPC Flow Logs showed 60,566 pod->S3
 # SYNs leaving ens5 carrying the POD IP (pkt-srcaddr) and never answered; the
 # cilium-agent log showed those same pod IPs configured as host addresses on
-# ens6; Hubble could not show it because its fieldMask drops IPs. The OS
+# ens6; Hubble could not show it because its fieldMask dropped IPs. The OS
 # managing Cilium's ENIs was the root cause (fixed in the golden AMI,
 # terraform-aws-k8s-ha packer/common-ami.sh 5b). This keeps the direct
-# evidence for the next run instead of reconstructing it:
+# evidence, tagged well enough to join and report on without reconstruction.
 #
-#   * handshake packets only — SYN, SYN-ACK and RST on port 443 to/from
-#     outside 10.0.0.0/8 (S3 via the Gateway endpoint), plus ICMP
-#     "fragmentation needed" for the MTU question. Headers only (snaplen 128),
-#     so a whole SF1000 run is tens of MB per node, not a full packet dump.
-#   * `-i any`, so each pod SYN appears twice: on its lxc device with the pod
-#     IP, and on ens5 after Cilium's SNAT with the node IP. A SYN on ens5 with
-#     a pod source IP is the 09-22 bug; a SYN with no SYN-ACK is a black hole.
-#   * a snapshot of addresses, links, rules and routes every 60 s — the
-#     "pod IPs on ens6" state that caused 09-22, and the ifindex -> name map
-#     needed to read `-i any` captures (LINUX_SLL2 records the ifindex).
+# What is captured (headers only, snaplen 128), on `-i any`:
+#   * every TCP connection's lifecycle — SYN, SYN-ACK, FIN, RST — on any port
+#     and destination: S3, executor-to-executor shuffle, the kube API. A SYN
+#     with no SYN-ACK is a black hole; a SYN on ens5 carrying a pod source IP
+#     is the 22 Sep masquerade bug; RST/FIN timing shows who closed what.
+#   * DNS (udp/53), including queries to node-local-dns.
+#   * ICMP destination-unreachable, all codes (incl. fragmentation-needed for
+#     MTU and port-unreachable).
+#   Loopback is excluded (kubelet/agent chatter). `-i any` records each pod
+#   packet twice — on its lxc device with the pod IP and on the egress ENI
+#   after SNAT — which is exactly what makes masquerade visible.
+#   Volume: handshakes only, so mostly kubelet probes and Spark's connections;
+#   expect ~0.5-1 GB/day per busy node, kept 90 days under network-logs/.
 #
-# Reading a capture:  tcpdump -nn -r X.pcap 'tcp[tcpflags] & tcp-syn != 0'
-# then match the ifindex against the net-state-*.txt taken at the same time.
+# What makes every capture joinable (the tags):
+#   * S3 key:      network-logs/packet-capture/<node>/YYYY/MM/DD/HH/<file>
+#   * S3 metadata: node, host-ip, instance-id, instance-type, az on each object
+#   * pods-<ts>-<node>.jsonl, every 60 s: one line per pod on the node —
+#       ts, node, host_ip, instance_id, pod_ip, namespace, pod, phase,
+#       host_network, spark_role, spark_app_selector, spark_exec_id, app,
+#       start_time
+#     i.e. the pod IP -> pod -> namespace -> Spark executor -> node table,
+#     the same keys as Loki (pod_ip, host_ip, node_name), Prometheus
+#     (kube_pod_info, node, pod_ip, host_ip), Hubble (IP, node_name) and
+#     VPC Flow Logs (pkt-srcaddr, srcaddr, instance-id).
+#   * net-state-<ts>-<node>.txt, every 60 s: node identity header, then
+#     ip link / addr / rule / route (all tables) — the ifindex -> name map for
+#     reading `-i any` (LINUX_SLL2 records the ifindex), and the "pod IPs on
+#     ens6" state that caused 22 Sep.
+#
+# Reading:  tcpdump -nn -r X.pcap 'tcp[tcpflags] & tcp-syn != 0'
+#           then join IPs to the pods-*.jsonl written in the same minute.
 #
 # Same shape and credentials as hubble-flow-shipper.yaml: a separate
 # DaemonSet so a failure here never touches Cilium, the node IMDS role for
 # the lakehouse bucket (no new IAM), and the spark-only toleration because
 # the spark nodes are the point. hostNetwork is required to see ens5/ens6;
-# NET_RAW/NET_ADMIN to capture, SETUID/SETGID for its user switch. Nothing here
-# changes node networking — it only reads.
+# NET_RAW/NET_ADMIN to capture, SETUID/SETGID for tcpdump's user switch. The
+# ServiceAccount below can only get/list pods, to write the pod map. Nothing
+# here changes node networking — it only reads.
 #
 # Disk: captures land on a size-limited emptyDir and are deleted once
 # uploaded; if S3 is unreachable the oldest files are dropped past the cap
@@ -41,6 +61,41 @@
 #
 # Managed via ArgoCD Sync Wave: 0
 # ------------------------------------------------------------------------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: packet-capture-shipper
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+---
+# Read-only, pods only: enough for the per-node pod map, nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: packet-capture-shipper
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: packet-capture-shipper
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: packet-capture-shipper
+subjects:
+  - kind: ServiceAccount
+    name: packet-capture-shipper
+    namespace: kube-system
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -53,21 +108,52 @@ data:
     #!/bin/bash
     set -u
     OUT=/captures
-    FILTER='(tcp port 443 and (tcp[tcpflags] & (tcp-syn|tcp-rst) != 0) and not (src net 10.0.0.0/8 and dst net 10.0.0.0/8)) or (icmp[0] = 3 and icmp[1] = 4)'
+    FILTER=${CAPTURE_FILTER:-'((tcp and (tcp[tcpflags] & (tcp-syn|tcp-fin|tcp-rst) != 0)) or udp port 53 or icmp[0] = 3) and not net 127.0.0.0/8'}
+
+    # Node identity from IMDSv2 (hostNetwork: no extra hop), written once for
+    # the net-state header and for the uploader's S3 object metadata.
+    TOK=$(curl -s -m 2 -X PUT http://169.254.169.254/latest/api/token \
+            -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' || true)
+    md() { curl -s -m 2 -H "X-aws-ec2-metadata-token: $TOK" "http://169.254.169.254/latest/meta-data/$1" || echo unknown; }
+    INSTANCE_ID=$(md instance-id); INSTANCE_TYPE=$(md instance-type); AZ=$(md placement/availability-zone)
+    printf 'INSTANCE_ID=%s\nINSTANCE_TYPE=%s\nAZ=%s\n' "$INSTANCE_ID" "$INSTANCE_TYPE" "$AZ" > "${OUT}/.node-meta"
+
+    # Pod map for this node, from the API server with the pod's own
+    # ServiceAccount (get/list pods only). One JSON line per pod.
+    API="https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}"
+    SA=/var/run/secrets/kubernetes.io/serviceaccount
+    podmap() {  # $1 = timestamp
+      curl -s -m 10 --cacert "$SA/ca.crt" -H "Authorization: Bearer $(cat $SA/token)" \
+        "${API}/api/v1/pods?fieldSelector=spec.nodeName%3D${NODE_NAME}" |
+      jq -c --arg ts "$1" --arg node "$NODE_NAME" --arg hip "$HOST_IP" --arg iid "$INSTANCE_ID" '
+        .items[]? | {ts:$ts, node:$node, host_ip:$hip, instance_id:$iid,
+          pod_ip:.status.podIP, namespace:.metadata.namespace, pod:.metadata.name,
+          phase:.status.phase, host_network:(.spec.hostNetwork // false),
+          spark_role:.metadata.labels["spark-role"],
+          spark_app_selector:.metadata.labels["spark-app-selector"],
+          spark_exec_id:.metadata.labels["spark-exec-id"],
+          app:(.metadata.labels["app"] // .metadata.labels["app.kubernetes.io/name"] // .metadata.labels["k8s-app"]),
+          start_time:.status.startTime}'
+    }
+
     # -G rotates every ROTATE_SECONDS; strftime in the name keeps files ordered.
-    tcpdump -i any -nn -s 128 -B 4096 -G "${ROTATE_SECONDS}" -Z root \
+    tcpdump -i any -nn -s 128 -B 8192 -G "${ROTATE_SECONDS}" -Z root \
       -w "${OUT}/%Y%m%dT%H%M%SZ-${NODE_NAME}.pcap" "${FILTER}" &
     TD=$!
     trap 'kill -TERM $TD 2>/dev/null; wait $TD; exit 0' TERM INT
     while kill -0 "$TD" 2>/dev/null; do
       TS=$(date -u +%Y%m%dT%H%M%SZ)
       {
-        echo "### $TS $NODE_NAME"
+        echo "### ts=$TS node=$NODE_NAME host_ip=$HOST_IP instance_id=$INSTANCE_ID instance_type=$INSTANCE_TYPE az=$AZ"
+        echo "### capture filter: $FILTER"
         echo "### ip -o link";          ip -o link show
         echo "### ip -o -4 addr";       ip -o -4 addr show
         echo "### ip rule";             ip rule show
         echo "### ip route table all";  ip -4 route show table all
       } > "${OUT}/.net-state-${TS}.tmp" && mv "${OUT}/.net-state-${TS}.tmp" "${OUT}/net-state-${TS}-${NODE_NAME}.txt"
+      podmap "$TS" > "${OUT}/.pods-${TS}.tmp" && [ -s "${OUT}/.pods-${TS}.tmp" ] \
+        && mv "${OUT}/.pods-${TS}.tmp" "${OUT}/pods-${TS}-${NODE_NAME}.jsonl" \
+        || { rm -f "${OUT}/.pods-${TS}.tmp"; echo "pod map failed at $TS" >&2; }
       sleep 60 & wait $!
     done
     echo "tcpdump exited" >&2
@@ -77,18 +163,27 @@ data:
     set -u
     OUT=/captures
     DEST="s3://${BUCKET}/network-logs/packet-capture/${NODE_NAME}"
+    meta() {    # S3 object metadata: the node identity, on every object
+      local INSTANCE_ID=unknown INSTANCE_TYPE=unknown AZ=unknown
+      [ -f "$OUT/.node-meta" ] && . "$OUT/.node-meta"
+      echo "node=${NODE_NAME},host-ip=${HOST_IP},instance-id=${INSTANCE_ID},instance-type=${INSTANCE_TYPE},az=${AZ}"
+    }
     upload() {  # $1 = file; key partitioned by the timestamp in its name
       local f=$1 b ts
       b=$(basename "$f"); ts=$(echo "$b" | grep -oE '[0-9]{8}T[0-9]{4}' | head -1)
       [ -z "$ts" ] && ts=$(date -u +%Y%m%dT%H%M)
-      aws s3 cp --only-show-errors "$f" \
+      aws s3 cp --only-show-errors --metadata "$(meta)" "$f" \
         "${DEST}/${ts:0:4}/${ts:4:2}/${ts:6:2}/${ts:9:2}/${b}" && rm -f "$f"
     }
-    sweep() {   # $1 = minimum age in seconds before a file counts as complete
+    sweep() {   # $1 = minimum age in seconds before a pcap counts as complete
       local now f; now=$(date +%s)
-      for f in "$OUT"/*.pcap "$OUT"/net-state-*.txt; do
+      for f in "$OUT"/*.pcap; do
         [ -e "$f" ] || continue
         [ $(( now - $(stat -c %Y "$f") )) -ge "$1" ] && upload "$f"
+      done
+      # Snapshots are written complete (tmp + mv), so ship them as they appear.
+      for f in "$OUT"/net-state-*.txt "$OUT"/pods-*.jsonl; do
+        [ -e "$f" ] && upload "$f"
       done
       # Cap: if uploads keep failing, drop the oldest rather than fill the disk.
       local n; n=$(ls -1 "$OUT" | wc -l)
@@ -122,6 +217,7 @@ spec:
       labels:
         app: packet-capture-shipper
     spec:
+      serviceAccountName: packet-capture-shipper
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       terminationGracePeriodSeconds: 90
@@ -132,7 +228,8 @@ spec:
           effect: NoSchedule
       containers:
         - name: capture
-          # Pinned, verified on Docker Hub's tags API (arm64 present).
+          # Pinned, verified on Docker Hub's tags API (arm64 present); ships
+          # tcpdump, iproute2, curl and jq, all used by capture.sh.
           image: nicolaka/netshoot:v0.16
           command: ["/bin/bash", "/scripts/capture.sh"]
           env:
@@ -140,8 +237,16 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
             - name: ROTATE_SECONDS
               value: {{ (.Values.packetCapture).rotateSeconds | default 300 | quote }}
+            {{- with (.Values.packetCapture).filter }}
+            - name: CAPTURE_FILTER
+              value: {{ . | quote }}
+            {{- end }}
           securityContext:
             runAsUser: 0
             capabilities:
@@ -154,7 +259,7 @@ spec:
           resources:
             requests:
               cpu: 20m
-              memory: 32Mi
+              memory: 48Mi
             limits:
               cpu: 250m
               memory: 256Mi
@@ -172,6 +277,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
             - name: ROTATE_SECONDS
               value: {{ (.Values.packetCapture).rotateSeconds | default 300 | quote }}
             - name: MAX_FILES
