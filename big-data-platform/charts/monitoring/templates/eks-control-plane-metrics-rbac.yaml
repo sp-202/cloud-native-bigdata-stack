@@ -1,0 +1,43 @@
+{{- if .Values.enabled }}
+# ------------------------------------------------------------------------------
+# Monitoring - EKS control-plane metrics RBAC
+# ------------------------------------------------------------------------------
+# Lets Prometheus read kube-scheduler and kube-controller-manager metrics,
+# which EKS (Kubernetes >= 1.28) serves through the API server under
+# /apis/metrics.eks.amazonaws.com/v1/{ksh,kcm}/container/metrics. The scrape
+# jobs are kube-prometheus-stack.prometheus.prometheusSpec.
+# additionalScrapeConfigs in big-data-platform/values.yaml; the rule is AWS's
+# documented one ("Fetch control plane raw metrics in Prometheus format").
+#
+# The subject is the ServiceAccount kube-prometheus-stack creates for
+# Prometheus (fullnameOverride "kube-prometheus-stack", release namespace
+# default).
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: eks-control-plane-metrics-reader
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: ["metrics.eks.amazonaws.com"]
+    resources: ["kcm/metrics", "ksh/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: eks-control-plane-metrics-reader
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: eks-control-plane-metrics-reader
+subjects:
+  - kind: ServiceAccount
+    name: kube-prometheus-stack-prometheus
+    namespace: default
+{{- end }}

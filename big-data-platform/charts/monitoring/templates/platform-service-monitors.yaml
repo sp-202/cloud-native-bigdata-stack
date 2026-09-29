@@ -1,0 +1,77 @@
+{{- if .Values.enabled }}
+# ------------------------------------------------------------------------------
+# Monitoring - ServiceMonitors for platform components installed by Terraform
+# ------------------------------------------------------------------------------
+# Karpenter and node-local-dns are installed by terraform-aws-k8s-ha before
+# kube-prometheus-stack exists, so — as with Cilium (cilium-service-monitors
+# .yaml) — their ServiceMonitors live here, applied in the same release that
+# installs the ServiceMonitor CRD, instead of in their own charts.
+#
+# Every endpoint relabels node / host_ip / pod_ip, the same join keys as every
+# other target, Loki stream and network log.
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+# Karpenter (terraform-aws-k8s-ha karpenter-k8s.tf, chart 1.13.0, namespace
+# karpenter): node launches, disruption and consolidation decisions, pod
+# scheduling latency. The chart's Service exposes port "http-metrics" (8080).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: karpenter
+  namespace: karpenter
+  labels:
+    release: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: karpenter
+  namespaceSelector:
+    matchNames:
+      - karpenter
+  endpoints:
+    - port: http-metrics
+      interval: 30s
+      path: /metrics
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_pod_host_ip]
+          targetLabel: host_ip
+        - sourceLabels: [__meta_kubernetes_pod_ip]
+          targetLabel: pod_ip
+---
+# node-local-dns (terraform-aws-k8s-ha node-local-dns.tf): per-node DNS cache —
+# query rate, cache hits and upstream errors per node, the DNS half of any
+# "S3 connection took N seconds" question. Its metrics Service is port
+# "metrics" (9253).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: node-local-dns
+  namespace: kube-system
+  labels:
+    release: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    matchLabels:
+      k8s-app: node-local-dns
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_pod_host_ip]
+          targetLabel: host_ip
+        - sourceLabels: [__meta_kubernetes_pod_ip]
+          targetLabel: pod_ip
+{{- end }}

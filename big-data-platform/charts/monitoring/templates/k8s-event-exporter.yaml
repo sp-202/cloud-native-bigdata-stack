@@ -1,0 +1,147 @@
+{{- if and .Values.enabled (.Values.eventExporter).enabled }}
+# ------------------------------------------------------------------------------
+# Monitoring - Kubernetes event exporter (events -> stdout -> promtail -> Loki)
+# ------------------------------------------------------------------------------
+# Kubernetes events — OOMKilled, BackOff, FailedScheduling, Evicted,
+# FailedMount, Karpenter's Nominated/Disrupting, Unhealthy probes — live in
+# etcd for one hour and were collected nowhere, so after a run the reason a
+# pod died or waited was gone. This writes every event, as one JSON line, to
+# stdout; promtail picks it up like any pod log and (values.yaml, the
+# app="k8s-event-exporter" match) turns type into level (Warning -> warn,
+# Normal -> info) and reason / involvedObject kind / namespace into labels.
+#
+#   Loki:  {app="k8s-event-exporter", level="warn"}
+#          {app="k8s-event-exporter", event_reason="OOMKilling"}
+#
+# Read-only: bound to the built-in "view" ClusterRole (namespaced objects, for
+# the involved object's labels) plus get/list/watch on events and nodes, which
+# "view" does not cover.
+#
+# Image pinned and verified on ghcr.io (v1.7, amd64 + arm64).
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-event-exporter
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8s-event-exporter
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: ["", "events.k8s.io"]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-event-exporter
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8s-event-exporter
+subjects:
+  - kind: ServiceAccount
+    name: k8s-event-exporter
+    namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-event-exporter-view
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: k8s-event-exporter
+    namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k8s-event-exporter-config
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  config.yaml: |
+    logLevel: error
+    logFormat: json
+    # Events older than this at startup are skipped, so a restart does not
+    # replay the last hour into Loki.
+    maxEventAgeSeconds: 60
+    kubeQPS: 50
+    kubeBurst: 100
+    route:
+      routes:
+        - match:
+            - receiver: stdout
+    receivers:
+      - name: stdout
+        stdout: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-event-exporter
+  namespace: kube-system
+  labels:
+    app: k8s-event-exporter
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8s-event-exporter
+  template:
+    metadata:
+      labels:
+        app: k8s-event-exporter
+        app.kubernetes.io/name: k8s-event-exporter
+    spec:
+      serviceAccountName: k8s-event-exporter
+      nodeSelector:
+        node-role.kubernetes.io/core-node: ""
+      containers:
+        - name: event-exporter
+          image: ghcr.io/resmoio/kubernetes-event-exporter:v1.7
+          args: ["-conf=/data/config.yaml"]
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: k8s-event-exporter-config
+{{- end }}

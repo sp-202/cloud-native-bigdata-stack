@@ -1122,13 +1122,17 @@ kube-prometheus-stack:
       podMonitorSelectorNilUsesHelmValues: false
       nodeSelector:
         node-role.kubernetes.io/data-node: ""
+      # 2Gi/8Gi (was 1Gi/4Gi): Hubble metrics now carry pod and namespace
+      # labels, Spark executor metrics are scraped for the first time, and
+      # Loki, promtail, Karpenter, node-local-dns and the EKS control plane
+      # are new targets: more series, and a head block that has to fit.
       resources:
         requests:
           cpu: "500m"
-          memory: "1Gi"
+          memory: "2Gi"
         limits:
           cpu: "2000m"
-          memory: "4Gi"
+          memory: "8Gi"
       # Enables POST /api/v1/admin/tsdb/snapshot, which is the ONLY way to get
       # the current head into S3 on demand. This matters because the cluster
       # is destroyed ~10-20 min after a benchmark finishes, and the sidecar
@@ -1164,6 +1168,40 @@ kube-prometheus-stack:
       # skip_head=false is the whole point — it materialises the in-memory
       # head as a real block, which is exactly the data a benchmark run
       # produces and would otherwise lose.
+      # EKS control-plane metrics (Kubernetes >= 1.28) through the API
+      # server's metrics.eks.amazonaws.com group. Paths, relabel and TLS are
+      # AWS's own documented scrape config ("Fetch control plane raw metrics
+      # in Prometheus format"). Needs the RBAC in charts/monitoring/templates/
+      # eks-control-plane-metrics-rbac.yaml. EKS control-plane LOGS stay in
+      # CloudWatch (/aws/eks/k8s-ha-cluster/cluster: api, audit,
+      # authenticator, controllerManager, scheduler).
+      additionalScrapeConfigs:
+        - job_name: eks-kube-scheduler
+          metrics_path: /apis/metrics.eks.amazonaws.com/v1/ksh/container/metrics
+          scheme: https
+          kubernetes_sd_configs:
+            - role: endpoints
+          tls_config:
+            ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+            insecure_skip_verify: true
+          bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+              action: keep
+              regex: default;kubernetes;https
+        - job_name: eks-kube-controller-manager
+          metrics_path: /apis/metrics.eks.amazonaws.com/v1/kcm/container/metrics
+          scheme: https
+          kubernetes_sd_configs:
+            - role: endpoints
+          tls_config:
+            ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+            insecure_skip_verify: true
+          bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+              action: keep
+              regex: default;kubernetes;https
       enableAdminAPI: true
       # Was emptyDir (no storageSpec at all) — every pod reschedule (Karpenter
       # consolidation, node replacement, AMI rollout) wiped ALL metrics
@@ -1264,6 +1302,19 @@ kube-prometheus-stack:
           existingSecret:
             key: object-store.yaml
             name: thanos-objstore-secret
+  # EKS runs etcd, the scheduler and the controller-manager off-cluster, and
+  # Cilium replaces kube-proxy: these four default scrapes have no targets
+  # here and would sit permanently down (and fire TargetDown). Scheduler and
+  # controller-manager metrics come through the EKS API instead
+  # (additionalScrapeConfigs above).
+  kubeEtcd:
+    enabled: false
+  kubeScheduler:
+    enabled: false
+  kubeControllerManager:
+    enabled: false
+  kubeProxy:
+    enabled: false
   prometheus-node-exporter:
     fullnameOverride: "node-exporter"
     # Exposes ENA/Nitro allowance-exceeded counters (node_ethtool_*) on both
@@ -1376,6 +1427,10 @@ loki-stack:
       timeoutSeconds: 10
       failureThreshold: 20
       initialDelaySeconds: 30
+    # Loki's own metrics (ingestion rate, discarded samples by reason,
+    # rate-limit rejections) — the only way to see that logs are being lost.
+    serviceMonitor:
+      enabled: true
     config:
       # Flush policy: time trigger at 15m, size trigger as the pressure
       # relief valve, and chunk cuts aligned so the flushes go out as a
@@ -1514,6 +1569,23 @@ loki-stack:
       compactor:
         working_directory: /data/loki/compactor
         shared_store: s3
+      # Explicit limits instead of Loki 2.9's defaults (4 MB/s per tenant,
+      # 3 MB/s per stream, 256 KB lines rejected outright). An SF1000 run
+      # with 56 executors logging INFO, plus node journals and Kubernetes
+      # events, can burst past 4 MB/s, and anything over is dropped at the
+      # push with a 429 — silently, from the reader's side. Over-long lines
+      # are truncated rather than rejected, so a huge stack trace is kept.
+      limits_config:
+        ingestion_rate_mb: 16
+        ingestion_burst_size_mb: 32
+        per_stream_rate_limit: 8MB
+        per_stream_rate_limit_burst: 16MB
+        max_line_size: 512KB
+        max_line_size_truncate: true
+        reject_old_samples: true
+        reject_old_samples_max_age: 168h
+        max_entries_limit_per_query: 20000
+        max_query_series: 5000
   promtail:
     enabled: true
     fullnameOverride: "promtail"
@@ -1530,17 +1602,14 @@ loki-stack:
     # only ever runs on core-node/data-node, and every multiline/labeling
     # rule added above for spark_role/spark_app_selector processes zero real
     # lines — the DaemonSet was never on the node producing them.
+    #
+    # Tolerates EVERY taint, not a list of known ones: a log agent that
+    # misses a node misses every pod on it, and a new taint (Karpenter's
+    # disruption taints, node.cilium.io/agent-not-ready during bootstrap,
+    # NotReady/unreachable during an incident — when logs matter most) would
+    # otherwise evict or block it silently.
     tolerations:
-      - key: node-role.kubernetes.io/master
-        operator: Exists
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/control-plane
-        operator: Exists
-        effect: NoSchedule
-      - key: spark-only
-        operator: Equal
-        value: "true"
-        effect: NoSchedule
+      - operator: Exists
     livenessProbe:
       httpGet:
         path: /ready
@@ -1555,6 +1624,28 @@ loki-stack:
       timeoutSeconds: 10
       failureThreshold: 20
       initialDelaySeconds: 15
+    # promtail's own metrics: promtail_sent_entries_total,
+    # promtail_dropped_entries_total, promtail_request_duration_seconds by
+    # status — how to tell "no logs" from "logs dropped or rate-limited".
+    serviceMonitor:
+      enabled: true
+    # Node journal for the journal scrape below. machine-id is how the
+    # journal reader finds /var/log/journal/<machine-id>/.
+    extraVolumes:
+      - name: journal
+        hostPath:
+          path: /var/log/journal
+      - name: machine-id
+        hostPath:
+          path: /etc/machine-id
+          type: File
+    extraVolumeMounts:
+      - name: journal
+        mountPath: /var/log/journal
+        readOnly: true
+      - name: machine-id
+        mountPath: /etc/machine-id
+        readOnly: true
     config:
       # REQUIRED — do not delete. loki-stack's own values.yaml hardcodes
       #
@@ -1574,6 +1665,10 @@ loki-stack:
       # makes this worth the comment.
       clients:
         - url: http://loki:3100/loki/api/v1/push
+          # Same cluster label Prometheus stamps (externalLabels), so Loki
+          # and Prometheus series join on it in one Grafana dashboard.
+          external_labels:
+            cluster: k8s-ha-cluster
       snippets:
         # Multi-line stack traces: promtail (via `cri: {}` above) still tails
         # one *raw container log line* at a time, but a JVM/Python stack
@@ -1655,6 +1750,71 @@ loki-stack:
                 - multiline:
                     firstline: '^\d{4}-\d{2}-\d{2}'
                     max_wait_time: 3s
+          # --- level: one normalised label across every log format ----------
+          # Values: trace | debug | info | warn | error | fatal, so a panel can
+          # be {level=~"warn|error|fatal"} over every pod. Each regex runs in
+          # turn and a later match overrides an earlier one, so they go from
+          # least to most reliable: bare "DATE TIME LEVEL", Airflow, log4j
+          # pattern, klog (kubelet-style I/W/E/F prefix), logfmt level=
+          # (cilium, karpenter, containerd), and last the JSON "level" key
+          # (Spark's log4j2 JsonLayout, most Go JSON loggers). A line with no
+          # recognisable level gets no label rather than a guessed one.
+          - regex:
+              expression: '^\S+[ T]\S+ +(?P<level>TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\b'
+          - regex:
+              expression: '^\[[^\]]+\] \{[^}]*\} (?P<level>[A-Z]+) - '
+          - regex:
+              expression: '^\d{2}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} (?P<level>[A-Z]+) '
+          - regex:
+              expression: '^(?P<level>[IWEF])\d{4} \d{2}:\d{2}:\d{2}'
+          - regex:
+              expression: '(?:^|\s)level=(?P<level>[A-Za-z]+)'
+          - regex:
+              expression: '"(?:level|severity|lvl|levelname)"\s*:\s*"(?P<level>[A-Za-z]+)"'
+          # Kubernetes events (k8s-event-exporter, charts/monitoring): the
+          # event type is the level (Warning -> warn, Normal -> info), and
+          # reason / kind / namespace of the involved object become labels —
+          # bounded sets (tens of reasons), unlike object names, which stay
+          # in the line.
+          - match:
+              selector: '{app="k8s-event-exporter"}'
+              stages:
+                - json:
+                    expressions:
+                      level: type
+                      event_reason: reason
+                      event_kind: involvedObject.kind
+                      event_namespace: involvedObject.namespace
+                - labels:
+                    event_reason:
+                    event_kind:
+                    event_namespace:
+          - replace:
+              source: level
+              expression: '(?i)^(t|trace)$'
+              replace: trace
+          - replace:
+              source: level
+              expression: '(?i)^(d|debug)$'
+              replace: debug
+          - replace:
+              source: level
+              expression: '(?i)^(i|info|information|notice|normal)$'
+              replace: info
+          - replace:
+              source: level
+              expression: '(?i)^(w|warn|warning)$'
+              replace: warn
+          - replace:
+              source: level
+              expression: '(?i)^(e|err|error)$'
+              replace: error
+          - replace:
+              source: level
+              expression: '(?i)^(f|fatal|crit|critical|panic|alert|emerg)$'
+              replace: fatal
+          - labels:
+              level:
         extraRelabelConfigs:
           - action: replace
             source_labels: [__meta_kubernetes_pod_label_spark_role]
@@ -1675,6 +1835,47 @@ loki-stack:
           - action: replace
             source_labels: [__meta_kubernetes_pod_host_ip]
             target_label: host_ip
+        # Node journal: kubelet, containerd, the kernel (OOM kills, NIC
+        # resets), systemd-networkd and cloud-init — the layer the 22 Sep
+        # root cause lived in, and none of it is a pod log. node_name matches
+        # the Kubernetes node name, so it lines up with the pod streams;
+        # level is the journal priority, mapped to the same six values.
+        extraScrapeConfigs: |
+          - job_name: systemd-journal
+            journal:
+              path: /var/log/journal
+              max_age: 12h
+              labels:
+                job: systemd-journal
+            relabel_configs:
+              - source_labels: [__journal__hostname]
+                regex: (.+)
+                replacement: $1.{{ .Values.global.awsLakehouse.region }}.compute.internal
+                target_label: node_name
+              - source_labels: [__journal__systemd_unit]
+                target_label: unit
+              - source_labels: [__journal_syslog_identifier]
+                target_label: syslog_identifier
+              - source_labels: [__journal__transport]
+                target_label: transport
+              - source_labels: [__journal_priority_keyword]
+                target_label: level
+              - source_labels: [level]
+                regex: (emerg|alert|crit)
+                replacement: fatal
+                target_label: level
+              - source_labels: [level]
+                regex: err
+                replacement: error
+                target_label: level
+              - source_labels: [level]
+                regex: warning
+                replacement: warn
+                target_label: level
+              - source_labels: [level]
+                regex: notice
+                replacement: info
+                target_label: level
 
 # =============================================================================
 # CLOUDFLARED (local sub-chart) — spread across GP nodes for tunnel HA
@@ -1711,6 +1912,10 @@ headlamp:
 # =============================================================================
 monitoring:
   enabled: true
+  # Kubernetes events -> stdout -> promtail -> Loki
+  # (charts/monitoring/templates/k8s-event-exporter.yaml).
+  eventExporter:
+    enabled: true
   # S3 handshake capture per node -> s3://<lakehouse>/network-logs/packet-capture/
   # (charts/monitoring/templates/packet-capture-shipper.yaml). Headers of
   # SYN/SYN-ACK/RST on :443 only, plus a 60 s ip addr/rule/route snapshot.
