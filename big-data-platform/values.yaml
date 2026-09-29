@@ -1639,12 +1639,22 @@ loki-stack:
         hostPath:
           path: /etc/machine-id
           type: File
+      # Spark's node-local log files (see the spark-node-files job below).
+      # The host path of what Spark pods mount as /mnt/spark-nvme; on nodes
+      # without Spark it is simply empty.
+      - name: spark-nvme
+        hostPath:
+          path: /mnt/spark-nvme/spark-shuffle
+          type: DirectoryOrCreate
     extraVolumeMounts:
       - name: journal
         mountPath: /var/log/journal
         readOnly: true
       - name: machine-id
         mountPath: /etc/machine-id
+        readOnly: true
+      - name: spark-nvme
+        mountPath: /spark-nvme
         readOnly: true
     config:
       # REQUIRED — do not delete. loki-stack's own values.yaml hardcodes
@@ -1876,6 +1886,79 @@ loki-stack:
                 regex: notice
                 replacement: info
                 target_label: level
+          # Spark's own files on the node NVMe, which never reach stdout: the
+          # JVM GC/safepoint logs (-Xlog:gc*,safepoint:file=/mnt/spark-nvme/
+          # gc-*.log — the instrument for "was that stall a GC pause or
+          # below the JVM") and the diag*.log appender (DAGScheduler stage
+          # boundaries, file listing, planning — additivity=false in the job
+          # YAMLs, so file-only). Karpenter deletes spark nodes minutes after
+          # a job, so without this they were lost every run. A raw copy also
+          # goes to S3 (charts/monitoring spark-node-log-shipper).
+          #
+          # role: node + __host__ makes each promtail pick only its own node
+          # (promtail drops targets whose __host__ is not its HOSTNAME).
+          - job_name: spark-node-files
+            kubernetes_sd_configs:
+              - role: node
+            relabel_configs:
+              - source_labels: [__meta_kubernetes_node_name]
+                target_label: __host__
+              - source_labels: [__meta_kubernetes_node_name]
+                target_label: node_name
+              - source_labels: [__meta_kubernetes_node_address_InternalIP]
+                target_label: host_ip
+              - target_label: job
+                replacement: spark-node-files
+              - target_label: __path__
+                replacement: /spark-nvme/{gc-*.log*,diag*.log}
+            pipeline_stages:
+              # log_type from the file name: gc-*.log* or diag*.log
+              - regex:
+                  source: filename
+                  expression: '/(?P<log_type>gc|diag)[-.]'
+              # driver / executor where the name says so (gc-driver-*, gc-exec-*,
+              # gc-28x10-exec-*, gc-vanilla-driver-*, ...)
+              - regex:
+                  source: filename
+                  expression: '-(?P<spark_role>driver|exec)-'
+              - replace:
+                  source: spark_role
+                  expression: '^(exec)$'
+                  replace: executor
+              # level: JVM unified logging "[time][uptime][info][gc,...]", then
+              # the diag PatternLayout "<ISO8601> INFO  [thread] ..."
+              - regex:
+                  expression: '\]\[(?P<level>trace|debug|info|warning|error)\]\['
+              - regex:
+                  expression: '^\S+ (?P<level>TRACE|DEBUG|INFO|WARN|ERROR|FATAL) '
+              - replace:
+                  source: level
+                  expression: '(?i)^(warn|warning)$'
+                  replace: warn
+              - replace:
+                  source: level
+                  expression: '(?i)^(error)$'
+                  replace: error
+              - replace:
+                  source: level
+                  expression: '(?i)^(info)$'
+                  replace: info
+              - replace:
+                  source: level
+                  expression: '(?i)^(debug)$'
+                  replace: debug
+              - replace:
+                  source: level
+                  expression: '(?i)^(trace)$'
+                  replace: trace
+              - replace:
+                  source: level
+                  expression: '(?i)^(fatal)$'
+                  replace: fatal
+              - labels:
+                  log_type:
+                  spark_role:
+                  level:
 
 # =============================================================================
 # CLOUDFLARED (local sub-chart) — spread across GP nodes for tunnel HA
@@ -1916,6 +1999,12 @@ monitoring:
   # (charts/monitoring/templates/k8s-event-exporter.yaml).
   eventExporter:
     enabled: true
+  # Spark GC/diag files on the node NVMe -> s3://<lakehouse>/spark-node-logs/
+  # (charts/monitoring/templates/spark-node-log-shipper.yaml); promtail also
+  # tails them into Loki (spark-node-files job).
+  sparkNodeLogs:
+    enabled: true
+    intervalSeconds: 300
   # S3 handshake capture per node -> s3://<lakehouse>/network-logs/packet-capture/
   # (charts/monitoring/templates/packet-capture-shipper.yaml). Headers of
   # SYN/SYN-ACK/RST on :443 only, plus a 60 s ip addr/rule/route snapshot.

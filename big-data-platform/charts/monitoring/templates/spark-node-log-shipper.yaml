@@ -1,0 +1,135 @@
+{{- if and .Values.enabled (.Values.sparkNodeLogs).enabled }}
+# ------------------------------------------------------------------------------
+# Monitoring - Spark node log shipper (GC / diag files on the NVMe -> S3)
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# The SparkApplications write two kinds of logs only to the node's NVMe, never
+# to stdout: the JVM GC/safepoint logs (-Xlog:gc*,safepoint:file=/mnt/
+# spark-nvme/gc-*.log) and the diag*.log appender (DAGScheduler, file listing,
+# planning; additivity=false in examples/spark-jobs/*.yaml). Karpenter deletes
+# spark nodes a few minutes after a job, so these were lost after every run.
+#
+# Two copies, on purpose:
+#   * Loki — promtail's spark-node-files job (values.yaml) tails them live,
+#     labelled node_name / host_ip / log_type / spark_role / level;
+#   * S3 — this DaemonSet uploads the raw files, so GC logs stay usable by GC
+#     tools (GCViewer, GCEasy) and survive a Loki problem.
+#
+#   s3://<lakehouse>/spark-node-logs/<YYYY-MM-DD>/<node>/<file>
+#   object metadata: node, host-ip
+#
+# Only the top-level gc-* / diag* files are read, by glob — never a recursive
+# walk: the same directory holds the range cache and shuffle files, tens of
+# thousands of them. A file is re-uploaded only when its size or mtime changed,
+# every INTERVAL seconds, and everything once more on SIGTERM. The date in the
+# key is the upload day (UTC), so a file still growing past midnight lands
+# under both days.
+#
+# Same credentials as the other shippers: node IMDS role on the lakehouse
+# bucket, no new IAM. Spark nodes only (nodeSelector + the spark-only
+# toleration). Read-only hostPath.
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-node-log-shipper-script
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  ship.sh: |
+    #!/bin/bash
+    set -u
+    SRC=/spark-nvme
+    declare -A SEEN   # file -> "size:mtime" last uploaded
+    ship() {          # upload every gc-*/diag* file that changed since last time
+      local f b sig day
+      for f in "$SRC"/gc-*.log* "$SRC"/diag*.log; do
+        [ -f "$f" ] || continue
+        sig=$(stat -c '%s:%Y' "$f") || continue
+        [ "${SEEN[$f]:-}" = "$sig" ] && continue
+        b=$(basename "$f"); day=$(date -u +%Y-%m-%d)
+        if aws s3 cp --only-show-errors --metadata "node=${NODE_NAME},host-ip=${HOST_IP}" \
+             "$f" "s3://${BUCKET}/spark-node-logs/${day}/${NODE_NAME}/${b}"; then
+          SEEN[$f]=$sig
+        fi
+      done
+    }
+    trap 'ship; exit 0' TERM INT
+    while true; do
+      ship
+      sleep "${INTERVAL}" & wait $!
+    done
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: spark-node-log-shipper
+  namespace: kube-system
+  labels:
+    app: spark-node-log-shipper
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    matchLabels:
+      app: spark-node-log-shipper
+  template:
+    metadata:
+      labels:
+        app: spark-node-log-shipper
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/spark-node: ""
+      tolerations:
+        - key: spark-only
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: shipper
+          # Pinned, verified on Docker Hub's tags API (arm64 present).
+          image: amazon/aws-cli:2.37.4
+          command: ["/bin/bash", "/scripts/ship.sh"]
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: BUCKET
+              value: {{ .Values.global.awsLakehouse.bucket | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.global.awsLakehouse.region | quote }}
+            - name: INTERVAL
+              value: {{ (.Values.sparkNodeLogs).intervalSeconds | default 300 | quote }}
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: spark-nvme
+              mountPath: /spark-nvme
+              readOnly: true
+            - name: script
+              mountPath: /scripts
+      volumes:
+        - name: spark-nvme
+          hostPath:
+            path: /mnt/spark-nvme/spark-shuffle
+            type: DirectoryOrCreate
+        - name: script
+          configMap:
+            name: spark-node-log-shipper-script
+            defaultMode: 0755
+{{- end }}
