@@ -10,9 +10,6 @@ ENV SPARK_VERSION=3.5.8 \
     AWS_SDK_V2_VERSION=2.29.52 \
     GRAVITINO_VERSION=1.2.0 \
     POSTGRES_VERSION=42.6.0 \
-    SEDONA_VERSION=1.8.1 \
-    GEOTOOLS_WRAPPER_VERSION=1.8.1-33.1 \
-    H3_VERSION=4.0.1 \
     COMET_VERSION=1.0.0-preview \
     SPARK_HOME=/opt/spark
 
@@ -47,25 +44,21 @@ RUN wget https://jdbc.postgresql.org/download/postgresql-${POSTGRES_VERSION}.jar
     wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_V1_VERSION}/aws-java-sdk-bundle-${AWS_SDK_V1_VERSION}.jar && \
     wget https://repo1.maven.org/maven2/software/amazon/awssdk/bundle/${AWS_SDK_V2_VERSION}/bundle-${AWS_SDK_V2_VERSION}.jar && \
     wget https://repo1.maven.org/maven2/software/amazon/awssdk/url-connection-client/${AWS_SDK_V2_VERSION}/url-connection-client-${AWS_SDK_V2_VERSION}.jar && \
-    wget https://repo1.maven.org/maven2/org/apache/sedona/sedona-spark-shaded-3.5_2.13/${SEDONA_VERSION}/sedona-spark-shaded-3.5_2.13-${SEDONA_VERSION}.jar && \
     wget https://repo1.maven.org/maven2/org/apache/gravitino/gravitino-spark-connector-runtime-3.5_2.13/${GRAVITINO_VERSION}/gravitino-spark-connector-runtime-3.5_2.13-${GRAVITINO_VERSION}.jar && \
-    wget https://repo1.maven.org/maven2/org/datasyslab/geotools-wrapper/${GEOTOOLS_WRAPPER_VERSION}/geotools-wrapper-${GEOTOOLS_WRAPPER_VERSION}.jar && \
-    wget https://repo1.maven.org/maven2/com/uber/h3/${H3_VERSION}/h3-${H3_VERSION}.jar && \
     wget https://repo1.maven.org/maven2/org/apache/spark/spark-connect_2.13/${SPARK_VERSION}/spark-connect_2.13-${SPARK_VERSION}.jar
 
-# geotools-wrapper bundles an UNSHADED slf4j-api 1.7.36 (38 classes under org/slf4j/). When it
-# lands on the classpath ahead of Spark's slf4j-api-2.0.7, the 1.x LoggerFactory looks for a
-# 1.x StaticLoggerBinder, finds none -- log4j-slf4j2-impl is a 2.x provider -- and falls back
-# to NOP. Spark logs everything through SLF4J, so every Spark/Comet JVM log line was silently
-# discarded on the 29 Sep runs: the pods printed
-#   SLF4J: Defaulting to no-operation (NOP) logger implementation
-# and nothing else from the JVM. That is also why diag.log was 0 bytes on every node, and why
-# only Python prints and native (Rust, straight to stderr) lines reached Loki.
-# Strip the copy; geotools then resolves the SLF4J API from Spark's 2.0.7 jar, which is
-# backward compatible for callers.
-RUN zip -q -d geotools-wrapper-${GEOTOOLS_WRAPPER_VERSION}.jar 'org/slf4j/*' 'META-INF/maven/org.slf4j/*' && \
-    if unzip -l geotools-wrapper-${GEOTOOLS_WRAPPER_VERSION}.jar | grep -q ' org/slf4j/'; then \
-      echo "org/slf4j still present in geotools-wrapper" >&2; exit 1; fi
+# No jar may bundle its own unrelocated SLF4J. Spark 3.5 ships slf4j-api 2.0.7 with a log4j 2.x
+# provider; a second org/slf4j/LoggerFactory from an older API (geotools-wrapper 1.8.1-33.1
+# carried 1.7.36) can win the classpath race, find no 1.x binding and fall back to NOP --
+# silently discarding every Spark and Comet JVM log line, which is what happened on the
+# 29 Sep runs. Sedona, geotools-wrapper and h3 were removed for that reason (unused by the
+# TPC-H jobs; Comet loads Sedona expressions only when Sedona is on the classpath). This
+# check fails the build if any jar added later reintroduces the problem.
+RUN bad=""; for j in $SPARK_HOME/jars/*.jar; do \
+      case "$(basename "$j")" in slf4j-*|jcl-over-slf4j-*|jul-to-slf4j-*|log4j-slf4j*) continue ;; esac; \
+      if unzip -Z1 "$j" 2>/dev/null | grep -q '^org/slf4j/LoggerFactory.class$'; then bad="$bad $(basename "$j")"; fi; \
+    done; \
+    if [ -n "$bad" ]; then echo "jars bundling unrelocated SLF4J:$bad" >&2; exit 1; fi
 
 # Final Stage
 FROM eclipse-temurin:17-jdk-noble
@@ -128,7 +121,7 @@ RUN cp $SPARK_HOME/kubernetes/dockerfiles/spark/entrypoint.sh /opt/entrypoint.sh
 # spark.plugins and spark.sql.extensions are deliberately NOT set here. Neither is additive: a
 # job that sets either in its SparkConf (as the TPC-H SparkApplication does, for Comet) replaces
 # this value outright rather than adding to it, so baking them creates the illusion that
-# Gravitino/Sedona/Iceberg are active when they have been silently dropped. Declare the full
+# Gravitino/Iceberg are active when they have been silently dropped. Declare the full
 # list per job instead, e.g.
 #   spark.plugins: "org.apache.spark.CometPlugin,org.apache.gravitino.spark.connector.plugin.GravitinoSparkPlugin"
 RUN printf "spark.network.timeout 120s\n\
@@ -137,7 +130,6 @@ spark.executor.heartbeatInterval 10s\n\
 spark.hadoop.fs.s3a.threads.keepalivetime 60\n\
 spark.hadoop.fs.s3a.multipart.purge.age 86400\n\
 spark.serializer org.apache.spark.serializer.KryoSerializer\n\
-spark.kryo.registrator org.apache.sedona.core.serde.SedonaKryoRegistrator\n\
 spark.sql.gravitino.metalake enterprise_metalake\n\
 spark.sql.gravitino.uri http://gravitino.default.svc.cluster.local:8090\n\
 spark.sql.gravitino.enableIcebergSupport true\n" > $SPARK_HOME/conf/spark-defaults.conf
