@@ -16,7 +16,7 @@ ENV SPARK_VERSION=3.5.8 \
     COMET_VERSION=1.0.0-preview \
     SPARK_HOME=/opt/spark
 
-RUN apt-get update && apt-get install -y wget curl
+RUN apt-get update && apt-get install -y wget curl zip
 
 # Base Spark arm64 build pulled from S3 by the workflow
 # (docker/spark/spark-3.5.8-comet-v1.tar.gz).
@@ -52,6 +52,20 @@ RUN wget https://jdbc.postgresql.org/download/postgresql-${POSTGRES_VERSION}.jar
     wget https://repo1.maven.org/maven2/org/datasyslab/geotools-wrapper/${GEOTOOLS_WRAPPER_VERSION}/geotools-wrapper-${GEOTOOLS_WRAPPER_VERSION}.jar && \
     wget https://repo1.maven.org/maven2/com/uber/h3/${H3_VERSION}/h3-${H3_VERSION}.jar && \
     wget https://repo1.maven.org/maven2/org/apache/spark/spark-connect_2.13/${SPARK_VERSION}/spark-connect_2.13-${SPARK_VERSION}.jar
+
+# geotools-wrapper bundles an UNSHADED slf4j-api 1.7.36 (38 classes under org/slf4j/). When it
+# lands on the classpath ahead of Spark's slf4j-api-2.0.7, the 1.x LoggerFactory looks for a
+# 1.x StaticLoggerBinder, finds none -- log4j-slf4j2-impl is a 2.x provider -- and falls back
+# to NOP. Spark logs everything through SLF4J, so every Spark/Comet JVM log line was silently
+# discarded on the 29 Sep runs: the pods printed
+#   SLF4J: Defaulting to no-operation (NOP) logger implementation
+# and nothing else from the JVM. That is also why diag.log was 0 bytes on every node, and why
+# only Python prints and native (Rust, straight to stderr) lines reached Loki.
+# Strip the copy; geotools then resolves the SLF4J API from Spark's 2.0.7 jar, which is
+# backward compatible for callers.
+RUN zip -q -d geotools-wrapper-${GEOTOOLS_WRAPPER_VERSION}.jar 'org/slf4j/*' 'META-INF/maven/org.slf4j/*' && \
+    if unzip -l geotools-wrapper-${GEOTOOLS_WRAPPER_VERSION}.jar | grep -q ' org/slf4j/'; then \
+      echo "org/slf4j still present in geotools-wrapper" >&2; exit 1; fi
 
 # Final Stage
 FROM eclipse-temurin:17-jdk-noble
