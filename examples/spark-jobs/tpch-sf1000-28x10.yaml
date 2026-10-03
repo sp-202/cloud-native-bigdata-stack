@@ -140,6 +140,9 @@ spec:
     "spark.comet.exec.columnarToRow.native.enabled": "true"
     "spark.comet.exec.memoryPool": "fair_unified"
     "spark.comet.exec.memoryPool.fraction": "1.0"
+    # INERT: no code reads this key -- the live one is spark.comet.exec.memoryPool.fraction
+    # just above, so the native pool is 100% of off-heap, not 80%. Kept so its absence is not
+    # mistaken for an oversight.
     "spark.comet.memoryPool.fraction": "0.8"
     "spark.comet.sparkToColumnar.enabled": "true"
     "spark.comet.sparkToColumnar.supportedOperatorList": "Range,InMemoryTableScan,RDDScan,OneRowRelation"
@@ -266,6 +269,16 @@ spec:
     "spark.sql.shuffle.partitions": "560"
     "spark.sql.adaptive.localShuffleReader.enabled": "true"
     "spark.sql.adaptive.coalescePartitions.enabled": "true"
+    # Fetch each map's contiguous shuffle blocks as one block. This is Spark's default;
+    # it is stated here because it is the A/B switch ("false" is the baseline). Spark only
+    # requests it for a reduce task reading a coalesced RANGE of partitions, so it applies
+    # where AQE coalesces -- here 560 partitions down to no fewer than 280 (default
+    # parallelism = total cores), i.e. ranges of ~2. Native shuffle no longer needs
+    # spark.serializer for this: its blocks are self-delimiting, and columnar shuffle uses
+    # UnsafeRowSerializer, which allows it too. Measured locally (SF10, q9, 200 partitions):
+    # 14x fewer remote blocks fetched, same bytes, wall clock unchanged within noise.
+    # Confirm it engaged with the "Batch fetch for shuffle N: true" lines in diag.log.
+    "spark.sql.adaptive.fetchShuffleBlocksInBatch": "true"
     "spark.sql.adaptive.skewJoin.enabled": "true"
     "spark.sql.files.maxPartitionBytes": "536870912"
 
@@ -321,8 +334,10 @@ spec:
     # holding a lock -- which is the hypothesis to confirm. That negative result is
     # as informative as a positive one, so capture it on driver and executors alike.
     #
-    # AsyncLoggerContextSelector keeps the loggers raised above off the hot path:
-    # without it every raised logger is a synchronised handoff on the appender.
+    # No AsyncLoggerContextSelector (removed in 34f6921): it needs the LMAX Disruptor jar,
+    # which the image does not ship, and without it log4j2 silently ignored this file's
+    # log4j2.properties. Raised loggers are therefore synchronous handoffs on the appender --
+    # keep per-task loggers few.
     #
     # (-XX:InitiatingHeapOccupancyPercent is a G1 flag and is inert under
     # -XX:+UseParallelGC. Left in place so this diff stays about diagnostics.)
@@ -578,6 +593,20 @@ data:
     logger.comet.level = info
     logger.cometSql.name = org.apache.spark.sql.comet
     logger.cometSql.level = info
+
+    # Shuffle batch-fetch decision, one DEBUG line per reduce task:
+    #   "Batch fetch for shuffle N: true|false (requested: true|false) ..."
+    # true = batched; false with requested: false = a single-partition read, nothing to
+    # batch; false with requested: true = refused, and the line says why.
+    #
+    # ADDITIVE, unlike the file-only loggers above: diag.log has never been shown to receive
+    # anything. It was 0 bytes on every node on 29 Sep, including cluster 2, which ran after
+    # the async selector was removed -- so it is not only the missing Disruptor jar. Until a
+    # run shows diag.log filling, this line also goes to stderr / Loki. Volume is one line per
+    # reduce task, a few dozen per second across the cluster.
+    logger.cometShuffleReader.name = org.apache.spark.sql.comet.execution.shuffle.CometBlockStoreShuffleReader
+    logger.cometShuffleReader.level = debug
+    logger.cometShuffleReader.appenderRef.diag.ref = diag
 
     # --- explicitly held down -------------------------------------------------
     # Per-task chatter. All of this is already in the event log with timestamps, so
