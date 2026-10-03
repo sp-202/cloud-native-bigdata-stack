@@ -37,12 +37,15 @@ spec:
             - "-in-cluster"
             - "-plugins-dir=/headlamp/plugins"
           env:
+            # Tracing off: no trace backend exists yet (Alloy routes OTLP metrics only), and the
+            # old target otel-collector:4317 never existed -- it logged an export error every ~12 s.
             - name: HEADLAMP_CONFIG_TRACING_ENABLED
-              value: "true"
+              value: "false"
             - name: HEADLAMP_CONFIG_METRICS_ENABLED
               value: "true"
+            # The node-local Alloy (Service internalTrafficPolicy: Local), OTLP gRPC -> Prometheus.
             - name: HEADLAMP_CONFIG_OTLP_ENDPOINT
-              value: "otel-collector:4317"
+              value: "alloy.kube-system.svc.cluster.local:4317"
             - name: HEADLAMP_CONFIG_SERVICE_NAME
               value: "headlamp"
             - name: HEADLAMP_CONFIG_SERVICE_VERSION

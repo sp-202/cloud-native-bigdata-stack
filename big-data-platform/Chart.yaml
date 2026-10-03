@@ -55,6 +55,14 @@ dependencies:
     repository: "https://grafana.github.io/helm-charts"
     condition: loki-stack.enabled
 
+  # Single node agent: pod logs, journal, Spark node files and Hubble drops -> Loki; OTLP
+  # (Comet) and its own delivery metrics -> Prometheus. Replaces loki-stack's promtail.
+  # Pipeline config: charts/monitoring/files/config.alloy.
+  - name: alloy
+    version: "1.13.0"
+    repository: "https://grafana.github.io/helm-charts"
+    condition: alloy.enabled
+
   - name: cloudflared
     version: "1.0.0"
     repository: "file://./charts/cloudflared"
@@ -66,7 +74,7 @@ dependencies:
     condition: headlamp.enabled
 
   - name: monitoring
-    version: "1.0.4"
+    version: "1.0.5"
     repository: "file://./charts/monitoring"
     condition: monitoring.enabled
 

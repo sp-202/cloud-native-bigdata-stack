@@ -1,0 +1,18 @@
+{{- if and .Values.enabled (.Values.alloyConfig).enabled }}
+# Grafana Alloy pipeline config (files/config.alloy), consumed by the `alloy` subchart's
+# DaemonSet in kube-system (big-data-platform values.yaml: alloy.alloy.configMap). Kept as a
+# real file rather than an inline values string so it can be checked with the exact Alloy
+# release before it ships:
+#   podman run --rm -v $PWD:/w grafana/alloy:v1.20.0 fmt /w/files/config.alloy
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-config
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/part-of: big-data-platform
+data:
+  config.alloy: |-
+{{ .Files.Get "files/config.alloy" | indent 4 }}
+{{- end }}
