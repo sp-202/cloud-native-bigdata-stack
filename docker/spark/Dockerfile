@@ -16,7 +16,7 @@ ENV SPARK_VERSION=3.5.8 \
     COMET_VERSION=1.0.0-preview \
     SPARK_HOME=/opt/spark
 
-RUN apt-get update && apt-get install -y wget curl zip
+RUN apt-get update && apt-get install -y wget curl zip unzip
 
 # Base Spark arm64 build pulled from S3 by the workflow
 # (docker/spark/spark-3.5.8-comet-v1.tar.gz).
