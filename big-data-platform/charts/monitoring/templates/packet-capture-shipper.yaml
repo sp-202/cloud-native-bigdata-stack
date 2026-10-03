@@ -241,7 +241,9 @@ spec:
       priorityClassName: system-node-critical
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
-      terminationGracePeriodSeconds: 60
+      # 55, not 60: kubelet gives critical pods 60 s in total at node shutdown
+      # (shutdownGracePeriodCriticalPods), so the final sweep must finish inside it.
+      terminationGracePeriodSeconds: 55
       tolerations:
         - key: spark-only
           operator: Equal

@@ -26,6 +26,9 @@ dependencies:
 - name: loki-stack
   repository: https://grafana.github.io/helm-charts
   version: 2.10.2
+- name: alloy
+  repository: https://grafana.github.io/helm-charts
+  version: 1.13.0
 - name: cloudflared
   repository: file://./charts/cloudflared
   version: 1.0.0
@@ -34,7 +37,7 @@ dependencies:
   version: 1.0.0
 - name: monitoring
   repository: file://./charts/monitoring
-  version: 1.0.4
+  version: 1.0.5
 - name: thanos
   repository: file://./charts/thanos
   version: 1.0.4
@@ -68,5 +71,5 @@ dependencies:
 - name: airflow-git-sync
   repository: file://./charts/airflow-git-sync
   version: 1.0.0
-digest: sha256:b9aaad31c68727b01349add2704291fca1c48d63c3277e8cc0dd3aca68b1330c
-generated: "2026-09-02T14:44:42.92776+05:30"
+digest: sha256:10fa5450561d7aa4ded0a99b8cd8b951be14424ca18854ec8b1883c8216006f5
+generated: "2026-10-03T22:01:54.785709778+05:30"

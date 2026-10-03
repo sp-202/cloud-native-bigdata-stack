@@ -169,6 +169,30 @@ spec:
     "spark.executorEnv.COMET_NATIVE_SCAN_CACHE_ENABLED": "false"
     "spark.comet.native.scan.cache.enabled": "false"
 
+    # --- Comet native OTel metrics -> node-local Alloy -> Prometheus ---------------
+    # The only route by which executor-side numbers reach Prometheus: the spark-ui
+    # ServiceMonitor scrapes the driver only, and executor Dropwizard sources are never
+    # scraped. The Service has internalTrafficPolicy: Local, so each executor sends to the
+    # Alloy on its own node. OTLP/HTTP; the path is used verbatim. Cumulative temporality
+    # keeps series cardinality at ~stage_id (CONFIG.md: delta at SF1000 would be ~500k).
+    "spark.comet.otel.endpoint": "http://alloy.kube-system.svc.cluster.local:4318/v1/metrics"
+    "spark.comet.otel.temporality": "cumulative"
+    "spark.comet.otel.intervalMs": "5000"
+
+    # --- Karpenter teardown: keep executor logs until the node goes ----------------
+    # Default true: at job end the driver DELETES executor pods, kubelet then removes
+    # /var/log/pods/<executor>/ and the log agent drops the target -- any unread tail of
+    # the executor's log is lost. Kept, the finished pods are terminal (ignored by
+    # Karpenter's emptiness check, so consolidation is not delayed) and their log files
+    # stay until the node itself is removed ~180 s later, by which time Alloy has read
+    # them to the end. Pod objects are garbage-collected with the node.
+    "spark.kubernetes.executor.deleteOnTermination": "false"
+
+    # Fixed block-manager port, so shuffle connections are on a known port the node
+    # packet capture can exclude (packet-capture-shipper filter: never capture shuffle).
+    # Each pod has its own IP, so a fixed port cannot collide.
+    "spark.blockManager.port": "7079"
+
     # --- S3 range disk cache (raw object bytes on the instance NVMe) ---------------
     # Complements the in-memory scan cache above, which is off because it keys on
     # (file, projection, filters, limit) and caches decoded Arrow -- an SF1000 run

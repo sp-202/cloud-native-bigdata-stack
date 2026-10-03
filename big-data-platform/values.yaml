@@ -1109,6 +1109,11 @@ kube-prometheus-stack:
       # deduplicate the two replicas' otherwise-identical series back down
       # to one, instead of Grafana showing everything doubled.
       replicas: 2
+      # Accept pushes on /api/v1/write. Alloy (top-level `alloy:` block) writes Comet's OTLP
+      # metrics and its own delivery metrics to BOTH replicas by pod DNS name
+      # (prometheus-kube-prometheus-stack-prometheus-{0,1}.prometheus-operated), so each
+      # replica holds every sample and Thanos dedup on prometheus_replica still holds.
+      enableRemoteWriteReceiver: true
       # "hard": with exactly 2 data-nodes (data_node_count, a fixed count —
       # not a min/max range), this guarantees one replica per node instead
       # of merely preferring it — the whole point of doing this is
@@ -1465,6 +1470,126 @@ kube-prometheus-stack:
         memory: "256Mi"
 
 # =============================================================================
+# GRAFANA ALLOY (external dependency) -- the single node agent
+# =============================================================================
+# One DaemonSet on every node. Pipelines live in charts/monitoring/files/config.alloy
+# (ConfigMap kube-system/alloy-config, rendered by charts/monitoring):
+#   pod logs, journal, Spark GC/diag files, Hubble drops -> Loki
+#   Hubble per-verdict counters, Comet OTLP metrics, Alloy's own metrics -> Prometheus
+# The S3 archives (hubble-flow-shipper, packet-capture-shipper, spark-node-log-shipper) are
+# unchanged and run alongside.
+#
+# Karpenter teardown: a spark node is removed ~180 s after its last executor exits
+# (NodePool consolidateAfter). Everything here ships continuously, so the node's data is in
+# Loki/Prometheus long before that; system-node-critical + a 50 s grace keep Alloy alive
+# through kubelet's critical-pod shutdown phase (60 s) for the final flush.
+alloy:
+  enabled: true
+  fullnameOverride: alloy
+  # kube-system: an ArgoCD AppProject destination already (terraform argocd.tf), and where
+  # the other node agents live.
+  namespaceOverride: kube-system
+  crds:
+    create: false            # PodLogs CRD -- not used
+  image:
+    tag: v1.20.0
+  alloy:
+    configMap:
+      create: false
+      name: alloy-config     # charts/monitoring/templates/alloy-config.yaml
+      key: config.alloy
+    # hostPath below: positions and the remote-write WAL survive an Alloy restart, so a
+    # restart resends rather than re-reads from the end or drops.
+    storagePath: /var/lib/alloy
+    listenAddr: 0.0.0.0
+    listenPort: 12345
+    enableReporting: false
+    extraEnv:
+      # config.alloy selects this node's pods by spec.nodeName -- HOSTNAME is the short
+      # host name under hostNetwork and never matches.
+      - name: NODE_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: spec.nodeName
+      - name: HOST_IP
+        valueFrom:
+          fieldRef:
+            fieldPath: status.hostIP
+    # OTLP for Comet (spark.comet.otel.endpoint) -- HTTP is what Comet speaks; gRPC is open
+    # for anything else.
+    extraPorts:
+      - name: otlp-http
+        port: 4318
+        targetPort: 4318
+        protocol: TCP
+      - name: otlp-grpc
+        port: 4317
+        targetPort: 4317
+        protocol: TCP
+    mounts:
+      varlog: true           # /var/log -> /var/log/pods/*
+      extra:
+        - name: journal
+          mountPath: /run/log/journal
+          readOnly: true
+        - name: machine-id
+          mountPath: /etc/machine-id
+          readOnly: true
+        - name: spark-nvme
+          mountPath: /spark-nvme
+          readOnly: true
+        - name: hubble
+          mountPath: /var/run/cilium/hubble
+          readOnly: true
+        - name: alloy-data
+          mountPath: /var/lib/alloy
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        memory: 2Gi
+  controller:
+    type: daemonset
+    hostNetwork: true
+    dnsPolicy: ClusterFirstWithHostNet
+    # Stopped in kubelet's critical-pod phase, after the workload, so the last lines of the
+    # executors are already read. 50 s fits inside shutdownGracePeriodCriticalPods (60 s,
+    # terraform-aws-k8s-ha scripts/worker-eks-bootstrap.sh).
+    priorityClassName: system-node-critical
+    terminationGracePeriodSeconds: 50
+    tolerations:
+      - operator: Exists     # every node, the spark-only taint included
+    volumes:
+      extra:
+        - name: journal
+          hostPath:
+            path: /run/log/journal
+        - name: machine-id
+          hostPath:
+            path: /etc/machine-id
+            type: File
+        # What Spark pods mount as /mnt/spark-nvme; empty on non-Spark nodes.
+        - name: spark-nvme
+          hostPath:
+            path: /mnt/spark-nvme/spark-shuffle
+            type: DirectoryOrCreate
+        # Cilium's flow export (terraform-aws-k8s-ha cilium.tf, export.static).
+        - name: hubble
+          hostPath:
+            path: /var/run/cilium/hubble
+            type: DirectoryOrCreate
+        - name: alloy-data
+          hostPath:
+            path: /var/lib/alloy
+            type: DirectoryOrCreate
+  service:
+    enabled: true
+    # An executor sending OTLP to alloy.kube-system.svc always reaches the Alloy on its own
+    # node, never a remote one.
+    internalTrafficPolicy: Local
+
+# =============================================================================
 # LOKI STACK (external dependency)
 # =============================================================================
 loki-stack:
@@ -1673,7 +1798,11 @@ loki-stack:
         max_entries_limit_per_query: 20000
         max_query_series: 5000
   promtail:
-    enabled: true
+    # Replaced by the `alloy` DaemonSet (top-level `alloy:` block), which runs the same
+    # pipelines -- same labels, same multiline rules, same journal and spark-node-files jobs --
+    # from charts/monitoring/files/config.alloy. Left configured so rollback is this one flag
+    # (and alloy.enabled: false). Do not run both: every line would reach Loki twice.
+    enabled: false
     fullnameOverride: "promtail"
     # REQUIRED — do not delete. All actual Spark driver/executor pods run on
     # Karpenter's spark-node pool, which carries a `spark-only=true:NoSchedule`
@@ -2097,22 +2226,29 @@ headlamp:
 # =============================================================================
 monitoring:
   enabled: true
-  # Kubernetes events -> stdout -> promtail -> Loki
+  # ConfigMap kube-system/alloy-config from files/config.alloy, for the `alloy` subchart.
+  alloyConfig:
+    enabled: true
+  # Kubernetes events -> stdout -> alloy -> Loki
   # (charts/monitoring/templates/k8s-event-exporter.yaml).
   eventExporter:
     enabled: true
   # Spark GC/diag files on the node NVMe -> s3://<lakehouse>/spark-node-logs/
-  # (charts/monitoring/templates/spark-node-log-shipper.yaml); promtail also
-  # tails them into Loki (spark-node-files job).
+  # (charts/monitoring/templates/spark-node-log-shipper.yaml); alloy also
+  # tails them into Loki (spark-node-files pipeline).
   sparkNodeLogs:
     enabled: true
-    intervalSeconds: 60
+    # 30 s, not 60: Karpenter removes the node ~180 s after the job ends, and the last
+    # files must be in S3 well before -- the SIGTERM sweep is only the backstop.
+    intervalSeconds: 30
   # S3 handshake capture per node -> s3://<lakehouse>/network-logs/packet-capture/
   # (charts/monitoring/templates/packet-capture-shipper.yaml). Headers of
   # SYN/SYN-ACK/RST on :443 only, plus a 60 s ip addr/rule/route snapshot.
   packetCapture:
     enabled: true
-    rotateSeconds: 60
+    # 30 s rotation: the final capture file is closed and uploaded inside the ~180 s
+    # post-job window instead of waiting for SIGTERM.
+    rotateSeconds: 30
     maxLocalFiles: 400
     localSizeLimit: "2Gi"
 

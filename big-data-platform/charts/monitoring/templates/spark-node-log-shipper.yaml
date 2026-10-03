@@ -96,7 +96,9 @@ spec:
       # Stopped in the critical phase of kubelet graceful node shutdown (the
       # last 60 s, after the Spark pods), so the final upload runs.
       priorityClassName: system-node-critical
-      terminationGracePeriodSeconds: 60
+      # 55, not 60: kubelet gives critical pods 60 s in total at node shutdown
+      # (shutdownGracePeriodCriticalPods), so the final sweep must finish inside it.
+      terminationGracePeriodSeconds: 55
       containers:
         - name: shipper
           # Pinned, verified on Docker Hub's tags API (arm64 present).
