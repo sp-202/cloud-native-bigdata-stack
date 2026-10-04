@@ -13,7 +13,7 @@
 #                       + 40g off-heap = 85Gi     + 16g off-heap = 26Gi
 #   native mem / task   4g                        ~2.3g (16g / 7)
 #   per executor node   4 pods: 40 CPU, 340Gi     4 pods: 28 CPU, 104Gi
-#   driver              on an executor node       its own m7gd.4xlarge (instance-size pin)
+#   driver              on an executor node       its own m7gd.2xlarge (instance-size pin)
 #   shuffle partitions  560 (2 x 280 slots)       112 (2 x 56 slots)
 #
 # Why these numbers:
@@ -22,8 +22,11 @@
 #   * 7 cores x 4 per node = 28: m7gd.8xlarge has 32 vCPU; the kubelet reserves 2
 #     (kubeReserved 1 + systemReserved 1, terraform-aws-k8s-ha worker-eks-bootstrap.sh,
 #     cpuManagerPolicy static) and the DaemonSets take ~1, leaving ~29. A 4-core driver
-#     cannot fit beside 28 executor cores, so the driver is pinned to 4xlarge and the
-#     executors to 8xlarge: Karpenter gives the driver its own small node.
+#     cannot fit beside 28 executor cores, so the driver is pinned to 2xlarge and the
+#     executors to 8xlarge: Karpenter gives the driver its own small node. m7gd.2xlarge is
+#     8 vCPU / 32 GiB: ~5 CPU and ~29 GiB free after reservations and DaemonSets, for a
+#     4-core, 16g + 4g driver. REQUIRES "2xlarge" in the spark NodePool's instance-size list
+#     (terraform-aws-k8s-ha karpenter-k8s.tf) -- without it the driver stays Pending.
 #   * Small JVM heap: with the plan running in Comet the heap only holds task bookkeeping,
 #     shuffle-fetch buffers, broadcast blocks and any Spark fallback; the working memory is
 #     Comet's off-heap pool. Overhead (4g) covers metaspace, threads, Netty direct buffers
@@ -383,7 +386,7 @@ spec:
                 - key: karpenter.k8s.aws/instance-size
                   operator: In
                   values:
-                    - "4xlarge"
+                    - "2xlarge"
                 - key: karpenter.sh/capacity-type
                   operator: In
                   values:
