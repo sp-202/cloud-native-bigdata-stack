@@ -81,6 +81,9 @@ global:
 
   # --- Container Images ---
   sparkImage: "subhodeep2022/spark-bigdata:spark-3.5.8-v13-iceberg-gravitino"
+  # Always, not IfNotPresent: the image is rebuilt under the same tag and the golden AMI
+  # pre-pulls an older copy of it (packer/images/spark.txt), which IfNotPresent silently runs.
+  sparkImagePullPolicy: Always
   jupyterhubImage: "subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v3"
   airflowImage: "apache/airflow:3.2.0"
   gitSyncImage: "subhodeep2022/k8s-git-sync:v2-prod"
@@ -549,17 +552,28 @@ gravitino:
 spark-history-server:
   enabled: true
   replicas: 1
-  daemonMemory: "2g"
-  # logDirectory is no longer a value here — the real bucket name (only known
-  # after `terraform apply`) is read from the lakehouse-s3 Secret directly in
-  # charts/spark-history-server/templates/deployment.yaml.
+  daemonMemory: "3g"
+  # Where the TPC-H jobs write spark.eventLog.dir (examples/spark-jobs/*.yaml). Unset, it
+  # falls back to s3a://<lakehouse bucket from the lakehouse-s3 Secret>/spark-events/.
+  logDirectory: "s3a://tpc-419772658418/spark-event-logs/"
+  retainedApplications: 2000
+  storeSizeLimit: "20Gi"
+  # The history server rebuilds each app's UI by replaying its event log under ITS OWN
+  # limits, not the job's -- same values as the TPC-H jobs set, so a replayed UI keeps
+  # what the live one showed.
+  ui:
+    retainedJobs: 1000
+    retainedStages: 1000
+    retainedTasks: 100000
+    retainedDeadExecutors: 20
+    retainedExecutions: 1000
   resources:
     requests:
       cpu: "500m"
-      memory: "2Gi"
+      memory: "3Gi"
     limits:
       cpu: "2000m"
-      memory: "4Gi"
+      memory: "5Gi"
 
 # =============================================================================
 # SPARK CONNECT SERVER — Spark node (Karpenter-managed, c7gd/m7gd/r7gd)

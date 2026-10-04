@@ -1,0 +1,58 @@
+# ------------------------------------------------------------------------------
+# CiliumNetworkPolicy - host-network node agents -> Loki / Prometheus
+# ------------------------------------------------------------------------------
+# Part of the Cloud-Native Big Data Platform (Umbrella Chart)
+#
+# Alloy runs with hostNetwork (charts/monitoring files/config.alloy), so Cilium gives its
+# traffic the `host` identity on its own node and `remote-node` everywhere else -- never the
+# identity of a kube-system pod. default-namespace-boundary's kube-system namespaceSelector
+# therefore does not match it, and every Alloy except the one on Loki's own node had its
+# pushes dropped (seen live: "context deadline exceeded" on loki push and remote_write, and
+# Loki holding pod logs from one node only). Promtail never hit this: it was not hostNetwork.
+#
+# Opened narrowly: only the push ports, only on the two receivers. Policies are additive, so
+# this widens default-namespace-boundary for exactly these two endpoints.
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+{{- if .Values.enabled }}
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-node-agents-to-loki
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  endpointSelector:
+    matchLabels:
+      app: loki
+  ingress:
+    - fromEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "3100"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-node-agents-to-prometheus
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  ingress:
+    - fromEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+{{- end }}

@@ -73,7 +73,9 @@ spec:
   pythonVersion: "3"
   mode: cluster
   image: "subhodeep2022/spark-bigdata:spark-3.5.8-v13-iceberg-gravitino"
-  imagePullPolicy: IfNotPresent
+  # Always: the golden AMI bakes an older build of this same tag (terraform-aws-k8s-ha
+  # packer/images/spark.txt); IfNotPresent silently ran that copy on every node.
+  imagePullPolicy: Always
   mainApplicationFile: "s3a://tpch-sf100-419772658418/scripts/tpcbench.py"
   arguments:
     - "--benchmark"
