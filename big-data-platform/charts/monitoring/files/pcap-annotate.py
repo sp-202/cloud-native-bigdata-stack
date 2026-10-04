@@ -35,7 +35,9 @@ LINKTYPE_LINUX_SLL2 = 276
 
 
 def load_names(podmap_path, cache_path):
-    names = {}
+    # node-local-dns listens on this link-local address on every node; without a name, every
+    # DNS query on the node showed up as "external -> external".
+    names = {"169.254.20.10": "kube-system/node-local-dns"}
     if cache_path and os.path.exists(cache_path):
         try:
             with open(cache_path) as f:

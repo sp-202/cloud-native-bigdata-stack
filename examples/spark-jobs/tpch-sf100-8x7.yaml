@@ -429,6 +429,20 @@ spec:
     # token file is what matters, and only the webhook can create it), and
     # do NOT set spark.hadoop.fs.s3a.aws.credentials.provider — forcing a
     # provider class there already broke startup once.
+    # OTel identity per executor. Comet's OTel SDK reads these from the environment;
+    # without them every executor on a node exported identical label sets
+    # (job="unknown_service:java", node, stage_id) and their cumulative counters
+    # overwrote each other in Prometheus. Alloy maps service.name -> job and
+    # service.instance.id -> instance.
+    env:
+      - name: OTEL_POD_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+      - name: OTEL_SERVICE_NAME
+        value: comet-executor
+      - name: OTEL_RESOURCE_ATTRIBUTES
+        value: "service.instance.id=$(OTEL_POD_NAME),k8s.pod.name=$(OTEL_POD_NAME)"
     serviceAccount: spark-operator-spark
     dnsConfig:
       options:
