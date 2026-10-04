@@ -4,8 +4,8 @@
       {
         "builtIn": 1,
         "datasource": {
-          "type": "datasource",
-          "uid": "grafana"
+          "type": "grafana",
+          "uid": "-- Grafana --"
         },
         "enable": true,
         "hide": true,
@@ -17,53 +17,56 @@
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
-  "id": 29,
+  "graphTooltip": 1,
+  "id": null,
   "links": [],
   "liveNow": false,
   "panels": [
     {
       "collapsed": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 0
       },
-      "id": 2,
-      "panels": [],
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "refId": "A"
-        }
-      ],
-      "title": "Cluster Overview",
+      "id": 101,
+      "title": "Spark Connect Server — live driver",
       "type": "row"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${ds}"
       },
+      "description": "Prometheus scrape health of the Spark Connect driver (port 4040).",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "DOWN"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "text",
                 "value": null
               }
             ]
@@ -74,11 +77,205 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
+        "w": 3,
         "x": 0,
         "y": 1
       },
-      "id": 4,
+      "id": 102,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "up{job=\"spark-connect-server\"}",
+          "refId": "A"
+        }
+      ],
+      "title": "Server",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Age of the Spark Connect server pod. A reset here means the driver restarted and all counters went to zero.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 3,
+        "y": 1
+      },
+      "id": 103,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "time() - max(kube_pod_start_time{namespace=~\"$namespace\", pod=~\"spark-connect-server-.*\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Pod uptime",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Executors currently registered with the Connect driver.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 6,
+        "y": 1
+      },
+      "id": 104,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_ExecutorAllocationManager_executors_numberAllExecutors_Value{job=\"spark-connect-server\"}",
+          "refId": "A"
+        }
+      ],
+      "title": "Executors",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Jobs currently running in the DAGScheduler.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 9,
+        "y": 1
+      },
+      "id": 105,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -100,21 +297,20 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${ds}"
           },
-          "expr": "count({__name__=~\"metrics_driver_.*cpuTime_Count\"})",
-          "interval": "",
-          "legendFormat": "",
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_DAGScheduler_job_activeJobs_Value{job=\"spark-connect-server\"}",
           "refId": "A"
         }
       ],
-      "title": "Active Drivers",
+      "title": "Active jobs",
       "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${ds}"
       },
       "fieldConfig": {
         "defaults": {
@@ -126,7 +322,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "text",
                 "value": null
               }
             ]
@@ -137,11 +333,11 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 4,
+        "w": 3,
+        "x": 12,
         "y": 1
       },
-      "id": 6,
+      "id": 106,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -163,58 +359,93 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${ds}"
           },
-          "expr": "count({__name__=~\"metrics_executor_.*cpuTime_Count\"})",
-          "interval": "",
-          "legendFormat": "",
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_DAGScheduler_stage_runningStages_Value{job=\"spark-connect-server\"}",
           "refId": "A"
         }
       ],
-      "title": "Active Executors",
+      "title": "Running stages",
       "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${ds}"
       },
+      "description": "Stages blocked on upstream dependencies.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "Bytes",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5
+              }
+            ]
+          },
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 15,
+        "y": 1
+      },
+      "id": 107,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_DAGScheduler_stage_waitingStages_Value{job=\"spark-connect-server\"}",
+          "refId": "A"
+        }
+      ],
+      "title": "Waiting stages",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Cumulative failed tasks since driver start.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
           },
           "mappings": [],
           "thresholds": {
@@ -226,64 +457,131 @@
               },
               {
                 "color": "red",
-                "value": 80
+                "value": 1
               }
             ]
           },
-          "unit": "bytes",
           "unitScale": true
         },
         "overrides": []
       },
       "gridPos": {
         "h": 4,
-        "w": 8,
-        "x": 8,
+        "w": 3,
+        "x": 18,
         "y": 1
       },
-      "id": 16,
+      "id": 108,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
+      "pluginVersion": "10.3.1",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${ds}"
           },
-          "expr": "sum(rate({__name__=~\".*shuffleBytesWritten_Count\"}[1m]))",
-          "interval": "",
-          "legendFormat": "Shuffle Write",
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_appStatus_tasks_failedTasks_Count{job=\"spark-connect-server\"}",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum(rate({__name__=~\".*shuffleTotalBytesRead_Count\"}[1m]))",
-          "interval": "",
-          "legendFormat": "Shuffle Read",
-          "refId": "B"
         }
       ],
-      "title": "Shuffle I/O (Bytes/sec)",
-      "type": "timeseries"
+      "title": "Failed tasks",
+      "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${ds}"
       },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 21,
+        "y": 1
+      },
+      "id": 109,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_jvm_heap_usage_Value{job=\"spark-connect-server\"}",
+          "refId": "A"
+        }
+      ],
+      "title": "Heap used",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Task completion rate on the Connect driver. `failed` above zero means retries are happening.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -293,26 +591,26 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Records",
+            "axisLabel": "tasks/sec",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
             "showPoints": "auto",
-            "spanNulls": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -338,82 +636,95 @@
           "unit": "short",
           "unitScale": true
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "failed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 16,
-        "y": 1
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
       },
-      "id": 18,
+      "id": 110,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${ds}"
           },
-          "expr": "sum(rate({__name__=~\".*shuffleRecordsWritten_Count\"}[1m]))",
-          "interval": "",
-          "legendFormat": "Recs Written",
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_appStatus_tasks_completedTasks_Count{job=\"spark-connect-server\"}[$__rate_interval])",
+          "legendFormat": "completed",
           "refId": "A"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${ds}"
           },
-          "expr": "sum(rate({__name__=~\".*shuffleRecordsRead_Count\"}[1m]))",
-          "interval": "",
-          "legendFormat": "Recs Read",
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_appStatus_tasks_failedTasks_Count{job=\"spark-connect-server\"}[$__rate_interval])",
+          "legendFormat": "failed",
           "refId": "B"
-        }
-      ],
-      "title": "Shuffle I/O (Records/sec)",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 5
-      },
-      "id": 8,
-      "panels": [],
-      "targets": [
+        },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${ds}"
           },
-          "refId": "A"
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_appStatus_tasks_skippedTasks_Count{job=\"spark-connect-server\"}[$__rate_interval])",
+          "legendFormat": "skipped",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_appStatus_tasks_killedTasks_Count{job=\"spark-connect-server\"}[$__rate_interval])",
+          "legendFormat": "killed",
+          "refId": "D"
         }
       ],
-      "title": "JVM Resources (Heap & CPU)",
-      "type": "row"
+      "title": "Task throughput",
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${ds}"
       },
       "fieldConfig": {
         "defaults": {
@@ -424,26 +735,26 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Bytes",
+            "axisLabel": "per sec",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
             "showPoints": "auto",
-            "spanNulls": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -459,6 +770,326 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short",
+          "unitScale": true
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*failed.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "id": 111,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_appStatus_jobs_succeededJobs_Count{job=\"spark-connect-server\"}[$__rate_interval])",
+          "legendFormat": "jobs succeeded",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_appStatus_jobs_failedJobs_Count{job=\"spark-connect-server\"}[$__rate_interval])",
+          "legendFormat": "jobs failed",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_appStatus_stages_completedStages_Count{job=\"spark-connect-server\"}[$__rate_interval])",
+          "legendFormat": "stages completed",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_appStatus_stages_failedStages_Count{job=\"spark-connect-server\"}[$__rate_interval])",
+          "legendFormat": "stages failed",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_appStatus_stages_skippedStages_Count{job=\"spark-connect-server\"}[$__rate_interval])",
+          "legendFormat": "stages skipped",
+          "refId": "E"
+        }
+      ],
+      "title": "Job & stage throughput",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "id": 112,
+      "title": "JVM — memory, GC, CPU",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "JVM heap on the Connect driver. `used` approaching `max` with rising GC means pressure.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes",
+          "unitScale": true
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "max"
+            },
+            "properties": [
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    10,
+                    10
+                  ],
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 14
+      },
+      "id": 113,
+      "options": {
+        "legend": {
+          "calcs": [
+            "last",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_jvm_heap_used_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "used",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_jvm_heap_committed_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "committed",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_jvm_heap_max_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "max",
+          "refId": "C"
+        }
+      ],
+      "title": "Heap memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Metaspace that only ever climbs is the classic Spark codegen class leak.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
               }
             ]
           },
@@ -468,44 +1099,67 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 6
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 14
       },
-      "id": 10,
+      "id": 114,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "last"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${ds}"
           },
-          "expr": "{__name__=~\".*JVMHeapMemory_Value\"}",
-          "interval": "",
-          "legendFormat": "{{pod}} ({{role}})",
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_jvm_non_heap_used_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "non-heap used",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_jvm_pools_Metaspace_used_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "metaspace",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_jvm_direct_used_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "direct buffers",
+          "refId": "C"
         }
       ],
-      "title": "JVM Heap Memory Used",
+      "title": "Non-heap & Metaspace",
       "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${ds}"
       },
+      "description": "Generational breakdown. Tenured growing across GC cycles indicates a real leak.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -515,26 +1169,144 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "GC Count",
+            "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
+            "fillOpacity": 25,
+            "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
             "showPoints": "auto",
-            "spanNulls": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 14
+      },
+      "id": 115,
+      "options": {
+        "legend": {
+          "calcs": [
+            "last"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_jvm_pools_Eden_Space_used_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "eden",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_jvm_pools_Survivor_Space_used_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "survivor",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_jvm_pools_Tenured_Gen_used_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "tenured",
+          "refId": "C"
+        }
+      ],
+      "title": "Heap pools",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Major (full) GCs are the expensive ones — a sustained non-zero rate hurts latency.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "collections/min",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -550,52 +1322,87 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
               }
             ]
           },
+          "unit": "short",
           "unitScale": true
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "major GC/min"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 6
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 22
       },
-      "id": 12,
+      "id": 116,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${ds}"
           },
-          "expr": "rate({__name__=~\".*MajorGCCount_Value\"}[1m])",
-          "interval": "",
-          "legendFormat": "{{pod}} GC Rate",
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_ExecutorMetrics_MinorGCCount_Value{job=\"spark-connect-server\"}[$__rate_interval]) * 60",
+          "legendFormat": "minor GC/min",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_ExecutorMetrics_MajorGCCount_Value{job=\"spark-connect-server\"}[$__rate_interval]) * 60",
+          "legendFormat": "major GC/min",
+          "refId": "B"
         }
       ],
-      "title": "JVM Garbage Collection Rate",
+      "title": "GC rate",
       "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${ds}"
       },
+      "description": "Share of wall-clock time spent in GC (ms of GC per sec, as a percentage). Sustained >10% is trouble.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -605,26 +1412,135 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "CPU Load",
+            "axisLabel": "% of wall time",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
             "showPoints": "auto",
-            "spanNulls": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 22
+      },
+      "id": 117,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_ExecutorMetrics_MinorGCTime_Value{job=\"spark-connect-server\"}[$__rate_interval]) / 10",
+          "legendFormat": "minor",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_ExecutorMetrics_MajorGCTime_Value{job=\"spark-connect-server\"}[$__rate_interval]) / 10",
+          "legendFormat": "major",
+          "refId": "B"
+        }
+      ],
+      "title": "GC pause time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "JVM-reported CPU vs. what the kernel accounts to the pod. A large gap means non-JVM overhead.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "cores",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -654,56 +1570,2309 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 15
+        "w": 8,
+        "x": 16,
+        "y": 22
       },
-      "id": 14,
+      "id": 118,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${ds}"
           },
-          "expr": "rate({__name__=~\".*jvmCpuTime_Value\"}[1m]) / 1000000000",
-          "interval": "",
-          "legendFormat": "{{pod}} CPU Cores",
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_JVMCPU_jvmCpuTime_Value{job=\"spark-connect-server\"}[$__rate_interval]) / 1e9",
+          "legendFormat": "JVM cores (in-process)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", pod=~\"spark-connect-server-.*\", container!=\"\"}[$__rate_interval]))",
+          "legendFormat": "pod cores (cgroup)",
+          "refId": "B"
+        }
+      ],
+      "title": "Driver CPU",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "id": 119,
+      "title": "Storage & scheduler internals",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Cached-block storage memory. `remaining` near zero means cached data is being evicted.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 31
+      },
+      "id": 120,
+      "options": {
+        "legend": {
+          "calcs": [
+            "last"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_BlockManager_memory_memUsed_MB_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "used",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_BlockManager_memory_remainingMem_MB_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "remaining",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_BlockManager_memory_maxMem_MB_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "max",
+          "refId": "C"
+        }
+      ],
+      "title": "BlockManager memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Blocks spilled to local disk. Any sustained growth means the working set exceeds memory.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 31
+      },
+      "id": 121,
+      "options": {
+        "legend": {
+          "calcs": [
+            "last",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_BlockManager_disk_diskSpaceUsed_MB_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "disk used",
           "refId": "A"
         }
       ],
-      "title": "CPU Usage (Time)",
+      "title": "Disk spill",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "How long the scheduler takes per event. Rising p99 = the driver is the bottleneck.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 31
+      },
+      "id": 122,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_DAGScheduler_messageProcessingTime_50thPercentile{job=\"spark-connect-server\"}",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_DAGScheduler_messageProcessingTime_95thPercentile{job=\"spark-connect-server\"}",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_DAGScheduler_messageProcessingTime_99thPercentile{job=\"spark-connect-server\"}",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "title": "DAGScheduler message latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Backlog per listener queue. A queue that stays deep will start dropping events.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "queued events",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 39
+      },
+      "id": 123,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_LiveListenerBus_queue_appStatus_size_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "appStatus",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_LiveListenerBus_queue_executorManagement_size_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "executorManagement",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "metrics_spark_driver_LiveListenerBus_queue_shared_size_Value{job=\"spark-connect-server\"}",
+          "legendFormat": "shared",
+          "refId": "C"
+        }
+      ],
+      "title": "Listener bus queue depth",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Dropped events mean the Spark UI and appStatus metrics are silently under-reporting.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dropped/sec"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 30
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      },
+      "id": 124,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "rate(metrics_spark_driver_LiveListenerBus_numEventsPosted_Count{job=\"spark-connect-server\"}[$__rate_interval])",
+          "legendFormat": "posted/sec",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(metrics_spark_driver_LiveListenerBus_queue_appStatus_numDroppedEvents_Count{job=\"spark-connect-server\"}[$__rate_interval])) + sum(rate(metrics_spark_driver_LiveListenerBus_queue_executorManagement_numDroppedEvents_Count{job=\"spark-connect-server\"}[$__rate_interval])) + sum(rate(metrics_spark_driver_LiveListenerBus_queue_shared_numDroppedEvents_Count{job=\"spark-connect-server\"}[$__rate_interval]))",
+          "legendFormat": "dropped/sec",
+          "refId": "B"
+        }
+      ],
+      "title": "Events posted vs dropped",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 47
+      },
+      "id": 125,
+      "title": "Batch pipelines (SparkApplication runs)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Distinct driver pods that reached completion and are still retained by kube-state-metrics.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 48
+      },
+      "id": 126,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "count(count by (pod) (kube_pod_completion_time{namespace=~\"$namespace\", pod=~\"spark-.*-driver\"}))",
+          "refId": "A"
+        }
+      ],
+      "title": "Completed runs tracked",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 48
+      },
+      "id": 127,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "count(kube_pod_status_phase{namespace=~\"$namespace\", pod=~\"spark-.*-driver\", phase=\"Running\"} == 1) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "Currently running",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Driver pods in the Failed phase.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 48
+      },
+      "id": 128,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "count(kube_pod_status_phase{namespace=~\"$namespace\", pod=~\"spark-.*-driver\", phase=\"Failed\"} == 1) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "Failed runs",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text"
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 48
+      },
+      "id": 129,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "quantile(0.5, kube_pod_completion_time{namespace=~\"$namespace\", pod=~\"spark-.*-driver\"} - on(pod, namespace) group_left kube_pod_start_time{namespace=~\"$namespace\", pod=~\"spark-.*-driver\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Median run duration",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text"
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 48
+      },
+      "id": 130,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "max(kube_pod_completion_time{namespace=~\"$namespace\", pod=~\"spark-.*-driver\"} - on(pod, namespace) group_left kube_pod_start_time{namespace=~\"$namespace\", pod=~\"spark-.*-driver\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Slowest run",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 48
+      },
+      "id": 131,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_pod_container_status_restarts_total{namespace=~\"$namespace\", pod=~\"spark-.*-driver\"}) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "Driver restarts",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Each point is one SparkApplication run, keyed by pipeline family. Watch for upward drift.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "duration",
+            "drawStyle": "points",
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "showPoints": "always",
+            "spanNulls": true
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 52
+      },
+      "id": 132,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "label_replace(kube_pod_completion_time{namespace=~\"$namespace\", pod=~\"spark-.*-driver\"} - on(pod, namespace) group_left kube_pod_start_time{namespace=~\"$namespace\", pod=~\"spark-.*-driver\"}, \"pipeline\", \"$1\", \"pod\", \"^spark-(.*)-[0-9]{8}t[0-9]{6}-driver$\")",
+          "legendFormat": "{{pipeline}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Run duration by pipeline",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "cores",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 52
+      },
+      "id": 133,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pipeline) (label_replace(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", pod=~\"spark-.*-driver\", container!=\"\"}[$__rate_interval]), \"pipeline\", \"$1\", \"pod\", \"^spark-(.*)-[0-9]{8}t[0-9]{6}-driver$\"))",
+          "legendFormat": "{{pipeline}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Driver pod CPU by pipeline",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 61
+      },
+      "id": 134,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pipeline) (label_replace(container_memory_working_set_bytes{namespace=~\"$namespace\", pod=~\"spark-.*-driver\", container!=\"\"}, \"pipeline\", \"$1\", \"pod\", \"^spark-(.*)-[0-9]{8}t[0-9]{6}-driver$\"))",
+          "legendFormat": "{{pipeline}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Driver pod memory by pipeline",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Most recent SparkApplication driver pods with their wall-clock duration.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text"
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "gauge"
+                }
+              },
+              {
+                "id": "max",
+                "value": 300
+              },
+              {
+                "id": "custom.width",
+                "value": 180
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pipeline"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 240
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 61
+      },
+      "id": 135,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Duration"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "label_replace(kube_pod_completion_time{namespace=~\"$namespace\", pod=~\"spark-.*-driver\"} - on(pod, namespace) group_left kube_pod_start_time{namespace=~\"$namespace\", pod=~\"spark-.*-driver\"}, \"pipeline\", \"$1\", \"pod\", \"^spark-(.*)-[0-9]{8}t[0-9]{6}-driver$\")",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Recent runs",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "container": true,
+              "endpoint": true,
+              "instance": true,
+              "job": true,
+              "namespace": true,
+              "service": true,
+              "uid": true
+            },
+            "indexByName": {
+              "Value": 2,
+              "pipeline": 0,
+              "pod": 1
+            },
+            "renameByName": {
+              "Value": "Duration",
+              "pipeline": "Pipeline",
+              "pod": "Driver pod"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": true,
+                "field": "Duration"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 70
+      },
+      "id": 136,
+      "title": "Instrumentation coverage",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Scrape health of every Spark-related Prometheus target.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "DOWN"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text"
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 14,
+        "x": 0,
+        "y": 71
+      },
+      "id": 137,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "State"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "up{job=~\"spark.*|.*/spark.*\"}",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Spark scrape targets",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "container": true,
+              "endpoint": true,
+              "service": true
+            },
+            "indexByName": {
+              "Value": 4,
+              "instance": 2,
+              "job": 0,
+              "namespace": 3,
+              "pod": 1
+            },
+            "renameByName": {
+              "Value": "State",
+              "instance": "Instance",
+              "job": "Scrape job",
+              "namespace": "Namespace",
+              "pod": "Pod"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": false,
+                "field": "State"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 14,
+        "y": 71
+      },
+      "id": 138,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "### What this dashboard can and cannot see\n\n**Fully instrumented** — `spark-connect-server` exposes the Spark\n`PrometheusServlet` on port 4040. All 467 `metrics_spark_driver_*`\nseries come from this one pod, and drive every panel above.\n\n**Not instrumented — the batch pipelines.** The scheduled\n`SparkApplication` drivers (`logistics-*`, `nav-data-raw`,\n`manual-nav-data`, `dri`) emit **no** Spark metrics. Their scrape\ntargets report `up = 0`, which is what keeps the `TargetDown` alert on\n`default/spark-monitor` firing. The *Batch pipelines* row is therefore\nbuilt from kube-state-metrics and cAdvisor — pod lifecycle, duration\nand resources only. No job, stage, task or shuffle detail.\n\n**Not instrumented — executors.** `spark-executor-exec-3` is running\nbut exposes no metrics, so there are no `metrics_spark_executor_*`\nseries anywhere. Shuffle read/write volume is consequently\nunavailable — it is an executor-only metric.\n\n**Double scrape.** Every Connect-server series is collected twice, by\njob `spark-connect-server` *and* job `spark-ui-headless`. Every query\nhere pins `job=\"spark-connect-server\"` so nothing is counted twice —\ndrop that filter and all totals double.\n",
+        "mode": "markdown"
+      },
+      "title": "Coverage notes",
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 79
+      },
+      "id": 139,
+      "panels": [],
+      "title": "Spark runs (TPC-H) & Comet native",
+      "type": "row"
+    },
+    {
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 80
+      },
+      "id": 140,
+      "title": "About these panels",
+      "type": "text",
+      "options": {
+        "mode": "markdown",
+        "content": "Per-executor numbers come from the driver's `/metrics/executors/prometheus` (spark-ui ServiceMonitor) and are built from executor **heartbeats** and task-end events -- with `spark.executor.heartbeatInterval: 300s` memory figures can lag up to 5 minutes; task, shuffle and GC totals update at task end. Comet native panels are Comet's OTel export (`spark.comet.otel.endpoint`) pushed through Alloy. Shuffle *time* and range-cache hit rates are not in Prometheus: read them from the event log or the `COMET RANGE CACHE` lines in the Logs dashboard."
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Executors that reported for the selected run(s).",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 83
+      },
+      "id": 141,
+      "title": "Executors",
+      "type": "stat",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "count(count by (application_id, executor_id) (metrics_executor_totalTasks_total{application_id=~\"$spark_app\", executor_id!=\"driver\"}))",
+          "legendFormat": "",
+          "range": false,
+          "refId": "A",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Task failures across the selected run(s). Retries hide these from query results.",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 83
+      },
+      "id": 142,
+      "title": "Failed tasks",
+      "type": "stat",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum(metrics_executor_failedTasks_total{application_id=~\"$spark_app\"}) or vector(0)",
+          "legendFormat": "",
+          "range": false,
+          "refId": "A",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Total shuffle bytes written.",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 83
+      },
+      "id": 143,
+      "title": "Shuffle written",
+      "type": "stat",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum(metrics_executor_totalShuffleWrite_bytes_total{application_id=~\"$spark_app\"})",
+          "legendFormat": "",
+          "range": false,
+          "refId": "A",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Total shuffle bytes read. Should be close to written (a little above when one exchange feeds two consumers).",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 83
+      },
+      "id": 144,
+      "title": "Shuffle read",
+      "type": "stat",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum(metrics_executor_totalShuffleRead_bytes_total{application_id=~\"$spark_app\"})",
+          "legendFormat": "",
+          "range": false,
+          "refId": "A",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Completed and failed tasks per second.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "tasks/sec",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 87
+      },
+      "id": 145,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (application_id) (rate(metrics_executor_completedTasks_total{application_id=~\"$spark_app\"}[$__rate_interval]))",
+          "legendFormat": "completed {{application_id}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (application_id) (rate(metrics_executor_failedTasks_total{application_id=~\"$spark_app\"}[$__rate_interval]))",
+          "legendFormat": "failed {{application_id}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Task completion rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Shuffle bytes written and read per second.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "tasks/sec",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "Bps",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 87
+      },
+      "id": 146,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (application_id) (rate(metrics_executor_totalShuffleWrite_bytes_total{application_id=~\"$spark_app\"}[$__rate_interval]))",
+          "legendFormat": "write {{application_id}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (application_id) (rate(metrics_executor_totalShuffleRead_bytes_total{application_id=~\"$spark_app\"}[$__rate_interval]))",
+          "legendFormat": "read {{application_id}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Shuffle throughput",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "JVM GC time / task time. With the plan in Comet the heap is small and this should stay low; a rise means Spark fallbacks or broadcasts are using the heap.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "tasks/sec",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 95
+      },
+      "id": 147,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (application_id) (rate(metrics_executor_totalGCTime_seconds_total{application_id=~\"$spark_app\"}[$__rate_interval])) / sum by (application_id) (rate(metrics_executor_totalDuration_seconds_total{application_id=~\"$spark_app\"}[$__rate_interval]))",
+          "legendFormat": "{{application_id}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "GC share of task time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Peak JVM heap and Spark off-heap execution memory per executor, as last reported by heartbeat.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "tasks/sec",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 95
+      },
+      "id": 148,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "max by (executor_id) (metrics_executor_JVMHeapMemory_bytes{application_id=~\"$spark_app\"})",
+          "legendFormat": "heap {{executor_id}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "max by (executor_id) (metrics_executor_OffHeapExecutionMemory_bytes{application_id=~\"$spark_app\"})",
+          "legendFormat": "off-heap exec {{executor_id}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Executor memory peaks (heartbeat)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Seconds per second spent inside Comet's native executePlan, i.e. how many cores are running native code, per Spark stage. Cumulative counter from Comet's OTel export.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "tasks/sec",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 103
+      },
+      "id": 149,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (stage_id) (rate(comet_jni_execute_plan_ns_total[$__rate_interval])) / 1e9",
+          "legendFormat": "stage {{stage_id}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Comet native execution, cores busy (by stage)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Comet's async runtime: alive tasks and global queue depth. A queue that keeps growing means the native runtime is saturated.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "tasks/sec",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 103
+      },
+      "id": 150,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "max by (node) (tokio_alive_tasks)",
+          "legendFormat": "alive tasks {{node}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "max by (node) (tokio_global_queue_depth)",
+          "legendFormat": "queue depth {{node}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Comet Tokio runtime, by node",
       "type": "timeseries"
     }
   ],
-  "refresh": "5s",
+  "refresh": "30s",
   "schemaVersion": 39,
   "tags": [
     "spark",
-    "kubernetes"
+    "kubernetes",
+    "prometheus"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "Prometheus",
+          "value": "prometheus"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Datasource",
+        "multi": false,
+        "name": "ds",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "default",
+          "value": "default"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds}"
+        },
+        "definition": "label_values(kube_pod_status_phase{pod=~\"spark-.*\"}, namespace)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Namespace",
+        "multi": true,
+        "name": "namespace",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(kube_pod_status_phase{pod=~\"spark-.*\"}, namespace)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds}"
+        },
+        "definition": "label_values(metrics_executor_totalTasks_total, application_id)",
+        "hide": 0,
+        "includeAll": true,
+        "allValue": ".+",
+        "label": "Spark run (app id)",
+        "multi": true,
+        "name": "spark_app",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(metrics_executor_totalTasks_total, application_id)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 2,
+        "type": "query"
+      }
+    ]
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-6h",
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "",
-  "title": "Spark Monitoring (Prometheus)",
-  "uid": "spark-k8s-monitor",
-  "version": 2,
+  "timezone": "browser",
+  "title": "Spark — Connect Server & Batch Pipelines",
+  "uid": "spark-observability",
+  "version": 1,
   "weekStart": ""
 }

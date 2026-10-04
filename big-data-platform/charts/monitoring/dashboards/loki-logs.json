@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": 35,
+  "id": null,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -1259,6 +1259,468 @@
       "title": "Notes",
       "transparent": true,
       "type": "text"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 68
+      },
+      "id": 323,
+      "panels": [],
+      "title": "Spark runs (by app)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${ds}"
+      },
+      "description": "One row per executor that logged its final line (\"Shutdown hook called\"). An executor of this run missing here lost its log tail at node teardown -- the same check flush/verify-run-telemetry.sh makes.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 69
+      },
+      "id": 324,
+      "title": "Executor log completeness",
+      "type": "table",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        }
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {}
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pod, node_name) (count_over_time({spark_app_selector=\"$spark_app\", spark_role=\"executor\"} |= \"Shutdown hook called\" [$__range]))",
+          "legendFormat": "",
+          "range": false,
+          "refId": "A",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${ds}"
+      },
+      "description": "Lines matching error/exception/warn per pod of the selected run.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "lines/sec",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 25,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 69
+      },
+      "id": 325,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pod) (count_over_time({spark_app_selector=\"$spark_app\"} |~ \"(?i)\\\\b(error|exception|warn)\\\\b\" [$__interval]))",
+          "legendFormat": "{{pod}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Errors and warnings, by pod",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${ds}"
+      },
+      "description": "CometBlockStoreShuffleReader's per-reduce-task decision. `false` with requested=true would mean batch fetch was refused -- the log line says why.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "lines/sec",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 25,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 69
+      },
+      "id": 326,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (decision) (count_over_time({spark_app_selector=\"$spark_app\"} |= \"Batch fetch for shuffle\" | regexp \"Batch fetch for shuffle \\\\d+: (?P<decision>true|false)\" [$__interval]))",
+          "legendFormat": "{{decision}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Batch-fetch decisions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${ds}"
+      },
+      "description": "The run's driver: query timings, planning, stage boundaries.",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 77
+      },
+      "id": 327,
+      "title": "Driver log",
+      "type": "logs",
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "{spark_app_selector=\"$spark_app\", spark_role=\"driver\"}",
+          "legendFormat": "",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${ds}"
+      },
+      "description": "Hit/miss and origin-byte summaries from each executor (COMET_RANGE_CACHE_REPORT_EVERY).",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 87
+      },
+      "id": 328,
+      "title": "S3 range cache (Comet native)",
+      "type": "logs",
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "{spark_app_selector=\"$spark_app\"} |= \"COMET RANGE CACHE\"",
+          "legendFormat": "",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${ds}"
+      },
+      "description": "gc-*.log and diag*.log tailed from /mnt/spark-nvme on the spark nodes (job spark-node-files).",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 87
+      },
+      "id": 329,
+      "title": "JVM GC / diag files from the node NVMe",
+      "type": "logs",
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "{job=\"spark-node-files\"}",
+          "legendFormat": "",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${ds}"
+      },
+      "description": "cilium-agent log lines about full or pressured BPF maps, map insertion failures and conntrack/NAT garbage collection. Pair with the 'Cilium BPF maps' row in the Kubernetes dashboard.",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 96
+      },
+      "id": 330,
+      "title": "Cilium agent: BPF map / conntrack / NAT warnings",
+      "type": "logs",
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "{namespace=\"kube-system\", container=\"cilium-agent\"} |~ \"(?i)(map is full|map.*pressure|insertion fail|ct.?map|nat.?map|conntrack|garbage collect|no space left|bpf map)\"",
+          "legendFormat": "",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${ds}"
+      },
+      "description": "Non-FORWARDED flow records from Cilium's export (FORWARDED is counted in Prometheus but not stored in Loki).",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 105
+      },
+      "id": 331,
+      "title": "Hubble: dropped and errored flows",
+      "type": "logs",
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "{job=\"hubble\"}",
+          "legendFormat": "",
+          "range": true,
+          "refId": "A"
+        }
+      ]
     }
   ],
   "refresh": "1m",
@@ -1375,6 +1837,32 @@
         "query": "",
         "skipUrlSync": false,
         "type": "textbox"
+      },
+      {
+        "allValue": ".+",
+        "current": {},
+        "datasource": {
+          "type": "loki",
+          "uid": "${ds}"
+        },
+        "definition": "",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Spark run (app id)",
+        "multi": false,
+        "name": "spark_app",
+        "options": [],
+        "query": {
+          "label": "spark_app_selector",
+          "refId": "LokiVariableQueryEditor-VariableQuery",
+          "stream": "{spark_role=~\"driver|executor\"}",
+          "type": 1
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 2,
+        "type": "query"
       }
     ]
   },
