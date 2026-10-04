@@ -44,8 +44,13 @@
 #     reading `-i any` (LINUX_SLL2 records the ifindex), and the "pod IPs on
 #     ens6" state that caused 22 Sep.
 #
-# Reading:  tcpdump -nn -r X.pcap 'tcp[tcpflags] & tcp-syn != 0'
-#           then join IPs to the pods-*.jsonl written in the same minute.
+# Reading:  captures are uploaded as .pcapng with each packet's pods in its comment:
+#             tshark -r X.pcapng -T fields -e ip.src -e ip.dst -e frame.comment
+#             Wireshark display filter:  frame.comment contains "exec-3"
+#           (a .pcap in S3 means annotation failed for that file; join its IPs to the
+#           pods-*.jsonl written in the same minute, as before).
+#
+# Never captured: shuffle (ports 7079 and 7337 -- see FILTER in capture.sh).
 #
 # Same shape and credentials as hubble-flow-shipper.yaml: a separate
 # DaemonSet so a failure here never touches Cilium, the node IMDS role for
@@ -108,7 +113,11 @@ data:
     #!/bin/bash
     set -u
     OUT=/captures
-    FILTER=${CAPTURE_FILTER:-'((tcp and (tcp[tcpflags] & (tcp-syn|tcp-fin|tcp-rst) != 0)) or udp port 53 or icmp[0] = 3) and not net 127.0.0.0/8'}
+    # Shuffle is never captured: 7079 is the block-manager port the Spark jobs pin
+    # (spark.blockManager.port; also the driver's default), the port every shuffle and
+    # broadcast block transfer uses; 7337 is the external shuffle service. Even headers-only,
+    # shuffle connection churn at SF1000 would dominate the volume.
+    FILTER=${CAPTURE_FILTER:-'((tcp and (tcp[tcpflags] & (tcp-syn|tcp-fin|tcp-rst) != 0)) or udp port 53 or icmp[0] = 3) and not net 127.0.0.0/8 and not port 7079 and not port 7337'}
 
     # Node identity from IMDSv2 (hostNetwork: no extra hop), written once for
     # the net-state header and for the uploader's S3 object metadata.
@@ -154,13 +163,18 @@ data:
         echo "### ip rule";             ip rule show
         echo "### ip route table all";  ip -4 route show table all
       } > "${OUT}/.net-state-${TS}.tmp" && mv "${OUT}/.net-state-${TS}.tmp" "${OUT}/net-state-${TS}-${NODE_NAME}.txt"
+      # .pods-latest.jsonl (hidden: never uploaded or capped) is what the uploader's
+      # pcap-annotate.py names packets from.
       podmap "$TS" > "${OUT}/.pods-${TS}.tmp" && [ -s "${OUT}/.pods-${TS}.tmp" ] \
+        && cp "${OUT}/.pods-${TS}.tmp" "${OUT}/.pods-latest.jsonl" \
         && mv "${OUT}/.pods-${TS}.tmp" "${OUT}/pods-${TS}-${NODE_NAME}.jsonl" \
         || { rm -f "${OUT}/.pods-${TS}.tmp"; echo "pod map failed at $TS" >&2; }
       sleep 60 & wait $!
     done
     echo "tcpdump exited" >&2
     exit 1
+  pcap-annotate.py: |
+{{ .Files.Get "files/pcap-annotate.py" | indent 4 }}
   upload.sh: |
     #!/bin/bash
     set -u
@@ -180,12 +194,26 @@ data:
         "${DEST}/${ts:0:4}/${ts:4:2}/${ts:6:2}/${ts:9:2}/${b}" || return 1
       [ "${2:-}" = keep ] || rm -f "$f"
     }
+    # A finished capture is rewritten as pcapng with the source and destination pods of
+    # every packet in its comment (frame.comment in Wireshark/tshark) and uploaded instead
+    # of the .pcap. If annotation fails for any reason the original .pcap is uploaded, so
+    # this can add names but never lose a capture.
+    ship_capture() {   # $1 = a completed .pcap
+      local f=$1 ng=${1%.pcap}.pcapng
+      if [ -s "$OUT/.pods-latest.jsonl" ] && \
+         python3 /scripts/pcap-annotate.py "$f" "$ng" "$OUT/.pods-latest.jsonl" "$OUT/.ip-cache.json" >/dev/null; then
+        upload "$ng" && rm -f "$f"
+      else
+        rm -f "$ng"; echo "annotation failed for $f; shipping it unannotated" >&2
+        upload "$f"
+      fi
+    }
     sweep() {   # $1 = minimum age in seconds before a pcap counts as complete
       local now f; now=$(date +%s)
       for f in "$OUT"/*.pcap; do
         [ -e "$f" ] || continue
         if [ $(( now - $(stat -c %Y "$f") )) -ge "$1" ]; then
-          upload "$f"
+          ship_capture "$f"
         elif [ "${ONCE:-0}" = 1 ]; then
           # --once: ship the file tcpdump is still writing too, but leave it
           # in place — deleting an open file would lose everything after it.

@@ -1408,6 +1408,15 @@ kube-prometheus-stack:
     enabled: false
   prometheus-node-exporter:
     fullnameOverride: "node-exporter"
+    # The node-exporter DaemonSet still runs unchanged (same flags, ethtool included); only
+    # its scrape moved: Alloy scrapes it on each node and pushes (charts/monitoring/files/
+    # config.alloy, section 7), with the exact labels this ServiceMonitor produced, so a
+    # spark node's last samples survive Karpenter removing it. Off here so nothing is
+    # ingested twice. Note: nodeExporter.enabled must stay true -- it also gates the four
+    # node Grafana dashboards.
+    prometheus:
+      monitor:
+        enabled: false
     # Exposes ENA/Nitro allowance-exceeded counters (node_ethtool_*) on both
     # ENIs so bandwidth/pps/conntrack throttling can be correlated against
     # Spark stall windows. See ISSUES.md ens5/ens6 notes.
@@ -2229,6 +2238,11 @@ monitoring:
   # ConfigMap kube-system/alloy-config from files/config.alloy, for the `alloy` subchart.
   alloyConfig:
     enabled: true
+  # cilium-agent and hubble ServiceMonitors (templates/cilium-service-monitors.yaml): off,
+  # because Alloy scrapes both on each node and pushes (config.alloy section 7). The
+  # cilium-operator monitor is unaffected. Set true to go back to Prometheus scraping them.
+  ciliumServiceMonitors:
+    agentAndHubble: false
   # Kubernetes events -> stdout -> alloy -> Loki
   # (charts/monitoring/templates/k8s-event-exporter.yaml).
   eventExporter:

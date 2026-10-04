@@ -1,0 +1,612 @@
+# TPC-H SF100 on the SF1000 28x10 configuration -- the pre-flight run.
+# Identical to tpch-sf1000-28x10.yaml in every setting (executor shape, Comet config, range
+# cache and affinity, OTel to Alloy, deleteOnTermination=false, pinned block-manager port,
+# log4j ConfigMap); only the data, the result prefix, the app/pod names and the node-local
+# file names differ. Validates a new image and the observability stack at a tenth of the
+# cost before an SF1000 run, then:
+#   terraform-aws-k8s-ha/flush/verify-run-telemetry.sh <spark-app-id>
+#
+# Data: s3://tpc-419772658418/tpch-sf100 -- same bucket and region (ap-south-1) as SF1000.
+# (examples/spark-jobs/tpch-sf100.yaml is an older job reading a us-east-1 bucket.)
+#
+# Run:    kubectl apply -f examples/spark-jobs/tpch-sf100-28x10.yaml
+# Watch:  kubectl get sparkapplication tpch-sf100-28x10 -n default -w
+# Logs:   kubectl logs -n default -l spark-app-name=tpch-sf100-28x10,spark-role=driver -f
+# Clean:  kubectl delete -f examples/spark-jobs/tpch-sf100-28x10.yaml
+apiVersion: "sparkoperator.k8s.io/v1beta2"
+kind: SparkApplication
+metadata:
+  name: tpch-sf100-28x10
+  namespace: default
+spec:
+  type: Python
+  pythonVersion: "3"
+  mode: cluster
+  image: "subhodeep2022/spark-bigdata:spark-3.5.8-v13-iceberg-gravitino"
+  imagePullPolicy: IfNotPresent
+  mainApplicationFile: "s3://tpc-419772658418/scripts/tpcbench.py"
+  arguments:
+    - "--benchmark"
+    - "tpch"
+    - "--data"
+    - "s3://tpc-419772658418/tpch-sf100"
+    - "--queries"
+    - "s3://tpc-419772658418/tpch-queries"
+    - "--output"
+    - "s3://tpc-419772658418/tpch-results-sf100-28x10"
+    - "--iterations"
+    - "2"
+  sparkVersion: "3.5.8"
+  restartPolicy:
+    type: Never
+
+  sparkUIOptions:
+    serviceLabels:
+      app: spark-ui
+    servicePortName: spark-ui
+
+  sparkConf:
+    "spark.local.dir": "/mnt/spark-nvme/spark-local"
+    "spark.kubernetes.executor.request.cores": "10"
+    "spark.kubernetes.allocation.batch.size": "28"
+    "spark.memory.fraction": "0.6"
+    "spark.memory.storageFraction": "0.2"
+    "spark.memory.offHeap.enabled": "true"
+    "spark.memory.offHeap.size": "40g"
+
+    "spark.scheduler.minRegisteredResourcesRatio": "1.0"
+    "spark.scheduler.maxRegisteredResourcesWaitingTime": "600s"
+
+    "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
+    "spark.hadoop.fs.s3.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
+    "spark.hadoop.fs.s3a.endpoint.region": "ap-south-1"
+    "spark.hadoop.fs.s3a.fast.upload": "true"
+    "spark.hadoop.fs.s3a.connection.ssl.enabled": "true"
+    "spark.hadoop.fs.s3a.fast.upload.buffer": "disk"
+    "spark.hadoop.fs.s3a.buffer.dir": "/mnt/spark-nvme/s3a-buffer"
+    "spark.hadoop.fs.s3a.multipart.size": "128M"
+    "spark.hadoop.fs.s3a.multipart.threshold": "256M"
+    "spark.hadoop.fs.s3a.threads.max": "50"
+    "spark.hadoop.fs.s3a.connection.maximum": "200"
+    "spark.hadoop.fs.s3a.multipart.purge": "true"
+    "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "2"
+
+    # INERT on this fork -- kept only so their absence is not mistaken for an
+    # oversight. All four are defined in CometConf and read by NO production code
+    # (the only reference outside the config is a test asserting the value reaches
+    # the Hadoop conf). Read size is therefore a property of the data, not of these
+    # settings: SF1000's 441 MiB files produce large reads on their own.
+    "spark.comet.parquet.read.parallel.io.enabled": "true"
+    "spark.comet.parquet.read.parallel.io.thread-pool.size": "12"
+    "spark.comet.parquet.read.io.mergeRanges": "true"
+    "spark.comet.parquet.read.io.mergeRanges.delta": "67108864"
+
+    "spark.plugins": "org.apache.spark.CometPlugin"
+    "spark.sql.extensions": "org.apache.comet.CometSparkSessionExtensions"
+    "spark.shuffle.manager": "org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager"
+    "spark.comet.enabled": "true"
+    "spark.comet.exec.enabled": "true"
+    # Also inert: no such key exists in CometConf on this fork. spark.comet.exec.enabled
+    # above is the live one.
+    "spark.comet.exec.all.enabled": "true"
+    "spark.comet.exec.replaceSortMergeJoin": "true"
+    "spark.comet.exec.hashJoin.enabled": "true"
+    "spark.comet.exec.shuffle.enabled": "true"
+    "spark.comet.exec.shuffle.mode": "auto"
+    "spark.comet.exec.shuffle.directRead.enabled": "true"
+    "spark.comet.exec.shuffle.convertFromSparkPlan.enabled": "true"
+    "spark.comet.exec.shuffle.revertRedundantColumnar.enabled": "true"
+    "spark.comet.exec.zeroCopySpill.enabled": "true"
+    "spark.comet.exec.localTableScan.enabled": "true"
+    "spark.comet.exec.localTopKPushdown.enabled": "true"
+    "spark.comet.exec.rowComet.enabled": "true"
+    "spark.comet.exec.columnarToRow.native.enabled": "true"
+    "spark.comet.exec.memoryPool": "fair_unified"
+    "spark.comet.exec.memoryPool.fraction": "1.0"
+    # INERT: no code reads this key -- the live one is spark.comet.exec.memoryPool.fraction
+    # just above, so the native pool is 100% of off-heap, not 80%. Kept so its absence is not
+    # mistaken for an oversight.
+    "spark.comet.memoryPool.fraction": "0.8"
+    "spark.comet.sparkToColumnar.enabled": "true"
+    "spark.comet.sparkToColumnar.supportedOperatorList": "Range,InMemoryTableScan,RDDScan,OneRowRelation"
+    "spark.comet.batchSize": "8192"
+    "spark.comet.nativeLoadRequired": "true"
+    "spark.comet.shuffle.preferDictionary.ratio": "10.0"
+    "spark.comet.shuffle.sizeInBytesMultiplier": "1.0"
+    "spark.comet.parquet.write.enabled": "true"
+    "spark.comet.cache.serializer.enabled": "true"
+    "spark.comet.expression.Cast.allowIncompatible": "true"
+    "spark.comet.expression.JsonToStructs.allowIncompatible": "true"
+    "spark.comet.operator.DataWritingCommandExec.allowIncompatible": "true"
+    "spark.comet.exec.strictFloatingPoint": "false"
+    "spark.comet.caseConversion.enabled": "false"
+    "spark.comet.logFallbackReasons.enabled": "true"
+    "spark.comet.explainFallback.enabled": "true"
+    "spark.comet.scan.csv.v2.enabled": "true"
+    "spark.comet.scan.json.v2.enabled": "true"
+    "spark.comet.native.shuffle.partitioning.roundrobin.maxHashColumns": "0"
+    "spark.comet.write.iceberg.splitOperator.enabled": "true"
+    "spark.comet.write.iceberg.nativeAcceleration": "true"
+    "spark.comet.exec.shuffle.compression.codec": "zstd"
+
+    "spark.executorEnv.COMET_NATIVE_SCAN_CACHE_ENABLED": "false"
+    "spark.comet.native.scan.cache.enabled": "false"
+
+    # --- Comet native OTel metrics -> node-local Alloy -> Prometheus ---------------
+    # The only route by which executor-side numbers reach Prometheus: the spark-ui
+    # ServiceMonitor scrapes the driver only, and executor Dropwizard sources are never
+    # scraped. The Service has internalTrafficPolicy: Local, so each executor sends to the
+    # Alloy on its own node. OTLP/HTTP; the path is used verbatim. Cumulative temporality
+    # keeps series cardinality at ~stage_id (CONFIG.md: delta at SF1000 would be ~500k).
+    "spark.comet.otel.endpoint": "http://alloy.kube-system.svc.cluster.local:4318/v1/metrics"
+    "spark.comet.otel.temporality": "cumulative"
+    "spark.comet.otel.intervalMs": "5000"
+
+    # --- Karpenter teardown: keep executor logs until the node goes ----------------
+    # Default true: at job end the driver DELETES executor pods, kubelet then removes
+    # /var/log/pods/<executor>/ and the log agent drops the target -- any unread tail of
+    # the executor's log is lost. Kept, the finished pods are terminal (ignored by
+    # Karpenter's emptiness check, so consolidation is not delayed) and their log files
+    # stay until the node itself is removed ~180 s later, by which time Alloy has read
+    # them to the end. Pod objects are garbage-collected with the node.
+    "spark.kubernetes.executor.deleteOnTermination": "false"
+
+    # Fixed block-manager port, so shuffle connections are on a known port the node
+    # packet capture can exclude (packet-capture-shipper filter: never capture shuffle).
+    # Each pod has its own IP, so a fixed port cannot collide.
+    "spark.blockManager.port": "7079"
+
+    # --- S3 range disk cache (raw object bytes on the instance NVMe) ---------------
+    # Complements the in-memory scan cache above, which is off because it keys on
+    # (file, projection, filters, limit) and caches decoded Arrow -- an SF1000 run
+    # measured 66,021 lookups and zero hits, since no two scans agree on all four.
+    # This caches raw bytes in fixed 8 MiB aligned blocks below Parquet decoding, so
+    # q1 reading l_shipdate and q9 reading l_suppkey share every block their ranges
+    # both touch.
+    #
+    # The directory sits inside the spark-shuffle hostPath, so it is on the r7gd's
+    # local NVMe and is SHARED BY BOTH EXECUTORS ON A NODE. Two consequences:
+    #   * cacheAffinity.level must be "host" (below), not "executor";
+    #   * capacity is enforced per executor process, not per directory.
+    # An executor accounts for what it adopted at startup plus what it wrote itself
+    # and never learns about a sibling's later writes, so the directory can exceed
+    # the value below -- measured at ~1.3x the N-executor sum on a 2-executor node.
+    # 128 GiB x 2 executors x ~1.3 bounds a node near 333 GiB. r7gd.12xlarge ships
+    # 2 x 1425 GB of NVMe, so that is comfortable even if only one device is mounted
+    # at /mnt/spark-nvme, alongside spark-local, the s3a buffer and java.io.tmpdir.
+    # (Worth checking which: `lsblk` on a spark-node. If both are RAID0'd there is
+    # 2850 GB and this could go higher still.)
+    #
+    # Sizing sanity check: SF1000 is ~396 GB over 7 nodes, so with placement on each
+    # node owns ~57 GB and each executor writes ~28 GB -- roughly 4.5x inside the cap,
+    # so the steady state should never evict. WITH PLACEMENT OFF every node converges
+    # on caching everything, 396 GB into ~333 GiB, so the baseline evicts mildly
+    # rather than thrashing. That is the fairer comparison: both arms mostly fit, so
+    # what is measured is placement rather than the difference between fitting and
+    # not. Drop this to 64 GiB (68719476736) if you want the thrashing baseline too.
+    #
+    # Unset fs.s3a.comet.range.cache.dir to disable the feature entirely.
+    # NOTE: the hostPath outlives the application, so blocks from a previous run are
+    # adopted at startup. Wipe /mnt/spark-nvme/spark-shuffle/comet-range-cache on the
+    # nodes first if you need a genuinely cold run.
+    "spark.hadoop.fs.s3a.comet.range.cache.dir": "/mnt/spark-nvme/comet-range-cache-sf100-28x10"
+    "spark.hadoop.fs.s3a.comet.range.cache.block.size": "8388608"
+    "spark.hadoop.fs.s3a.comet.range.cache.capacity": "137438953472"
+
+    # Largest single origin request, in BYTES. Deliberately not the older
+    # max.run.length.blocks key, whose effect moved with the block size: 4 blocks
+    # meant 32 MiB at an 8 MiB block and silently became 8 MiB at 2 MiB, which is
+    # what a measured run hit (8.45 MiB average over 51,227 requests) while paying
+    # four times the intended requests and LRU updates per byte moved.
+    "spark.hadoop.fs.s3a.comet.range.cache.max.run.bytes": "33554432"
+
+    # Origin bytes in flight per executor, and the size of one request.
+    #
+    # This is the knob that matters for ENA, and it is bytes rather than request
+    # count because burst size is what the allowance polices -- a run averaging
+    # 0.5 Gbps per node still tripped bw_in_allowance 21.7M times. Spark throttles
+    # remote shuffle fetches the same way (ShuffleBlockFetcherIterator).
+    #
+    # Sized from Little's law, not taste: throughput is in-flight bytes over RTT,
+    # so 22.5 Gbps at ~15 ms is saturated by ~42 MiB, and two executors per node
+    # want about half that each. Request size is a fifth of the budget, copying
+    # Spark's own reasoning ("to allow multiple, parallel fetches"), so a 32 MiB
+    # run goes out as ~2-3 concurrent connections rather than one large GET --
+    # which is also AWS's guidance, since per-connection throughput is the ceiling.
+    #
+    # Side effect worth knowing: this bounds concurrent S3 connections to roughly
+    # budget/request-size, about 5 per executor. Every pod->S3 connection is
+    # masqueraded by Cilium and costs a conntrack entry plus a NAT entry, so this
+    # also relieves the map pressure behind issues.md #38.
+    "spark.hadoop.fs.s3a.comet.range.cache.max.bytes.in.flight": "33554432"
+    "spark.hadoop.fs.s3a.comet.range.cache.fetch.part.bytes": "13421772"
+
+    # Block files are flushed and dropped from the page cache after write and read.
+    # Defaults to true, stated here because it is load-bearing: a measured run
+    # served 1,258 GiB of hits while the NVMe counters recorded 4.93 MiB of reads,
+    # so every hit came from page cache and 423 GiB of blocks were written through
+    # it -- on nodes already committing ~340 GiB of 384 GiB to heap and off-heap.
+    # Set to false only to measure the difference.
+    "spark.hadoop.fs.s3a.comet.range.cache.drop.page.cache": "true"
+    # Lookups between progress lines on executor stderr: hits/misses, MiB from disk vs
+    # origin, origin request count, and misses deduped by single-flight. Read misses
+    # against requests -- misses are blocks that were absent, requests are the network
+    # calls they cost. 0 disables reporting.
+    "spark.executorEnv.COMET_RANGE_CACHE_REPORT_EVERY": "2048"
+
+    # --- cache-aware scan placement -----------------------------------------------
+    # Without this, scan tasks carry no locality at all: object stores report no block
+    # locations (S3AFileSystem inherits the default getFileBlockLocations, which names
+    # the host as literally "localhost"), so Spark places tasks wherever a slot frees
+    # first and a file cached by q1 on one node is refetched by q9 on another. Files
+    # are assigned a stable owner by rendezvous hashing and offered as a preference --
+    # a task still runs elsewhere when the owner is busy, taking a cache miss, so a
+    # stale assignment costs time and never correctness.
+    #
+    # "host" (NODE_LOCAL) because the cache directory is a shared hostPath: any
+    # executor on the owning node can serve the block. "executor" (PROCESS_LOCAL)
+    # would make Spark hold out for one specific JVM for no gain.
+    "spark.comet.scan.cacheAffinity.enabled": "true"
+    "spark.comet.scan.cacheAffinity.level": "host"
+
+    "spark.comet.exec.replaceSortMergeJoin.leftSemi.enabled": "true"
+    "spark.comet.operator.ProjectExec.allowIncompatible": "true"
+
+    "spark.sql.adaptive.enabled": "true"
+    "spark.sql.shuffle.partitions": "560"
+    "spark.sql.adaptive.localShuffleReader.enabled": "true"
+    "spark.sql.adaptive.coalescePartitions.enabled": "true"
+    # Fetch each map's contiguous shuffle blocks as one block. This is Spark's default;
+    # it is stated here because it is the A/B switch ("false" is the baseline). Spark only
+    # requests it for a reduce task reading a coalesced RANGE of partitions, so it applies
+    # where AQE coalesces -- here 560 partitions down to no fewer than 280 (default
+    # parallelism = total cores), i.e. ranges of ~2. Native shuffle no longer needs
+    # spark.serializer for this: its blocks are self-delimiting, and columnar shuffle uses
+    # UnsafeRowSerializer, which allows it too. Measured locally (SF10, q9, 200 partitions):
+    # 14x fewer remote blocks fetched, same bytes, wall clock unchanged within noise.
+    # Confirm it engaged with the "Batch fetch for shuffle N: true" lines in diag.log.
+    "spark.sql.adaptive.fetchShuffleBlocksInBatch": "true"
+    "spark.sql.adaptive.skewJoin.enabled": "true"
+    "spark.sql.files.maxPartitionBytes": "536870912"
+
+    "spark.speculation": "true"
+    "spark.speculation.quantile": "0.90"
+    "spark.speculation.multiplier": "3.0"
+    "spark.speculation.interval": "1000ms"
+
+    "spark.ui.enabled": "true"
+    "spark.ui.port": "4040"
+    "spark.ui.host": "0.0.0.0"
+    "spark.ui.retainedJobs": "1000"
+    "spark.ui.retainedStages": "1000"
+    "spark.ui.retainedTasks": "100000"
+    "spark.ui.retainedDeadExecutors": "20"
+    "spark.sql.ui.retainedExecutions": "1000"
+
+    "spark.ui.prometheus.enabled": "true"
+    "spark.executor.processTreeMetrics.enabled": "true"
+    "spark.metrics.conf.*.sink.prometheusServlet.class": "org.apache.spark.metrics.sink.PrometheusServlet"
+    "spark.metrics.conf.driver.sink.prometheusServlet.path": "/metrics/driver/prometheus/"
+    "spark.metrics.conf.executor.sink.prometheusServlet.path": "/metrics/executors/prometheus/"
+
+    "spark.network.timeout": "2000s"
+    "spark.executor.heartbeatInterval": "300s"
+    "spark.files.fetchTimeout": "300s"
+    "spark.kubernetes.submission.connectionTimeout": "120000"
+    "spark.kubernetes.submission.requestTimeout": "120000"
+    "spark.kubernetes.driver.connectionTimeout": "120000"
+    "spark.kubernetes.driver.requestTimeout": "120000"
+    "spark.kubernetes.executor.podNamePrefix": "tpch-sf100-28x10"
+
+    "spark.executor.decommission.enabled": "true"
+    "spark.storage.decommission.enabled": "true"
+    "spark.storage.decommission.shuffleBlocks.enabled": "true"
+    "spark.storage.decommission.rddBlocks.enabled": "true"
+
+    "spark.shuffle.file.buffer": "1m"
+    "spark.reducer.maxSizeInFlight": "48m"
+    "spark.reducer.maxReqsInFlight": "256"
+    "spark.reducer.maxBlocksInFlightPerAddress": "128"
+
+    "spark.eventLog.enabled": "true"
+    "spark.eventLog.dir": "s3a://tpc-419772658418/spark-event-logs"
+    "spark.eventLog.compress": "true"
+    "spark.eventLog.compression.codec": "zstd"
+    "spark.eventLog.rolling.enabled": "true"
+    "spark.eventLog.rolling.maxFileSize": "64m"
+
+    # -Xlog:safepoint is the decisive instrument for the freeze. Grep the resulting
+    # file for "Total time for which application threads were stopped". If a 60 s
+    # stall has NO matching safepoint, the pause is below the JVM -- native code
+    # holding a lock -- which is the hypothesis to confirm. That negative result is
+    # as informative as a positive one, so capture it on driver and executors alike.
+    #
+    # No AsyncLoggerContextSelector (removed in 34f6921): it needs the LMAX Disruptor jar,
+    # which the image does not ship, and without it log4j2 silently ignored this file's
+    # log4j2.properties. Raised loggers are therefore synchronous handoffs on the appender --
+    # keep per-task loggers few.
+    #
+    # (-XX:InitiatingHeapOccupancyPercent is a G1 flag and is inert under
+    # -XX:+UseParallelGC. Left in place so this diff stays about diagnostics.)
+    "spark.driver.extraJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-sf100-28x10-driver-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
+    "spark.executor.defaultJavaOptions": "-Djava.io.tmpdir=/mnt/spark-nvme -XX:+UseParallelGC -XX:InitiatingHeapOccupancyPercent=70 -Dlog4j.configurationFile=/opt/spark/log4j2-custom/log4j2.properties -Xlog:gc*,safepoint:file=/mnt/spark-nvme/gc-sf100-28x10-exec-%p-%t.log:time,uptime,level,tags:filecount=5,filesize=64M"
+
+  driver:
+    cores: 4
+    memory: "16g"
+    memoryOverhead: "4g"
+    serviceAccount: spark-operator-spark
+    dnsConfig:
+      options:
+        - name: ndots
+          value: "2"
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
+    nodeSelector:
+      node-role.kubernetes.io/spark-node: ""
+      karpenter.k8s.aws/instance-family: "r7gd"
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: karpenter.k8s.aws/instance-size
+                  operator: In
+                  values:
+                    - "12xlarge"
+                - key: karpenter.sh/capacity-type
+                  operator: In
+                  values:
+                    - "on-demand"
+    tolerations:
+      - key: spark-only
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+    volumeMounts:
+      - name: spark-shuffle
+        mountPath: /mnt/spark-nvme
+      # Must mount at the exact path in spark.local.dir, or Spark's
+      # LocalDirsFeatureStep sees no volume there and auto-creates a
+      # shadowing emptyDir (on gp3 root) over this NVMe hostPath.
+      - name: spark-local-dir-1
+        mountPath: /mnt/spark-nvme/spark-local
+      - name: log4j2-config
+        mountPath: /opt/spark/log4j2-custom
+
+  executor:
+    cores: 10
+    coreLimit: "10"
+    instances: 28
+    memory: "37g"
+    memoryOverhead: "8g"
+    # REQUIRED, and easy to miss: without this, executors run under the
+    # namespace's `default` ServiceAccount, NOT the driver's. Only
+    # spark-operator-spark carries the eks.amazonaws.com/role-arn
+    # annotation, so `default` gets no IRSA token projected — and the
+    # credential failure this fixes happened on EXECUTOR tasks
+    # ("Executor task launch worker for task 199.0 in stage 72.0"), not the
+    # driver. Setting it on the driver alone fixes nothing here.
+    #
+    # Nothing else is needed for IRSA: the EKS pod-identity webhook injects
+    # AWS_ROLE_ARN + AWS_WEB_IDENTITY_TOKEN_FILE and the token file itself
+    # off this annotation. Do NOT add spark.executorEnv.AWS_* by hand (the
+    # token file is what matters, and only the webhook can create it), and
+    # do NOT set spark.hadoop.fs.s3a.aws.credentials.provider — forcing a
+    # provider class there already broke startup once.
+    serviceAccount: spark-operator-spark
+    dnsConfig:
+      options:
+        - name: ndots
+          value: "2"
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
+    nodeSelector:
+      node-role.kubernetes.io/spark-node: ""
+      karpenter.k8s.aws/instance-family: "r7gd"
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: karpenter.k8s.aws/instance-size
+                  operator: In
+                  values:
+                    - "12xlarge"
+                - key: karpenter.sh/capacity-type
+                  operator: In
+                  values:
+                    - "on-demand"
+    tolerations:
+      - key: spark-only
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+    volumeMounts:
+      - name: spark-shuffle
+        mountPath: /mnt/spark-nvme
+      - name: spark-local-dir-1
+        mountPath: /mnt/spark-nvme/spark-local
+      - name: log4j2-config
+        mountPath: /opt/spark/log4j2-custom
+
+  volumes:
+    - name: spark-shuffle
+      hostPath:
+        path: /mnt/spark-nvme/spark-shuffle
+        type: DirectoryOrCreate
+    - name: spark-local-dir-1
+      hostPath:
+        path: /mnt/spark-nvme/spark-shuffle/spark-local
+        type: DirectoryOrCreate
+    - name: log4j2-config
+      configMap:
+        name: spark-log4j2-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-log4j2-config
+  namespace: default
+data:
+  log4j2.properties: |
+    #
+    # Licensed to the Apache Software Foundation (ASF) under one or more
+    # contributor license agreements.  See the NOTICE file distributed with
+    # this work for additional information regarding copyright ownership.
+    # The ASF licenses this file to You under the Apache License, Version 2.0
+    # (the "License"); you may not use this file except in compliance with
+    # the License.  You may obtain a copy of the License at
+    #
+    #    http://www.apache.org/licenses/LICENSE-2.0
+    #
+    # Unless required by applicable law or agreed to in writing, software
+    # distributed under the License is distributed on an "AS IS" BASIS,
+    # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    # See the License for the specific language governing permissions and
+    # limitations under the License.
+    #
+
+    # rootLogger stays at WARN deliberately. At SF1000, INFO turns on TaskSetManager
+    # and Executor at ~2 lines per task across 46k tasks, all funnelled through a
+    # SYNCHRONIZED Console appender: 20 task threads serialising on one SYSTEM_ERR
+    # lock, with a JsonLayout allocating per event. The symptom under investigation is
+    # whole-process freezes, so a process-wide logging lock would either mask the
+    # freeze or manufacture a new one -- and it would shift the very timings being
+    # measured. Name the loggers that answer the question instead; see the
+    # diagnostics block below.
+    # info, not warn. At warn the driver log is completely silent through a 60s
+    # stall, which is why diagnosing the last one took event-log arithmetic rather
+    # than reading. If the volume becomes a problem, narrow it with per-logger
+    # levels below rather than muting the root again.
+    rootLogger.level = info
+    rootLogger.appenderRef.stdout.ref = console
+    rootLogger.appenderRef.diag.ref = diag
+
+    appender.console.type = Console
+    appender.console.name = console
+    appender.console.target = SYSTEM_ERR
+    appender.console.layout.type = JsonLayout
+    appender.console.layout.compact = true
+    appender.console.layout.eventEol = true
+
+    # Diagnostics land on the instance NVMe instead of stderr, so raising a logger
+    # does not push extra volume through the kubelet and Loki. PatternLayout, not
+    # JsonLayout: this file is read with grep and awk, and JsonLayout allocates per
+    # event precisely as event count is being raised.
+    appender.diag.type = RollingFile
+    appender.diag.name = diag
+    appender.diag.fileName = /mnt/spark-nvme/diag.log
+    appender.diag.filePattern = /mnt/spark-nvme/diag-%i.log
+    appender.diag.layout.type = PatternLayout
+    appender.diag.layout.pattern = %d{ISO8601} %-5p [%t] %c{1}: %m%n
+    appender.diag.policies.type = Policies
+    appender.diag.policies.size.type = SizeBasedTriggeringPolicy
+    appender.diag.policies.size.size = 64MB
+    appender.diag.strategy.type = DefaultRolloverStrategy
+    appender.diag.strategy.max = 5
+
+    logger.repl.name = org.apache.spark.repl.Main
+    logger.repl.level = warn
+
+    logger.thriftserver.name = org.apache.spark.sql.hive.thriftserver.SparkSQLCLIDriver
+    logger.thriftserver.level = warn
+
+    logger.jetty1.name = org.sparkproject.jetty
+    logger.jetty1.level = warn
+    logger.jetty2.name = org.sparkproject.jetty.util.component.AbstractLifeCycle
+    logger.jetty2.level = error
+    logger.replexprTyper.name = org.apache.spark.repl.SparkIMain$exprTyper
+    logger.replexprTyper.level = info
+    logger.replSparkILoopInterpreter.name = org.apache.spark.repl.SparkILoop$SparkILoopInterpreter
+    logger.replSparkILoopInterpreter.level = info
+    logger.parquet1.name = org.apache.parquet
+    logger.parquet1.level = error
+    logger.parquet2.name = parquet
+    logger.parquet2.level = error
+
+    # rootLogger is warn, which would hide the one line that says whether cache
+    # affinity actually engaged and how the partitions were spread across targets.
+    # A spread piling most partitions onto one target is a failure mode that looks
+    # identical to success from the config alone.
+    logger.cometCacheAffinity.name = org.apache.spark.sql.comet.CometCacheAffinity
+    logger.cometCacheAffinity.level = info
+
+    logger.metastore.name = org.apache.hadoop.hive.metastore.RetryingHMSHandler
+    logger.metastore.level = fatal
+    logger.metastore2.name = org.apache.hadoop.hive.metastore.ObjectStore
+    logger.metastore2.level = error
+
+    # ---------------------------------------------------------------------------
+    # Freeze diagnostics. The 22 Sep run lost 929 s to overhead that was not query
+    # execution: 351 s before the first query, 275 s reading tiny .sql files between
+    # queries, 303 s inside the driver's stopwatch but outside SQL execution. The
+    # loggers below are the ones that can say where that time went.
+    # ---------------------------------------------------------------------------
+
+    # "It took N ms to list leaf files for M paths" -- the single most useful line
+    # for the 351 s setup phase and for any per-query re-listing.
+    # additivity = false on these four: they go to the NVMe file ONLY, not to stderr.
+    # Without it they would reach both, and the whole point of the file appender --
+    # keeping raised volume out of the kubelet and Loki -- would be lost.
+    logger.fileIndex.name = org.apache.spark.sql.execution.datasources.InMemoryFileIndex
+    logger.fileIndex.level = info
+    logger.fileIndex.additivity = false
+    logger.fileIndex.appenderRef.diag.ref = diag
+    logger.pafi.name = org.apache.spark.sql.execution.datasources.PartitioningAwareFileIndex
+    logger.pafi.level = info
+    logger.pafi.additivity = false
+    logger.pafi.appenderRef.diag.ref = diag
+    # "Pruning directories with:", "Pushed Filters:", "Post-Scan Filters:",
+    # "Output Data Schema:" -- bounds the planning phase per query.
+    logger.fileSource.name = org.apache.spark.sql.execution.datasources.FileSourceStrategy
+    logger.fileSource.level = info
+    logger.fileSource.additivity = false
+    logger.fileSource.appenderRef.diag.ref = diag
+
+    # Job and stage boundaries with durations. Per stage, not per task, so the volume
+    # is bounded -- and it brackets the wholeTextFiles jobs that took 60 s to read a
+    # few hundred bytes.
+    logger.dag.name = org.apache.spark.scheduler.DAGScheduler
+    logger.dag.level = info
+    logger.dag.additivity = false
+    logger.dag.appenderRef.diag.ref = diag
+
+    # Comet Scala side: rules, fallbacks, and the affinity spread. Left ADDITIVE on
+    # purpose -- these keep reaching stderr and therefore Loki, so the cache-affinity
+    # spread stays queryable where it already is. Superset of the cometCacheAffinity
+    # entry above, which is kept because it documents why that line matters.
+    logger.comet.name = org.apache.comet
+    logger.comet.level = info
+    logger.cometSql.name = org.apache.spark.sql.comet
+    logger.cometSql.level = info
+
+    # Shuffle batch-fetch decision, one DEBUG line per reduce task:
+    #   "Batch fetch for shuffle N: true|false (requested: true|false) ..."
+    # true = batched; false with requested: false = a single-partition read, nothing to
+    # batch; false with requested: true = refused, and the line says why.
+    #
+    # ADDITIVE, unlike the file-only loggers above: diag.log has never been shown to receive
+    # anything. It was 0 bytes on every node on 29 Sep, including cluster 2, which ran after
+    # the async selector was removed -- so it is not only the missing Disruptor jar. Until a
+    # run shows diag.log filling, this line also goes to stderr / Loki. Volume is one line per
+    # reduce task, a few dozen per second across the cluster.
+    logger.cometShuffleReader.name = org.apache.spark.sql.comet.execution.shuffle.CometBlockStoreShuffleReader
+    logger.cometShuffleReader.level = debug
+    logger.cometShuffleReader.appenderRef.diag.ref = diag
+
+    # --- explicitly held down -------------------------------------------------
+    # Per-task chatter. All of this is already in the event log with timestamps, so
+    # logging it again only adds contention on the appender.
+    logger.tsm.name = org.apache.spark.scheduler.TaskSetManager
+    logger.tsm.level = warn
+    logger.executor.name = org.apache.spark.executor.Executor
+    logger.executor.level = warn
+    logger.storage.name = org.apache.spark.storage
+    logger.storage.level = warn
+    # Do NOT raise these two: per-request S3 logging at SF1000 buries the signal and
+    # adds real CPU on the path being measured.
+    logger.s3a.name = org.apache.hadoop.fs.s3a
+    logger.s3a.level = warn
+    logger.awsreq.name = com.amazonaws.request
+    logger.awsreq.level = warn

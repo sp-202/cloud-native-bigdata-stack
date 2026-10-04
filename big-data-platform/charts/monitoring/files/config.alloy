@@ -8,6 +8,7 @@
 //   4. Hubble flows        -> Loki (non-FORWARDED only) + per-verdict counters -> Prometheus
 //   5. OTLP (Comet)        -> Prometheus
 //   6. Alloy's own metrics -> Prometheus (delivery health: dropped/failed entries, WAL lag)
+//   7. node-exporter, Cilium agent and Hubble metrics, scraped on this node -> Prometheus
 //
 // Env from the pod spec: NODE_NAME (spec.nodeName), HOST_IP (status.hostIP).
 //
@@ -537,7 +538,7 @@ otelcol.processor.batch "default" {
 }
 
 otelcol.exporter.prometheus "default" {
-	forward_to = [prometheus.remote_write.default.receiver]
+	forward_to = [prometheus.relabel.add_node.receiver]
 }
 
 // -------------------------------------------------------------------------------- 6. self metrics
@@ -549,9 +550,180 @@ prometheus.exporter.self "alloy" { }
 
 prometheus.scrape "alloy_self" {
 	targets         = prometheus.exporter.self.alloy.targets
-	forward_to      = [prometheus.remote_write.default.receiver]
+	forward_to      = [prometheus.relabel.add_node.receiver]
 	scrape_interval = "15s"
 	job_name        = "alloy"
+}
+
+// `node` on Alloy's own and Comet's series only -- NOT a remote_write external label. The
+// kube-prometheus-stack dashboards filter on cluster="$cluster" (empty: matches only series
+// WITHOUT a cluster label) and its node rules join node-exporter series on namespace/pod and
+// group_left(node); a label stamped on everything pushed would break both.
+prometheus.relabel "add_node" {
+	forward_to = [prometheus.remote_write.default.receiver]
+
+	rule {
+		target_label = "node"
+		replacement  = sys.env("NODE_NAME")
+	}
+}
+
+// -------------------------------------------------------------------------------- 7. node metrics
+
+// Scraped on the node and PUSHED, instead of pulled by Prometheus: Prometheus on the core
+// node loses whatever it had not yet scraped when Karpenter removes a spark node, while Alloy
+// keeps scraping until its own SIGTERM -- the last pod to stop -- and its remote-write WAL
+// flushes on the way out. The exporters themselves are unchanged (node-exporter with
+// --collector.ethtool on ens5|ens6; Cilium's agent and Hubble metrics); only who scrapes
+// moved. Their ServiceMonitors are off (values: prometheus-node-exporter.prometheus.monitor,
+// monitoring.ciliumServiceMonitors.agentAndHubble) so nothing is ingested twice.
+//
+// Labels reproduce exactly what prometheus-operator generated from those ServiceMonitors --
+// job, instance, namespace, pod, container, service, endpoint (+ node/host_ip/pod_ip for
+// Cilium, from its relabelings) -- so the node dashboards, the node.rules recording rules and
+// the ENA allowance panels keep working unchanged.
+//
+// kubelet / cAdvisor stay pulled by Prometheus: kube-prometheus-stack can only drop their
+// ServiceMonitor together with the kubelet dashboard and recording rules (kubelet.enabled).
+discovery.relabel "node_exporter" {
+	targets = discovery.kubernetes.pods.targets
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name", "__meta_kubernetes_pod_container_port_name"]
+		regex         = "prometheus-node-exporter;http-metrics"
+		action        = "keep"
+	}
+
+	rule {
+		target_label = "job"
+		replacement  = "node-exporter"
+	}
+
+	rule {
+		source_labels = ["__address__"]
+		target_label  = "instance"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_namespace"]
+		target_label  = "namespace"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_name"]
+		target_label  = "pod"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_container_name"]
+		target_label  = "container"
+	}
+
+	rule {
+		target_label = "service"
+		replacement  = "node-exporter"
+	}
+
+	rule {
+		target_label = "endpoint"
+		replacement  = "http-metrics"
+	}
+}
+
+prometheus.scrape "node_exporter" {
+	targets         = discovery.relabel.node_exporter.output
+	forward_to      = [prometheus.remote_write.default.receiver]
+	scrape_interval = "30s"
+	job_name        = "node-exporter"
+}
+
+// Cilium agent (container port "prometheus", 9962; Service cilium-agent, port "metrics") and
+// Hubble (container port "hubble-metrics", 9965; Service hubble-metrics) -- both served by the
+// per-node cilium pod (k8s-app=cilium). honor_labels as in the ServiceMonitors.
+discovery.relabel "cilium" {
+	targets = discovery.kubernetes.pods.targets
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_label_k8s_app", "__meta_kubernetes_pod_container_port_name"]
+		regex         = "cilium;(prometheus|hubble-metrics)"
+		action        = "keep"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_container_port_name"]
+		regex         = "prometheus"
+		target_label  = "job"
+		replacement   = "cilium-agent"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_container_port_name"]
+		regex         = "prometheus"
+		target_label  = "endpoint"
+		replacement   = "metrics"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_container_port_name"]
+		regex         = "hubble-metrics"
+		target_label  = "job"
+		replacement   = "hubble-metrics"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_container_port_name"]
+		regex         = "hubble-metrics"
+		target_label  = "endpoint"
+		replacement   = "hubble-metrics"
+	}
+
+	rule {
+		source_labels = ["job"]
+		target_label  = "service"
+	}
+
+	rule {
+		source_labels = ["__address__"]
+		target_label  = "instance"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_namespace"]
+		target_label  = "namespace"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_name"]
+		target_label  = "pod"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_container_name"]
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_node_name"]
+		target_label  = "node"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_host_ip"]
+		target_label  = "host_ip"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_ip"]
+		target_label  = "pod_ip"
+	}
+}
+
+prometheus.scrape "cilium" {
+	targets         = discovery.relabel.cilium.output
+	forward_to      = [prometheus.remote_write.default.receiver]
+	scrape_interval = "30s"
+	honor_labels    = true
+	job_name        = "cilium"
 }
 
 // -------------------------------------------------------------------------------- outputs
@@ -577,7 +749,8 @@ loki.write "default" {
 
 // Both HA replicas, written independently, so each holds every sample and Thanos keeps
 // deduplicating on prometheus_replica. The WAL lives under --storage.path (hostPath
-// /var/lib/alloy), so an Alloy restart resends rather than drops.
+// /var/lib/alloy), so an Alloy restart resends rather than drops. No external_labels: see
+// prometheus.relabel "add_node".
 prometheus.remote_write "default" {
 	endpoint {
 		url = "http://prometheus-kube-prometheus-stack-prometheus-0.prometheus-operated.default.svc.cluster.local:9090/api/v1/write"
@@ -585,10 +758,5 @@ prometheus.remote_write "default" {
 
 	endpoint {
 		url = "http://prometheus-kube-prometheus-stack-prometheus-1.prometheus-operated.default.svc.cluster.local:9090/api/v1/write"
-	}
-
-	external_labels = {
-		cluster = "k8s-ha-cluster",
-		node    = sys.env("NODE_NAME"),
 	}
 }
