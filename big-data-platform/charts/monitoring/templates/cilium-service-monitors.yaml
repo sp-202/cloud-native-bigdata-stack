@@ -40,6 +40,14 @@
 #
 # Managed via ArgoCD Sync Wave: 0
 # ------------------------------------------------------------------------------
+{{- /*
+  cilium-agent and hubble are per-node and, by default, scraped on the node by Alloy and
+  pushed (files/config.alloy section 7) so a spark node's last samples survive Karpenter
+  removing it. Their ServiceMonitors render only when ciliumServiceMonitors.agentAndHubble
+  is not false. cilium-operator and hubble-relay run on core nodes and stay here.
+*/}}
+{{- $agentAndHubble := ne (toString (.Values.ciliumServiceMonitors).agentAndHubble) "false" }}
+{{- if $agentAndHubble }}
 
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -74,6 +82,7 @@ spec:
         - sourceLabels: [__meta_kubernetes_pod_ip]
           targetLabel: pod_ip
 ---
+{{- end }}
 # cilium-operator owns ENI/IPAM: IP pool watermarks, allocation latency and
 # EC2 API errors — the numbers the ipamMinAllocate/ipamPreAllocate tuning in
 # cilium.tf is otherwise set blind. Selector and port copied verbatim from
@@ -121,6 +130,7 @@ spec:
         - sourceLabels: [__meta_kubernetes_pod_ip]
           targetLabel: pod_ip
 ---
+{{- if $agentAndHubble }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -155,6 +165,7 @@ spec:
         - sourceLabels: [__meta_kubernetes_pod_ip]
           targetLabel: pod_ip
 ---
+{{- end }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
