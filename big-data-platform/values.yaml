@@ -1139,6 +1139,15 @@ kube-prometheus-stack:
                 query: sum by (reason) (rate(hubble_drop_total{$$__tags}[1m]))
               - name: TCP flags from this pod (RST = resets)
                 query: sum by (flag) (rate(hubble_tcp_flags_total{$$__tags}[1m]))
+              # Same two as the local stack (datafusion-comet-geo dev/otel-test-env), checked
+              # there against Prometheus. Span variables, not $$__tags: $$__tags would add
+              # source_pod to these and stage_id to the Hubble ones, matching nothing.
+              # Counter value, not rate(): a stage shorter than the export + scrape interval
+              # is born with its final value and rate() sees no increase.
+              - name: Native seconds in this span's stage (total, all executors)
+                query: sum by (stage_id) (max_over_time(comet_jni_execute_plan_ns_total{stage_id="$${__span.tags["spark.stage_id"]}"}[5m])) / 1e9
+              - name: p95 duration of this operator type
+                query: histogram_quantile(0.95, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{span_name="$${__span.name}"}[5m])))
           nodeGraph:
             enabled: true
   alertmanager:
