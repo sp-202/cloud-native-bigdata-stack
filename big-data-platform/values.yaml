@@ -164,6 +164,10 @@ global:
   # here rather than injected from Terraform at deploy time.
   thanosS3RoleArn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-thanos-s3-writer"
   lokiS3RoleArn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-loki-s3-writer"
+  # Tempo: lakehouse bucket, tempo/ prefix (charts/monitoring/templates/tempo.yaml). The role
+  # exists only after terraform-aws-k8s-ha observability-irsa.tf is applied; until then Tempo
+  # starts but every block flush fails as Access Denied.
+  tempoS3RoleArn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-tempo-s3-writer"
   # Spark is the third IRSA consumer, added for a different reason than the
   # two above (which exist for least-privilege). Spark already had S3 access
   # via the node role/IMDS and it worked for the JVM side — but Comet's
@@ -1077,6 +1081,14 @@ kube-prometheus-stack:
         labelValue: "1"
         folder: /tmp/dashboards
         searchNamespace: ALL
+      datasources:
+        # Pinned so Tempo's trace-to-metrics links below can name it; dashboards use ${ds}.
+        uid: prometheus
+        # Exemplars on the Prometheus datasource carry trace_id (spanmetrics); this makes the
+        # exemplar dots in Grafana link to the trace in Tempo.
+        exemplarTraceIdDestinations:
+          datasourceUid: tempo
+          traceIdLabelName: trace_id
     resources:
       requests:
         cpu: "200m"
@@ -1094,6 +1106,41 @@ kube-prometheus-stack:
         access: proxy
         url: http://thanos-query.default.svc.cluster.local:9090
         isDefault: false
+      # Comet's per-operator traces (charts/monitoring/templates/tempo.yaml). Links out:
+      #   * Logs for this span -> Loki lines carrying this trace_id: native stderr
+      #     (`trace_id=<hex>`) and JVM JSON (`"trace_id":"<hex>"` in contextMap).
+      #   * Metrics -> Hubble/Cilium for the span's pod over the span's time window. Hubble
+      #     cannot carry our trace_id: Cilium 1.19 extracts trace context only from L7 HTTP
+      #     `traceparent` headers (pkg/hubble/parser/seven/tracing.go), and Comet's traffic is
+      #     shuffle RPC, TLS to S3 and OTLP. So the join is pod + time, via the span's
+      #     k8s.pod.name resource attribute (set in the Spark job's OTEL_RESOURCE_ATTRIBUTES)
+      #     mapped onto Hubble's source_pod label.
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        access: proxy
+        url: http://tempo.default.svc.cluster.local:3200
+        isDefault: false
+        jsonData:
+          tracesToLogsV2:
+            datasourceUid: loki
+            filterByTraceID: true
+            spanStartTimeShift: "-5m"
+            spanEndTimeShift: "5m"
+          tracesToMetrics:
+            datasourceUid: prometheus
+            spanStartTimeShift: "-2m"
+            spanEndTimeShift: "2m"
+            tags:
+              - key: k8s.pod.name
+                value: source_pod
+            queries:
+              - name: Hubble drops from this pod, by reason
+                query: sum by (reason) (rate(hubble_drop_total{$$__tags}[1m]))
+              - name: TCP flags from this pod (RST = resets)
+                query: sum by (flag) (rate(hubble_tcp_flags_total{$$__tags}[1m]))
+          nodeGraph:
+            enabled: true
   alertmanager:
     alertmanagerSpec:
       nodeSelector:
@@ -1128,6 +1175,11 @@ kube-prometheus-stack:
       # (prometheus-kube-prometheus-stack-prometheus-{0,1}.prometheus-operated), so each
       # replica holds every sample and Thanos dedup on prometheus_replica still holds.
       enableRemoteWriteReceiver: true
+      # Keep exemplars: Alloy's spanmetrics attach trace_id exemplars to the per-operator
+      # duration histograms (config.alloy section 5) and remote-writes them here; without this
+      # flag Prometheus accepts the samples and silently discards the exemplars.
+      enableFeatures:
+        - exemplar-storage
       # "hard": with exactly 2 data-nodes (data_node_count, a fixed count —
       # not a min/max range), this guarantees one replica per node instead
       # of merely preferring it — the whole point of doing this is
@@ -1619,6 +1671,19 @@ loki-stack:
   enabled: true
   loki:
     fullnameOverride: "loki"
+    # The chart's Grafana datasource (templates/datasources.yaml). uid is pinned because Tempo's
+    # "logs for this span" link names it; dashboards select Loki through ${ds}. The derived
+    # field turns any trace id in a log line into a link to Tempo, matching both forms Comet
+    # writes: native stderr `trace_id=<hex>` and JVM JSON `"trace_id":"<hex>"`. A text match
+    # rather than structured metadata, which Loki 2.9 here does not store.
+    datasource:
+      uid: loki
+      jsonData: |
+        derivedFields:
+          - name: TraceID
+            matcherRegex: 'trace_id"?[=:]"?([0-9a-f]{32})'
+            datasourceUid: tempo
+            url: "$${__value.raw}"
     isDefault: false
     nodeSelector:
       node-role.kubernetes.io/core-node: ""
@@ -2269,6 +2334,26 @@ monitoring:
     # 30 s, not 60: Karpenter removes the node ~180 s after the job ends, and the last
     # files must be in S3 well before -- the SIGTERM sweep is only the backstop.
     intervalSeconds: 30
+  # Tempo (charts/monitoring/templates/tempo.yaml): Comet's per-operator spans, via the Alloy
+  # on each node (config.alloy section 5). S3 under s3://<lakehouse>/tempo/ through IRSA
+  # (global.tempoS3RoleArn). Limits are sized for SF1000 at sampleRatio 1.0 -- one query's
+  # trace is tens of MB, and Tempo's 5 MB default per trace would truncate it.
+  tempo:
+    enabled: true
+    image: "grafana/tempo:2.5.0"
+    retention: "168h"
+    storageClassName: "ebs-gp3"
+    storageSize: "20Gi"   # WAL + blocks not yet flushed to S3
+    nodeSelector:
+      node-role.kubernetes.io/data-node: ""
+    limits:
+      ingestionRateBytes: 104857600    # 100 MiB/s
+      ingestionBurstBytes: 209715200   # 200 MiB
+      maxTracesPerUser: 100000
+      maxBytesPerTrace: 524288000      # 500 MiB
+    resources:
+      requests: { cpu: "500m", memory: "2Gi" }
+      limits: { cpu: "2", memory: "8Gi" }
   # S3 handshake capture per node -> s3://<lakehouse>/network-logs/packet-capture/
   # (charts/monitoring/templates/packet-capture-shipper.yaml). Headers of
   # SYN/SYN-ACK/RST on :443 only, plus a 60 s ip addr/rule/route snapshot.

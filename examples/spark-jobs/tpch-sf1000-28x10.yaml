@@ -181,6 +181,15 @@ spec:
     "spark.comet.otel.temporality": "cumulative"
     "spark.comet.otel.intervalMs": "5000"
 
+    # --- Comet per-operator traces -> node-local Alloy -> Tempo ----------------------
+    # datafusion-tracing spans, one trace per SQL execution across all executors, plus span
+    # metrics with trace_id exemplars into Prometheus (config.alloy section 5). Needs an image
+    # with the Comet build that has spark.comet.otel.traces.* (branch feat/operator-tracing).
+    # 1.0 traces every query: a debugging setting -- timings are not comparable with an
+    # untraced run. Use 0.0 to switch the whole feature off (no spans, no plan wrapping).
+    "spark.comet.otel.traces.endpoint": "http://alloy.kube-system.svc.cluster.local:4318/v1/traces"
+    "spark.comet.otel.traces.sampleRatio": "1.0"
+
     # --- Karpenter teardown: keep executor logs until the node goes ----------------
     # Default true: at job end the driver DELETES executor pods, kubelet then removes
     # /var/log/pods/<executor>/ and the log agent drops the target -- any unread tail of
@@ -445,8 +454,19 @@ spec:
             fieldPath: metadata.name
       - name: OTEL_SERVICE_NAME
         value: comet-executor
+      # Node and namespace too: Grafana joins a span to Hubble/Cilium by pod and node over
+      # the span's time window -- Cilium cannot carry our trace_id on the wire (it extracts
+      # trace context from L7 HTTP traceparent headers only), so these are the join keys.
+      - name: OTEL_NODE_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: spec.nodeName
+      - name: OTEL_POD_NAMESPACE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
       - name: OTEL_RESOURCE_ATTRIBUTES
-        value: "service.instance.id=$(OTEL_POD_NAME),k8s.pod.name=$(OTEL_POD_NAME)"
+        value: "service.instance.id=$(OTEL_POD_NAME),k8s.pod.name=$(OTEL_POD_NAME),k8s.node.name=$(OTEL_NODE_NAME),k8s.namespace.name=$(OTEL_POD_NAMESPACE)"
     serviceAccount: spark-operator-spark
     dnsConfig:
       options:
@@ -542,6 +562,10 @@ data:
     appender.console.layout.type = JsonLayout
     appender.console.layout.compact = true
     appender.console.layout.eventEol = true
+    # Emit the thread context map ("contextMap"), which carries trace_id for traced queries
+    # (CometExecIterator puts it in the task MDC). Grafana's Loki derived field links it to
+    # Tempo. Also adds Spark's mdc.taskName, which names the task on every line.
+    appender.console.layout.properties = true
 
     # Diagnostics land on the instance NVMe instead of stderr, so raising a logger
     # does not push extra volume through the kubelet and Loki. PatternLayout, not
@@ -552,7 +576,7 @@ data:
     appender.diag.fileName = /mnt/spark-nvme/diag.log
     appender.diag.filePattern = /mnt/spark-nvme/diag-%i.log
     appender.diag.layout.type = PatternLayout
-    appender.diag.layout.pattern = %d{ISO8601} %-5p [%t] %c{1}: %m%n
+    appender.diag.layout.pattern = %d{ISO8601} %-5p [%t] %c{1}: %notEmpty{[trace_id=%X{trace_id}] }%m%n
     appender.diag.policies.type = Policies
     appender.diag.policies.size.type = SizeBasedTriggeringPolicy
     appender.diag.policies.size.size = 64MB

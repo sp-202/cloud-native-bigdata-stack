@@ -6,7 +6,8 @@
 //   2. systemd journal     -> Loki
 //   3. Spark GC/diag files -> Loki   (node NVMe; the raw files also go to S3 via spark-node-log-shipper)
 //   4. Hubble flows        -> Loki (non-FORWARDED only) + per-verdict counters -> Prometheus
-//   5. OTLP (Comet)        -> Prometheus
+//   5. OTLP (Comet)        -> metrics to Prometheus; traces to Tempo, plus span metrics with
+//                             trace_id exemplars to Prometheus
 //   6. Alloy's own metrics -> Prometheus (delivery health: dropped/failed entries, WAL lag)
 //   7. node-exporter, Cilium agent and Hubble metrics, scraped on this node -> Prometheus
 //
@@ -512,9 +513,10 @@ loki.process "hubble" {
 
 // -------------------------------------------------------------------------------- 5. OTLP
 
-// Comet's native OTel metrics (spark.comet.otel.endpoint, OTLP/HTTP protobuf). The Service in
-// front of this DaemonSet has internalTrafficPolicy: Local, so an executor always reaches the
-// Alloy on its own node. Traces and logs are not routed anywhere yet: Comet emits neither.
+// Comet's native OTel metrics (spark.comet.otel.endpoint) and per-operator spans
+// (spark.comet.otel.traces.endpoint), both OTLP/HTTP protobuf. The Service in front of this
+// DaemonSet has internalTrafficPolicy: Local, so an executor always reaches the Alloy on its
+// own node. Comet ships no OTLP logs: its native log is stderr, collected by pipeline 1.
 otelcol.receiver.otlp "default" {
 	http {
 		endpoint = "0.0.0.0:4318"
@@ -523,6 +525,58 @@ otelcol.receiver.otlp "default" {
 	grpc {
 		endpoint = "0.0.0.0:4317"
 	}
+
+	output {
+		metrics = [otelcol.processor.batch.default.input]
+		traces  = [otelcol.processor.batch.traces.input]
+	}
+}
+
+// Spans arrive in bursts at stage boundaries (one per operator per task, ~80 attributes each),
+// so batch larger than the metrics path before the network hop to Tempo.
+otelcol.processor.batch "traces" {
+	timeout         = "2s"
+	send_batch_size = 2048
+
+	output {
+		traces = [otelcol.exporter.otlp.tempo.input, otelcol.connector.spanmetrics.default.input]
+	}
+}
+
+// charts/monitoring/templates/tempo.yaml. The sending queue absorbs a stage's burst while Tempo
+// flushes; when it overflows, spans are dropped here and counted in
+// otelcol_exporter_enqueue_failed_spans -- never back-pressure on an executor.
+otelcol.exporter.otlp "tempo" {
+	client {
+		endpoint = "tempo.default.svc.cluster.local:4317"
+
+		tls {
+			insecure = true
+		}
+	}
+
+	sending_queue {
+		queue_size = 20000
+	}
+}
+
+// Per span name -- i.e. per DataFusion operator (HashJoinExec, SortExec, ...) and comet_task --
+// a call counter and a duration histogram, with trace_id exemplars so a Grafana latency panel
+// links straight to a trace. Default dimensions only (service.name, span.name, span.kind,
+// status.code): pod or stage dimensions would mint a series per task. Covers sampled queries
+// only, and a span's duration includes time waiting on its children.
+otelcol.connector.spanmetrics "default" {
+	histogram {
+		explicit {
+			buckets = ["10ms", "50ms", "100ms", "500ms", "1s", "5s", "15s", "30s", "60s", "120s", "300s"]
+		}
+	}
+
+	exemplars {
+		max_per_data_point = 5
+	}
+
+	metrics_flush_interval = "15s"
 
 	output {
 		metrics = [otelcol.processor.batch.default.input]

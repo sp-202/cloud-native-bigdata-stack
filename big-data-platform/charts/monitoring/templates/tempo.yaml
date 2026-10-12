@@ -1,0 +1,153 @@
+{{- if and .Values.enabled (.Values.tempo).enabled }}
+# Grafana Tempo, single binary -- the trace backend for Comet's per-operator spans
+# (datafusion-tracing, spark.comet.otel.traces.endpoint). Executors send OTLP to the Alloy on
+# their own node (config.alloy section 5), which forwards traces here and derives span metrics
+# for Prometheus.
+#
+# Blocks go to the lakehouse bucket under tempo/, through IRSA: terraform-aws-k8s-ha
+# observability-irsa.tf, role <cluster>-tempo-s3-writer, trusted for
+# system:serviceaccount:default:tempo only -- rename the ServiceAccount and STS silently
+# rejects it, the SDK falls back to the node role, and every flush is Access Denied.
+#
+# Sizing is for SF1000 at sampleRatio 1.0: one query is ~50-100k spans (one per operator per
+# task, ~80 metric attributes each), i.e. tens of MB per trace arriving in a burst at stage
+# boundaries. Hence the raised per-trace and ingestion limits below, and a memory limit with
+# room for a few such traces live in the ingester at once.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tempo
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    eks.amazonaws.com/role-arn: {{ .Values.global.tempoS3RoleArn | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-config
+  namespace: {{ .Release.Namespace }}
+data:
+  tempo.yaml: |
+    server:
+      http_listen_port: 3200
+      grpc_listen_port: 9095
+
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+
+    ingester:
+      # Cut blocks often: a live trace sits in memory until it is idle, and a spark node's
+      # executors burst a whole stage's spans at once.
+      trace_idle_period: 10s
+      max_block_duration: 5m
+
+    compactor:
+      compaction:
+        # Tempo deletes expired blocks itself (the IAM policy grants DeleteObject on tempo/*).
+        block_retention: {{ .Values.tempo.retention }}
+
+    storage:
+      trace:
+        backend: s3
+        s3:
+          bucket: {{ .Values.global.awsLakehouse.bucket }}
+          prefix: tempo
+          endpoint: s3.{{ .Values.global.awsLakehouse.region }}.amazonaws.com
+          region: {{ .Values.global.awsLakehouse.region }}
+        wal:
+          path: /var/tempo/wal
+        local:
+          path: /var/tempo/blocks
+
+    overrides:
+      defaults:
+        ingestion:
+          rate_limit_bytes: {{ .Values.tempo.limits.ingestionRateBytes | int64 }}
+          burst_size_bytes: {{ .Values.tempo.limits.ingestionBurstBytes | int64 }}
+          max_traces_per_user: {{ .Values.tempo.limits.maxTracesPerUser | int64 }}
+        global:
+          # Default 5 MB truncates an SF1000 query's trace to its first few stages.
+          max_bytes_per_trace: {{ .Values.tempo.limits.maxBytesPerTrace | int64 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: tempo
+spec:
+  selector:
+    app: tempo
+  ports:
+    - name: http
+      port: 3200
+      targetPort: 3200
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tempo
+  namespace: {{ .Release.Namespace }}
+spec:
+  serviceName: tempo
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tempo
+  template:
+    metadata:
+      labels:
+        app: tempo
+      annotations:
+        # Roll the pod when the config changes; Tempo does not reload it.
+        checksum/config: {{ .Values.tempo | toJson | sha256sum }}
+    spec:
+      serviceAccountName: tempo
+      nodeSelector:
+        {{- toYaml .Values.tempo.nodeSelector | nindent 8 }}
+      securityContext:
+        # The image runs as 10001; the WAL volume must be writable by it.
+        fsGroup: 10001
+      containers:
+        - name: tempo
+          image: {{ .Values.tempo.image | quote }}
+          args: ["-config.file=/etc/tempo/tempo.yaml"]
+          ports:
+            - name: http
+              containerPort: 3200
+            - name: otlp-grpc
+              containerPort: 4317
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 15
+          resources:
+            {{- toYaml .Values.tempo.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tempo
+            - name: data
+              mountPath: /var/tempo
+      volumes:
+        - name: config
+          configMap:
+            name: tempo-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.tempo.storageClassName | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.tempo.storageSize | quote }}
+{{- end }}
