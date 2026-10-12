@@ -66,6 +66,25 @@ FROM eclipse-temurin:17-jdk-noble
 ENV SPARK_HOME=/opt/spark
 ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
 
+# Comet native telemetry defaults, as image ENV rather than in spark-env.sh below: on
+# Kubernetes only the DRIVER reads spark-env.sh (entrypoint.sh -> spark-submit -> spark-class
+# -> load-spark-env.sh). Executors -- where Comet's native code runs -- are started as a bare
+# `java ... KubernetesExecutorBackend` and never source it (Spark v3.5.8
+# kubernetes/dockerfiles/spark/entrypoint.sh). Image ENV reaches both.
+#
+# Span export queue (OpenTelemetry SDK BatchSpanProcessor), used when a job sets
+# spark.comet.otel.traces.endpoint. The default 2048 drops spans when a stage's tasks finish
+# together; spans past the queue are DROPPED, never waited for, so this cannot slow a task.
+# 2 s export interval instead of 5 s: less to lose if an executor dies abruptly (a clean stop
+# flushes everything regardless -- CometExecutorPlugin.shutdown).
+#
+# Per-pod identity (OTEL_SERVICE_NAME, OTEL_RESOURCE_ATTRIBUTES with pod/node names) stays in
+# each SparkApplication's executor env: it needs the Downward API, which an image cannot use.
+# RUST_LOG is unset on purpose: Comet's native default is `info`; a job can raise it with
+# spark.executorEnv.RUST_LOG.
+ENV OTEL_BSP_MAX_QUEUE_SIZE=32768 \
+    OTEL_BSP_SCHEDULE_DELAY=2000
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     tini \
@@ -138,6 +157,13 @@ spark.sql.gravitino.enableIcebergSupport true\n" > $SPARK_HOME/conf/spark-defaul
 # JVM starts (must live here, not spark-defaults.conf: PyO3's
 # auto-initialize reads these at interpreter init, before
 # spark-defaults.conf is even parsed).
+#
+# DRIVER ONLY on Kubernetes: executors never source this file (see the ENV
+# block at the top of this stage). That is why the TPC-H jobs repeat
+# COMET_NATIVE_SCAN_CACHE_ENABLED as spark.executorEnv.*, and why nothing
+# below reaches an executor -- including LD_PRELOAD, so PyO3/Python UDFs on
+# executors run without it. Executor-side settings belong in image ENV or in
+# the job's executor env, not here.
 #
 # python3 here is the system Python installed above via apt — no venv,
 # unlike local dev. pandas/pyarrow/numpy already live in its site-packages
