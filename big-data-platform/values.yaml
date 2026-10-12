@@ -1145,7 +1145,7 @@ kube-prometheus-stack:
               # Counter value, not rate(): a stage shorter than the export + scrape interval
               # is born with its final value and rate() sees no increase.
               - name: Native seconds in this span's stage (total, all executors)
-                query: sum by (stage_id) (max_over_time(comet_jni_execute_plan_ns_total{stage_id="$${__span.tags["spark.stage_id"]}"}[5m])) / 1e9
+                query: sum by (stage_id) (max_over_time(comet_jni_execute_plan_ns_total{stage_id="$${__span.tags.stage_id}"}[5m])) / 1e9
               - name: p95 duration of this operator type
                 query: histogram_quantile(0.95, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{span_name="$${__span.name}"}[5m])))
           nodeGraph:
