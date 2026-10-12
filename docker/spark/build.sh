@@ -34,10 +34,22 @@ if ! docker info > /dev/null 2>&1; then
   exit 1
 fi
 
-echo "🔨 Building Multi-Arch Docker image: $IMAGE_NAME (Platforms: linux/amd64, linux/arm64)"
-# Use buildx for multi-arch support
-docker buildx build --platform linux/amd64,linux/arm64 -t $IMAGE_NAME -f $DOCKERFILE_PATH --push .
+# Dockerfile expects the base Spark tarball in this directory
+COMET_TARBALL="spark-3.5.8-comet-v1.tar.gz"
+if [ ! -f "$COMET_TARBALL" ]; then
+    echo "📥 $COMET_TARBALL not found locally, pulling from S3..."
+    aws s3 cp s3://spark-3.5.8-scala-2.13-custom/spark-arm64/spark-3.5.8-comet-v1.tar.gz "$COMET_TARBALL"
+fi
 
-echo "✅ Multi-Arch Build and Push Complete: $IMAGE_NAME"
+# Dockerfile also expects the Comet acceleration jar in this directory (separate from the tarball above)
+COMET_JAR="comet-spark-spark3.5_2.13-0.17.0-SNAPSHOT.jar"
+if [ ! -f "$COMET_JAR" ]; then
+    echo "📥 $COMET_JAR not found locally, pulling from S3..."
+    aws s3 cp s3://spark-3.5.8-scala-2.13-custom/comet-arm/comet-spark-spark3.5_2.13-0.17.0-SNAPSHOT.jar "$COMET_JAR"
+fi
+
+echo "🔨 Building Docker image: $IMAGE_NAME (Platform: linux/arm64)"
+# arm64 only — the Comet-accelerated Spark build is arm64-only
+docker buildx build --platform linux/arm64 -t $IMAGE_NAME -f $DOCKERFILE_PATH --push .
 
 echo "✅ Build and Push Complete: $IMAGE_NAME"

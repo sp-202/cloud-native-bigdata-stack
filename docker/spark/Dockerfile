@@ -1,9 +1,8 @@
 # Builder Stage
-# Using eclipse-temurin:17-jdk-jammy as ARM64-compatible base (multi-arch manifest)
-FROM eclipse-temurin:17-jdk-jammy AS builder
+# Using eclipse-temurin:17-jdk-noble (Ubuntu 24.04, Python 3.12 by default) — arm64 only
+FROM eclipse-temurin:17-jdk-noble AS builder
 
 ENV SPARK_VERSION=3.5.8 \
-    HADOOP_VERSION=3 \
     SCALA_VERSION=2.13 \
     ICEBERG_VERSION=1.10.1 \
     HADOOP_AWS_VERSION=3.3.4 \
@@ -11,19 +10,27 @@ ENV SPARK_VERSION=3.5.8 \
     AWS_SDK_V2_VERSION=2.29.52 \
     GRAVITINO_VERSION=1.2.0 \
     POSTGRES_VERSION=42.6.0 \
-    SEDONA_VERSION=1.8.1 \
-    GEOTOOLS_WRAPPER_VERSION=1.8.1-33.1 \
-    H3_VERSION=4.0.1 \
+    COMET_VERSION=1.0.0-preview \
     SPARK_HOME=/opt/spark
 
-RUN apt-get update && apt-get install -y wget curl
+RUN apt-get update && apt-get install -y wget curl zip unzip
 
-RUN wget https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala2.13.tgz && \
-    tar -xzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala2.13.tgz && \
-    mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala2.13 ${SPARK_HOME} && \
-    rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala2.13.tgz
+# Base Spark arm64 build pulled from S3 by the workflow
+# (docker/spark/spark-3.5.8-comet-v1.tar.gz).
+# new comet jar added
+COPY spark-3.5.8-comet-v1.tar.gz /tmp/spark-comet.tar.gz
+
+RUN mkdir -p /tmp/spark-extract && \
+    tar -xzf /tmp/spark-comet.tar.gz -C /tmp/spark-extract && \
+    mv /tmp/spark-extract/*/ ${SPARK_HOME} && \
+    rm -rf /tmp/spark-extract /tmp/spark-comet.tar.gz
 
 RUN rm -rf $SPARK_HOME/examples $SPARK_HOME/data $SPARK_HOME/tests $SPARK_HOME/licenses
+
+# Comet acceleration jar, built separately (arm64) and pulled from S3 by the
+# workflow (docker/spark/comet-spark-spark3.5_2.13-${COMET_VERSION}.jar) —
+# not bundled inside the base tarball above.
+COPY comet-spark-spark3.5_2.13-${COMET_VERSION}.jar ${SPARK_HOME}/jars/
 
 # Download JARs into WORKDIR — no -P flag needed
 # Iceberg-native setup: iceberg-spark-runtime (core) + iceberg-aws-bundle (S3FileIO with shaded AWS SDK v2)
@@ -37,14 +44,24 @@ RUN wget https://jdbc.postgresql.org/download/postgresql-${POSTGRES_VERSION}.jar
     wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_V1_VERSION}/aws-java-sdk-bundle-${AWS_SDK_V1_VERSION}.jar && \
     wget https://repo1.maven.org/maven2/software/amazon/awssdk/bundle/${AWS_SDK_V2_VERSION}/bundle-${AWS_SDK_V2_VERSION}.jar && \
     wget https://repo1.maven.org/maven2/software/amazon/awssdk/url-connection-client/${AWS_SDK_V2_VERSION}/url-connection-client-${AWS_SDK_V2_VERSION}.jar && \
-    wget https://repo1.maven.org/maven2/org/apache/sedona/sedona-spark-shaded-3.5_2.13/${SEDONA_VERSION}/sedona-spark-shaded-3.5_2.13-${SEDONA_VERSION}.jar && \
     wget https://repo1.maven.org/maven2/org/apache/gravitino/gravitino-spark-connector-runtime-3.5_2.13/${GRAVITINO_VERSION}/gravitino-spark-connector-runtime-3.5_2.13-${GRAVITINO_VERSION}.jar && \
-    wget https://repo1.maven.org/maven2/org/datasyslab/geotools-wrapper/${GEOTOOLS_WRAPPER_VERSION}/geotools-wrapper-${GEOTOOLS_WRAPPER_VERSION}.jar && \
-    wget https://repo1.maven.org/maven2/com/uber/h3/${H3_VERSION}/h3-${H3_VERSION}.jar && \
     wget https://repo1.maven.org/maven2/org/apache/spark/spark-connect_2.13/${SPARK_VERSION}/spark-connect_2.13-${SPARK_VERSION}.jar
 
+# No jar may bundle its own unrelocated SLF4J. Spark 3.5 ships slf4j-api 2.0.7 with a log4j 2.x
+# provider; a second org/slf4j/LoggerFactory from an older API (geotools-wrapper 1.8.1-33.1
+# carried 1.7.36) can win the classpath race, find no 1.x binding and fall back to NOP --
+# silently discarding every Spark and Comet JVM log line, which is what happened on the
+# 29 Sep runs. Sedona, geotools-wrapper and h3 were removed for that reason (unused by the
+# TPC-H jobs; Comet loads Sedona expressions only when Sedona is on the classpath). This
+# check fails the build if any jar added later reintroduces the problem.
+RUN bad=""; for j in $SPARK_HOME/jars/*.jar; do \
+      case "$(basename "$j")" in slf4j-*|jcl-over-slf4j-*|jul-to-slf4j-*|log4j-slf4j*) continue ;; esac; \
+      if unzip -Z1 "$j" 2>/dev/null | grep -q '^org/slf4j/LoggerFactory.class$'; then bad="$bad $(basename "$j")"; fi; \
+    done; \
+    if [ -n "$bad" ]; then echo "jars bundling unrelocated SLF4J:$bad" >&2; exit 1; fi
+
 # Final Stage
-FROM eclipse-temurin:17-jdk-jammy
+FROM eclipse-temurin:17-jdk-noble
 
 ENV SPARK_HOME=/opt/spark
 ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
@@ -59,7 +76,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && ln -sf /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --no-cache-dir pandas pyarrow numpy
+RUN python3 -m pip install --no-cache-dir --break-system-packages pandas pyarrow numpy
 
 COPY --from=builder /opt/spark /opt/spark
 
@@ -69,24 +86,86 @@ RUN cp $SPARK_HOME/kubernetes/dockerfiles/spark/entrypoint.sh /opt/entrypoint.sh
     chmod +x /opt/entrypoint.sh
 
 # Baseline spark-defaults.conf — executor defaults (no ConfigMap mounted on executors).
-# GravitinoSparkPlugin on the driver broadcasts catalog registrations to executors,
-# so no per-catalog config is needed here. Plugin + metalake refs are included so
-# executor-side plugin init (if any) can reach Gravitino directly.
-RUN printf "spark.network.timeout 120\n\
-spark.files.fetchTimeout 60\n\
-spark.executor.heartbeatInterval 10\n\
-spark.hadoop.fs.s3a.connection.timeout 60\n\
-spark.hadoop.fs.s3a.connection.establish.timeout 30\n\
-spark.hadoop.fs.s3a.connection.acquisition.timeout 60\n\
+# new line added for comet jar
+# UNITS. Spark and Hadoop disagree on the default unit per key, so a bare integer means
+# different things on adjacent lines:
+#   spark.network.timeout, spark.files.fetchTimeout  -> timeConf(SECONDS)
+#   spark.executor.heartbeatInterval                 -> timeConf(MILLISECONDS), default "10s"
+#   fs.s3a.*.timeout                                 -> milliseconds (Hadoop 3.3.4)
+# This block previously read `heartbeatInterval 10` (10ms, not 10s), `connection.timeout 60`
+# (60ms against a Hadoop default of 200000) and `connection.establish.timeout 30` (30ms against
+# a default of 5000). Sub-second S3 deadlines make nearly every read time out and retry, which
+# looks like network trouble rather than configuration.
+#
+# Comet's native S3 store reads the same fs.s3a.* keys and also treats bare integers as
+# milliseconds (get_config_duration_ms in native/core/src/parquet/objectstore/s3.rs), so these
+# values reach the native reader too. Suffix anything Spark accepts a suffix for.
+#
+# fs.s3a.connection.timeout and fs.s3a.connection.establish.timeout are deliberately NOT set.
+# The key is shared by two readers that want different values, and neither ships a default in
+# a *-default.xml -- each applies its own in code when the key is absent, which is the only way
+# both get what they need:
+#   hadoop-aws  -> 200000ms request / 5000ms connect. Sized for 128MB multipart part uploads
+#                  (fs.s3a.multipart.size), where a tight deadline would abort a healthy upload.
+#   Comet native-> 15000ms request / 3000ms connect. Sized for merged column ranges, which
+#                  complete in well under a second on a healthy connection.
+# Setting the key globally forces one number on both. In particular `200000` (the hadoop-aws
+# figure) gives the native reader a 200s whole-request deadline, so a GET that goes silent
+# mid-transfer under ENA inbound-bandwidth shaping holds its task slot for 200s instead of
+# failing over at 15s -- which is precisely the stall this deployment is trying to bound.
+# Per-bucket overrides cannot separate them here either: both readers hit the same bucket.
+#
+# fs.s3a.connection.acquisition.timeout is dropped: it is a Hadoop 3.4+ key, ignored by the
+# 3.3.4 hadoop-aws bundled here, but still picked up by Comet's native reader.
+#
+# spark.plugins and spark.sql.extensions are deliberately NOT set here. Neither is additive: a
+# job that sets either in its SparkConf (as the TPC-H SparkApplication does, for Comet) replaces
+# this value outright rather than adding to it, so baking them creates the illusion that
+# Gravitino/Iceberg are active when they have been silently dropped. Declare the full
+# list per job instead, e.g.
+#   spark.plugins: "org.apache.spark.CometPlugin,org.apache.gravitino.spark.connector.plugin.GravitinoSparkPlugin"
+RUN printf "spark.network.timeout 120s\n\
+spark.files.fetchTimeout 60s\n\
+spark.executor.heartbeatInterval 10s\n\
 spark.hadoop.fs.s3a.threads.keepalivetime 60\n\
 spark.hadoop.fs.s3a.multipart.purge.age 86400\n\
 spark.serializer org.apache.spark.serializer.KryoSerializer\n\
-spark.kryo.registrator org.apache.sedona.core.serde.SedonaKryoRegistrator\n\
-spark.sql.extensions org.apache.sedona.viz.sql.SedonaVizExtensions,org.apache.sedona.sql.SedonaSqlExtensions,org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions\n\
-spark.plugins org.apache.gravitino.spark.connector.plugin.GravitinoSparkPlugin\n\
 spark.sql.gravitino.metalake enterprise_metalake\n\
 spark.sql.gravitino.uri http://gravitino.default.svc.cluster.local:8090\n\
 spark.sql.gravitino.enableIcebergSupport true\n" > $SPARK_HOME/conf/spark-defaults.conf
+
+# spark-env.sh — sets PYSPARK_PYTHON/LD_LIBRARY_PATH/LD_PRELOAD before the
+# JVM starts (must live here, not spark-defaults.conf: PyO3's
+# auto-initialize reads these at interpreter init, before
+# spark-defaults.conf is even parsed).
+#
+# python3 here is the system Python installed above via apt — no venv,
+# unlike local dev. pandas/pyarrow/numpy already live in its site-packages
+# (--break-system-packages pip install above), already on its default
+# sys.path, so no PYTHONPATH/VIRTUAL_ENV override is needed the way a venv
+# would require.
+#
+# aarch64-linux-gnu, not x86_64-linux-gnu: this image is arm64-only (see
+# the builder stage's base-image comment) — the multiarch lib path has to
+# match the actual architecture or LD_PRELOAD silently points at nothing.
+#
+# LD_PRELOAD forces libpython to load with RTLD_GLOBAL: PyO3 defaults to
+# RTLD_LOCAL, which hides Python's C API symbols (PyExc_ValueError etc.)
+# from the global symbol table. pyarrow's libarrow_python.so needs those
+# symbols visible globally for Comet's native PyO3 bridge to resolve them.
+#
+# NOT independently verified against this exact image (no running
+# container to exec into from here) — apt's python3-dev on Ubuntu Noble
+# should provide libpython3.12.so.1.0 at this path, but confirm with
+# `docker run --rm <image> find / -name "libpython3*"` before relying on
+# it if PyO3 init fails.
+RUN printf "#!/usr/bin/env bash\n\
+export PYSPARK_PYTHON=/usr/bin/python3\n\
+export PYSPARK_DRIVER_PYTHON=/usr/bin/python3\n\
+export COMET_NATIVE_SCAN_CACHE_ENABLED=false\n\
+export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/lib:\${LD_LIBRARY_PATH}\n\
+export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libpython3.12.so.1.0\n" > $SPARK_HOME/conf/spark-env.sh && \
+    chmod +x $SPARK_HOME/conf/spark-env.sh
 
 ENTRYPOINT ["/opt/entrypoint.sh"]
 CMD ["bash"]
