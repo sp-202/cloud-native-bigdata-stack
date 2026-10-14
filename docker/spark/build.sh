@@ -42,10 +42,10 @@ if [ ! -f "$COMET_TARBALL" ]; then
 fi
 
 # Dockerfile also expects the Comet acceleration jar in this directory (separate from the tarball above)
-COMET_JAR="comet-spark-spark3.5_2.13-0.17.0-SNAPSHOT.jar"
+COMET_JAR="comet-spark-spark3.5_2.13-1.0.0-preview.jarr"
 if [ ! -f "$COMET_JAR" ]; then
     echo "📥 $COMET_JAR not found locally, pulling from S3..."
-    aws s3 cp s3://spark-3.5.8-scala-2.13-custom/comet-arm/comet-spark-spark3.5_2.13-0.17.0-SNAPSHOT.jar "$COMET_JAR"
+    aws s3 cp s3://spark-3.5.8-scala-2.13-custom/comet-arm/comet-spark-spark3.5_2.13-1.0.0-preview.jarr "$COMET_JAR"
 fi
 
 echo "🔨 Building Docker image: $IMAGE_NAME (Platform: linux/arm64)"
