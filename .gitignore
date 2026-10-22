@@ -61,3 +61,4 @@ rke2/cluster-*.env
 
 # Local notes with real credentials/addresses (never committed)
 *.local.md
+rke2/WIFI-SETUP.md
