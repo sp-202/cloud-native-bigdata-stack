@@ -13,7 +13,7 @@ Two scripts replace `terraform-aws-k8s-ha`:
 
 **Two profiles:** `full` (4 nodes, `rke2/cluster.env`) and `2node` (test subset,
 `rke2/cluster-2node.env` + `big-data-platform/values-2node.yaml`). Which service runs on which
-node: [`NODE-LAYOUT.md`](NODE-LAYOUT.md). Step-by-step for the 2-node test cluster: [`SETUP-2NODE.md`](SETUP-2NODE.md).
+node: [`NODE-LAYOUT.md`](NODE-LAYOUT.md). Step-by-step for the 2-node test cluster: [`SETUP-2NODE.md`](SETUP-2NODE.md). SSH + passwordless sudo on the nodes: [`NODE-ACCESS.md`](NODE-ACCESS.md).
 
 After step 2, **Argo CD deploys everything from git**, as on `main`. To change the
 platform, edit `big-data-platform/values.yaml`, push to `rke2`, and Argo CD syncs it.

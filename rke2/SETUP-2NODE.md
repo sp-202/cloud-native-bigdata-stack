@@ -53,6 +53,8 @@ sudo apt-get install -y chrony && sudo systemctl enable --now chrony
 
 ## Step 2: SSH key + passwordless sudo
 
+Full reference (laptop/WSL and node-01 variants, troubleshooting, undo): [`NODE-ACCESS.md`](NODE-ACCESS.md).
+
 **(each node)**: let your user run sudo without a password (the scripts call `sudo -n`):
 ```bash
 echo "$USER ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/90-$USER
