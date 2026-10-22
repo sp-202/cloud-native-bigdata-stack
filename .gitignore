@@ -58,3 +58,6 @@ vendor-charts/
 rke2/cluster.env
 rke2/kubeconfig*
 rke2/cluster-*.env
+
+# Local notes with real credentials/addresses (never committed)
+*.local.md
