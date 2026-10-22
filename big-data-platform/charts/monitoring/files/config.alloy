@@ -4,24 +4,24 @@
 // Pipelines (each section below):
 //   1. pod logs            -> Loki   (replaces Promtail; labels kept identical)
 //   2. systemd journal     -> Loki
-//   3. Spark GC/diag files -> Loki   (node NVMe; the raw files also go to S3 via spark-node-log-shipper)
-//   4. Hubble flows        -> Loki (non-FORWARDED only) + per-verdict counters -> Prometheus
-//   5. OTLP (Comet)        -> metrics to Prometheus; traces to Tempo, plus span metrics with
+//   3. Spark GC/diag files -> Loki   (node disk, /mnt/spark-nvme/spark-shuffle)
+//   4. (main: Hubble flows -- removed on RKE2/Canal, there is no Hubble)
+//   5. OTLP (any OTel SDK) -> metrics to Prometheus; traces to Tempo, plus span metrics with
 //                             trace_id exemplars to Prometheus
 //   6. Alloy's own metrics -> Prometheus (delivery health: dropped/failed entries, WAL lag)
-//   7. node-exporter, Cilium agent and Hubble metrics, scraped on this node -> Prometheus
+//   7. node-exporter metrics, scraped on this node -> Prometheus
 //
 // Env from the pod spec: NODE_NAME (spec.nodeName), HOST_IP (status.hostIP).
 //
-// Karpenter removes a spark node ~180 s after its last executor exits. Everything here ships
-// continuously (Loki batch_wait 1s, remote-write WAL on hostPath), so nothing depends on the
-// SIGTERM flush; that is only the backstop, inside kubelet's 60 s critical-pod window.
+// Everything here ships continuously (Loki batch_wait 1s, remote-write WAL on hostPath), so
+// nothing depends on the SIGTERM flush; that is only the backstop, inside kubelet's 60 s
+// critical-pod window.
 
 // -------------------------------------------------------------------------------- 1. pod logs
 
-// Pods on THIS node only. NODE_NAME, not HOSTNAME: with hostNetwork, HOSTNAME is the short host
-// name (ip-10-0-2-41) and never matches spec.nodeName (ip-10-0-2-41.<region>.compute.internal),
-// which would select no pods at all.
+// Pods on THIS node only. NODE_NAME, not HOSTNAME: with hostNetwork, HOSTNAME is the host's
+// name, which need not equal spec.nodeName (RKE2 lowercases it and `node-name` can override
+// it); a mismatch would select no pods at all.
 //
 // Terminal pods stay in this list as long as their objects exist, so a finished executor's file
 // is read to the end -- provided the pod is not deleted first. The Spark jobs set
@@ -282,17 +282,12 @@ loki.process "pods" {
 
 // -------------------------------------------------------------------------------- 2. journal
 
-// /run/log/journal: the AMI keeps the journal volatile, and the persistent /var/log/journal
-// is empty.
+// No `path`: the journal reader then opens the system default locations, both the persistent
+// /var/log/journal (most on-prem distros; mounted via the varlog mount) and the volatile
+// /run/log/journal. node_name is this pod's node, matching the pod streams' node_name label --
+// not the journal hostname, which RKE2 may lowercase or override.
 discovery.relabel "journal" {
 	targets = []
-
-	rule {
-		source_labels = ["__journal__hostname"]
-		regex         = "(.+)"
-		target_label  = "node_name"
-		replacement   = "$1.ap-south-1.compute.internal"
-	}
 
 	rule {
 		source_labels = ["__journal__systemd_unit"]
@@ -345,17 +340,17 @@ discovery.relabel "journal" {
 
 loki.source.journal "journal" {
 	max_age       = "12h0m0s"
-	path          = "/run/log/journal"
 	relabel_rules = discovery.relabel.journal.rules
 	forward_to    = [loki.write.default.receiver]
 	labels        = {
-		job = "systemd-journal",
+		job       = "systemd-journal",
+		node_name = sys.env("NODE_NAME"),
 	}
 }
 
 // -------------------------------------------------------------------------------- 3. Spark node files
 
-// Spark's own files on the node NVMe, which never reach stdout: JVM GC/safepoint logs and the
+// Spark's own files on the node disk, which never reach stdout: JVM GC/safepoint logs and the
 // diag*.log appender. Mounted from the host's /mnt/spark-nvme/spark-shuffle (what Spark pods see
 // as /mnt/spark-nvme). A static target labelled with this node: Promtail filtered node targets
 // by __host__, Alloy does not, so per-node discovery here would tail the same local path once
@@ -446,77 +441,12 @@ loki.process "spark_node_files" {
 	}
 }
 
-// -------------------------------------------------------------------------------- 4. Hubble flows
-
-// Cilium's flow export (terraform-aws-k8s-ha cilium.tf, export.static), one JSON object per line:
-// {"flow":{...,"verdict":"FORWARDED","drop_reason_desc":...},"node_name":...,"time":...}.
-// Every flow is still archived to S3 by hubble-flow-shipper (Fluent Bit), unchanged. Here:
-//   * every flow is counted, by verdict and drop reason, into Prometheus;
-//   * only non-FORWARDED flows (DROPPED, ERROR, AUDIT, ...) go to Loki. Forwarded flows are
-//     overwhelmingly shuffle and S3 traffic at ~100 KB/s/node idle, far more under SF1000, and
-//     would compete with Spark logs for Loki's 16 MB/s per-tenant ingest limit.
-loki.source.file "hubble" {
-	targets = [{
-		"__path__"  = "/var/run/cilium/hubble/events.log",
-		"job"       = "hubble",
-		"node_name" = sys.env("NODE_NAME"),
-	}]
-	forward_to = [loki.process.hubble.receiver]
-
-	// Re-glob every few seconds. Without file_match a path that does not exist yet is
-	// "skipped" once and never retried -- and on a fresh Karpenter node Alloy can start before
-	// Cilium writes its first flow, which would silence Hubble on that node for its lifetime.
-	file_match {
-		enabled     = true
-		sync_period = "5s"
-	}
-}
-
-loki.process "hubble" {
-	forward_to = [loki.write.default.receiver]
-
-	stage.json {
-		expressions = {
-			verdict     = "flow.verdict",
-			drop_reason = "flow.drop_reason_desc",
-		}
-	}
-
-	stage.labels {
-		values = {
-			verdict     = null,
-			drop_reason = null,
-		}
-	}
-
-	// Exposed on Alloy's /metrics as hubble_export_flows_total{verdict,drop_reason,node_name},
-	// then remote-written by pipeline 6.
-	stage.metrics {
-		metric.counter {
-			name        = "flows_total"
-			prefix      = "hubble_export_"
-			description = "Hubble flows read from the export file, by verdict and drop reason."
-			match_all   = true
-			action      = "inc"
-		}
-	}
-
-	stage.drop {
-		source = "verdict"
-		value  = "FORWARDED"
-	}
-
-	stage.label_drop {
-		values = ["filename"]
-	}
-}
-
 // -------------------------------------------------------------------------------- 5. OTLP
 
-// Comet's native OTel metrics (spark.comet.otel.endpoint) and per-operator spans
-// (spark.comet.otel.traces.endpoint), both OTLP/HTTP protobuf. The Service in front of this
-// DaemonSet has internalTrafficPolicy: Local, so an executor always reaches the Alloy on its
-// own node. Comet ships no OTLP logs: its native log is stderr, collected by pipeline 1.
+// OTLP metrics and traces from any OpenTelemetry SDK/agent (HTTP :4318 or gRPC :4317). The
+// Service in front of this DaemonSet (alloy.kube-system.svc) has internalTrafficPolicy: Local,
+// so a pod always reaches the Alloy on its own node. Logs are not taken over OTLP: stdout/stderr
+// is collected by pipeline 1.
 otelcol.receiver.otlp "default" {
 	http {
 		endpoint = "0.0.0.0:4318"
@@ -560,7 +490,7 @@ otelcol.exporter.otlp "tempo" {
 	}
 }
 
-// Per span name -- i.e. per DataFusion operator (HashJoinExec, SortExec, ...) and comet_task --
+// Per span name --
 // a call counter and a duration histogram, with trace_id exemplars so a Grafana latency panel
 // links straight to a trace. Default dimensions only (service.name, span.name, span.kind,
 // status.code): pod or stage dimensions would mint a series per task. Covers sampled queries
@@ -597,9 +527,8 @@ otelcol.exporter.prometheus "default" {
 
 // -------------------------------------------------------------------------------- 6. self metrics
 
-// Alloy's own metrics: loki_write_dropped_entries_total, loki_write_sent_entries_total,
-// prometheus_remote_storage_* and the hubble_export_flows_total counters above. The first is
-// what verify-run-telemetry.sh reads to prove nothing was dropped on the way to Loki.
+// Alloy's own metrics: loki_write_dropped_entries_total, loki_write_sent_entries_total and
+// prometheus_remote_storage_* -- the first proves nothing was dropped on the way to Loki.
 prometheus.exporter.self "alloy" { }
 
 prometheus.scrape "alloy_self" {
@@ -609,7 +538,7 @@ prometheus.scrape "alloy_self" {
 	job_name        = "alloy"
 }
 
-// `node` on Alloy's own and Comet's series only -- NOT a remote_write external label. The
+// `node` on Alloy's own and OTLP series only -- NOT a remote_write external label. The
 // kube-prometheus-stack dashboards filter on cluster="$cluster" (empty: matches only series
 // WITHOUT a cluster label) and its node rules join node-exporter series on namespace/pod and
 // group_left(node); a label stamped on everything pushed would break both.
@@ -624,18 +553,14 @@ prometheus.relabel "add_node" {
 
 // -------------------------------------------------------------------------------- 7. node metrics
 
-// Scraped on the node and PUSHED, instead of pulled by Prometheus: Prometheus on the core
-// node loses whatever it had not yet scraped when Karpenter removes a spark node, while Alloy
-// keeps scraping until its own SIGTERM -- the last pod to stop -- and its remote-write WAL
-// flushes on the way out. The exporters themselves are unchanged (node-exporter with
-// --collector.ethtool on ens5|ens6; Cilium's agent and Hubble metrics); only who scrapes
-// moved. Their ServiceMonitors are off (values: prometheus-node-exporter.prometheus.monitor,
-// monitoring.ciliumServiceMonitors.agentAndHubble) so nothing is ingested twice.
+// Scraped on the node and PUSHED, instead of pulled by Prometheus: Alloy keeps scraping until
+// its own SIGTERM -- the last pod to stop -- and its remote-write WAL flushes on the way out.
+// node-exporter's ServiceMonitor is off (values: prometheus-node-exporter.prometheus.monitor)
+// so nothing is ingested twice.
 //
-// Labels reproduce exactly what prometheus-operator generated from those ServiceMonitors --
-// job, instance, namespace, pod, container, service, endpoint (+ node/host_ip/pod_ip for
-// Cilium, from its relabelings) -- so the node dashboards, the node.rules recording rules and
-// the ENA allowance panels keep working unchanged.
+// Labels reproduce exactly what prometheus-operator generated from that ServiceMonitor --
+// job, instance, namespace, pod, container, service, endpoint -- so the node dashboards and
+// the node.rules recording rules keep working unchanged.
 //
 // kubelet / cAdvisor stay pulled by Prometheus: kube-prometheus-stack can only drop their
 // ServiceMonitor together with the kubelet dashboard and recording rules (kubelet.enabled).
@@ -691,95 +616,6 @@ prometheus.scrape "node_exporter" {
 	job_name        = "node-exporter"
 }
 
-// Cilium agent (container port "prometheus", 9962; Service cilium-agent, port "metrics") and
-// Hubble (container port "hubble-metrics", 9965; Service hubble-metrics) -- both served by the
-// per-node cilium pod (k8s-app=cilium). honor_labels as in the ServiceMonitors.
-discovery.relabel "cilium" {
-	targets = discovery.kubernetes.pods.targets
-
-	rule {
-		source_labels = ["__meta_kubernetes_pod_label_k8s_app", "__meta_kubernetes_pod_container_port_name"]
-		regex         = "cilium;(prometheus|hubble-metrics)"
-		action        = "keep"
-	}
-
-	rule {
-		source_labels = ["__meta_kubernetes_pod_container_port_name"]
-		regex         = "prometheus"
-		target_label  = "job"
-		replacement   = "cilium-agent"
-	}
-
-	rule {
-		source_labels = ["__meta_kubernetes_pod_container_port_name"]
-		regex         = "prometheus"
-		target_label  = "endpoint"
-		replacement   = "metrics"
-	}
-
-	rule {
-		source_labels = ["__meta_kubernetes_pod_container_port_name"]
-		regex         = "hubble-metrics"
-		target_label  = "job"
-		replacement   = "hubble-metrics"
-	}
-
-	rule {
-		source_labels = ["__meta_kubernetes_pod_container_port_name"]
-		regex         = "hubble-metrics"
-		target_label  = "endpoint"
-		replacement   = "hubble-metrics"
-	}
-
-	rule {
-		source_labels = ["job"]
-		target_label  = "service"
-	}
-
-	rule {
-		source_labels = ["__address__"]
-		target_label  = "instance"
-	}
-
-	rule {
-		source_labels = ["__meta_kubernetes_namespace"]
-		target_label  = "namespace"
-	}
-
-	rule {
-		source_labels = ["__meta_kubernetes_pod_name"]
-		target_label  = "pod"
-	}
-
-	rule {
-		source_labels = ["__meta_kubernetes_pod_container_name"]
-		target_label  = "container"
-	}
-
-	rule {
-		source_labels = ["__meta_kubernetes_pod_node_name"]
-		target_label  = "node"
-	}
-
-	rule {
-		source_labels = ["__meta_kubernetes_pod_host_ip"]
-		target_label  = "host_ip"
-	}
-
-	rule {
-		source_labels = ["__meta_kubernetes_pod_ip"]
-		target_label  = "pod_ip"
-	}
-}
-
-prometheus.scrape "cilium" {
-	targets         = discovery.relabel.cilium.output
-	forward_to      = [prometheus.remote_write.default.receiver]
-	scrape_interval = "30s"
-	honor_labels    = true
-	job_name        = "cilium"
-}
-
 // -------------------------------------------------------------------------------- outputs
 
 loki.write "default" {
@@ -788,16 +624,15 @@ loki.write "default" {
 		batch_wait = "1s"
 		batch_size = "1MiB"
 
-		// Give up on a batch within ~1 min rather than Loki's default of minutes of backoff:
-		// a spark node lives ~3 min after the job ends, and a batch still retrying when the
-		// node goes is lost anyway -- better it is counted in loki_write_dropped_entries_total
-		// while the node is still being scraped.
+		// Give up on a batch within ~1 min rather than Loki's default of minutes of backoff,
+		// so a stuck push is counted in loki_write_dropped_entries_total instead of silently
+		// backing up the pipeline.
 		max_backoff_period  = "10s"
 		max_backoff_retries = 8
 	}
 
 	external_labels = {
-		cluster = "k8s-ha-cluster",
+		cluster = "rke2-bigdata",
 	}
 }
 

@@ -1,0 +1,109 @@
+# -----------------------------------------------------------------------------
+# RKE2 smoke test: Spark (stock image) -> Gravitino (sales_catalog) -> Iceberg
+# tables on SeaweedFS. Exercises everything the platform wires together:
+#   * Spark Operator submission
+#   * S3 credentials from the lakehouse-s3 Secret (envFrom, no IRSA)
+#   * S3A against SeaweedFS (event log) and Iceberg S3FileIO (table data,
+#     endpoint/keys from the catalog properties gravitino-init registered)
+#   * Spark History Server picking up the event log
+#
+#   kubectl apply -f examples/spark-jobs/rke2-iceberg-smoke-test.yaml
+#   kubectl get sparkapplication rke2-iceberg-smoke-test -w
+#   kubectl logs rke2-iceberg-smoke-test-driver | grep SMOKE
+#   kubectl delete -f examples/spark-jobs/rke2-iceberg-smoke-test.yaml
+#
+# The tpch-*/tpcds-* manifests next to this are main's EKS benchmark jobs
+# (AWS buckets, Karpenter instance families, Comet) — not runnable here.
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rke2-iceberg-smoke-test
+  namespace: default
+data:
+  smoke.py: |
+    from pyspark.sql import SparkSession
+
+    spark = SparkSession.builder.appName("rke2-iceberg-smoke-test").getOrCreate()
+    spark.sql("CREATE DATABASE IF NOT EXISTS sales_catalog.smoke")
+    spark.sql("""
+        CREATE TABLE IF NOT EXISTS sales_catalog.smoke.orders (
+            id BIGINT, amount DOUBLE, region STRING)
+        USING iceberg
+    """)
+    df = spark.range(0, 100000).selectExpr(
+        "id", "rand() * 100 AS amount",
+        "element_at(array('north','south','east','west'), cast(id % 4 AS int) + 1) AS region")
+    df.writeTo("sales_catalog.smoke.orders").append()
+    rows = spark.sql("""
+        SELECT region, count(*) AS n, round(sum(amount), 2) AS total
+        FROM sales_catalog.smoke.orders GROUP BY region ORDER BY region
+    """).collect()
+    for r in rows:
+        print(f"SMOKE {r.region} n={r.n} total={r.total}")
+    snaps = spark.sql("SELECT count(*) FROM sales_catalog.smoke.orders.snapshots").first()[0]
+    print(f"SMOKE OK snapshots={snaps}")
+    spark.stop()
+---
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: rke2-iceberg-smoke-test
+  namespace: default
+spec:
+  type: Python
+  pythonVersion: "3"
+  mode: cluster
+  image: "subhodeep2022/spark-bigdata:spark-3.5.8-v14-iceberg-gravitino-kafka-oss"
+  imagePullPolicy: Always
+  mainApplicationFile: "local:///opt/smoke/smoke.py"
+  sparkVersion: "3.5.8"
+  restartPolicy:
+    type: Never
+  sparkConf:
+    # Gravitino connector: registers sales_catalog (and raw_catalog) from the
+    # metalake; spark.sql.gravitino.{uri,metalake} come from the image's
+    # spark-defaults.conf. Both lists are full (they replace, never add).
+    "spark.plugins": "org.apache.gravitino.spark.connector.plugin.GravitinoSparkPlugin"
+    "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions,org.apache.gravitino.spark.connector.iceberg.extensions.GravitinoIcebergSparkSessionExtensions"
+    # SeaweedFS for S3A (event log). Keys: AWS_* env from lakehouse-s3, read
+    # by S3A's default provider chain.
+    "spark.hadoop.fs.s3a.endpoint": "http://seaweedfs-filer.storage.svc.cluster.local:8333"
+    "spark.hadoop.fs.s3a.endpoint.region": "us-east-1"
+    "spark.hadoop.fs.s3a.path.style.access": "true"
+    "spark.hadoop.fs.s3a.connection.ssl.enabled": "false"
+    "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
+    "spark.eventLog.enabled": "true"
+    "spark.eventLog.dir": "s3a://lakehouse/spark-events/"
+    "spark.local.dir": "/mnt/spark-nvme/spark-local"
+  driver:
+    cores: 1
+    memory: "1g"
+    serviceAccount: spark-operator-spark
+    envFrom:
+      - secretRef:
+          name: lakehouse-s3
+    volumeMounts:
+      - name: smoke
+        mountPath: /opt/smoke
+      - name: spark-local
+        mountPath: /mnt/spark-nvme
+  executor:
+    instances: 2
+    cores: 1
+    memory: "2g"
+    envFrom:
+      - secretRef:
+          name: lakehouse-s3
+    volumeMounts:
+      - name: spark-local
+        mountPath: /mnt/spark-nvme
+  volumes:
+    - name: smoke
+      configMap:
+        name: rke2-iceberg-smoke-test
+    # Same host dir as the platform's Spark jobs (rke2/scripts/prep-node.sh).
+    - name: spark-local
+      hostPath:
+        path: /mnt/spark-nvme/spark-shuffle
+        type: DirectoryOrCreate

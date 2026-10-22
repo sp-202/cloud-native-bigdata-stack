@@ -1,0 +1,19 @@
+{{- if and .Values.enabled .Values.mosquitto.enabled .Values.mosquitto.expose }}
+# MQTT from the plant network: Traefik's `mqtt` TCP entrypoint (hostPort 1883
+# on every ingress node, rke2/helm-values/traefik.yaml) -> Service mosquitto.
+# Plain TCP (no TLS, so no SNI): HostSNI(`*`) is the only match possible.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: mosquitto
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  entryPoints:
+    - mqtt
+  routes:
+    - match: HostSNI(`*`)
+      services:
+        - name: mosquitto
+          port: 1883
+{{- end }}

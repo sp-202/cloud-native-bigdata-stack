@@ -32,14 +32,6 @@ spec:
       serviceAccountName: spark-operator-spark
       nodeSelector:
         {{- toYaml .Values.global.nodeSelector.spark | nindent 8 }}
-      # spark-node's NodePool taint (terraform-aws-k8s-ha/karpenter-k8s.tf)
-      # — without this, the driver couldn't schedule there despite matching
-      # the nodeSelector above.
-      tolerations:
-        - key: "spark-only"
-          value: "true"
-          effect: "NoSchedule"
-          operator: "Equal"
       containers:
         - name: spark-connect-server
           image: {{ .Values.global.sparkImage }}
@@ -61,6 +53,8 @@ spec:
               --conf spark.kubernetes.namespace=default \
               --conf spark.sql.connect.port=15002 \
               --conf spark.sql.connect.common.enforce_pyspark_compat=true \
+              --conf spark.hadoop.fs.s3a.endpoint={{ .Values.global.s3.endpoint }} \
+              --conf spark.hadoop.fs.s3a.endpoint.region={{ .Values.global.s3.region }} \
               --conf spark.hadoop.fs.s3a.path.style.access={{ .Values.global.s3.pathStyleAccess }} \
               --conf spark.hadoop.fs.s3a.connection.ssl.enabled={{ .Values.global.s3.sslEnabled }} \
               --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
@@ -94,13 +88,15 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            # No AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/MINIO_ENDPOINT — the
-            # node's IAM role provides S3 credentials via the default chain.
             - name: LAKEHOUSE_BUCKET
               valueFrom:
                 secretKeyRef:
-                  name: lakehouse-s3
+                  name: {{ .Values.global.s3.secretName }}
                   key: bucket
+          # AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY for S3A's default chain.
+          envFrom:
+            - secretRef:
+                name: {{ .Values.global.s3.secretName }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           # TCP check on the Spark UI port rather than httpGet — the JVM

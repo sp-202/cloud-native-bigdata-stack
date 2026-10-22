@@ -2,8 +2,8 @@ apiVersion: v2
 name: big-data-platform
 description: >-
   Data Platform as Code (DPaC) — Helm Umbrella Chart for a full big-data
-  stack on AWS EC2 (ARM64/Graviton). Includes Spark, Gravitino, Airflow,
-  StarRocks, JupyterHub, Superset, S3, PostgreSQL, and Redis.
+  stack on an on-prem RKE2 cluster (x86_64). Includes Spark, Gravitino, Airflow,
+  StarRocks, JupyterHub, SeaweedFS-backed S3, PostgreSQL, and Redis.
 type: application
 version: 1.0.0
 appVersion: "1.0.0"
@@ -24,10 +24,9 @@ dependencies:
     repository: "https://kubeflow.github.io/spark-operator"
     condition: spark-operator.enabled
 
-  - name: superset
-    version: "0.12.0"
-    repository: "https://apache.github.io/superset"
-    condition: superset.enabled
+  # superset (apache/superset 0.12.0) is not a dependency on this branch — kept
+  # off; re-add this entry and set superset.enabled + ingress.superset.enabled
+  # to bring it back (values.yaml `superset:` block is kept for that).
 
   - name: kube-starrocks
     alias: starrocks
@@ -40,11 +39,6 @@ dependencies:
     repository: "https://airflow.apache.org"
     condition: airflow.enabled
 
-  - name: metrics-server
-    version: "3.12.1"
-    repository: "https://kubernetes-sigs.github.io/metrics-server/"
-    condition: metrics-server.enabled
-
   - name: kube-prometheus-stack
     version: "56.6.2"
     repository: "https://prometheus-community.github.io/helm-charts"
@@ -55,23 +49,13 @@ dependencies:
     repository: "https://grafana.github.io/helm-charts"
     condition: loki-stack.enabled
 
-  # Single node agent: pod logs, journal, Spark node files and Hubble drops -> Loki; OTLP
-  # (Comet) and its own delivery metrics -> Prometheus. Replaces loki-stack's promtail.
+  # Single node agent: pod logs, journal and Spark node files -> Loki; OTLP
+  # (any OpenTelemetry source) and its own delivery metrics -> Prometheus. Replaces loki-stack's promtail.
   # Pipeline config: charts/monitoring/files/config.alloy.
   - name: alloy
     version: "1.13.0"
     repository: "https://grafana.github.io/helm-charts"
     condition: alloy.enabled
-
-  - name: cloudflared
-    version: "1.0.0"
-    repository: "file://./charts/cloudflared"
-    condition: cloudflared.enabled
-
-  - name: headlamp
-    version: "1.0.0"
-    repository: "file://./charts/headlamp"
-    condition: headlamp.enabled
 
   - name: monitoring
     version: "1.0.5"
@@ -129,7 +113,14 @@ dependencies:
     repository: "file://./charts/ingress"
     condition: ingress.enabled
 
-  - name: airflow-git-sync
+  # Kafka for the IIoT stream (KRaft). Operator only — the Kafka/KafkaNodePool/
+  # KafkaTopic resources are in charts/iiot. CRDs: rke2/scripts/apply-crds.sh.
+  - name: strimzi-kafka-operator
+    version: "0.48.0"
+    repository: "oci://quay.io/strimzi-helm"
+    condition: strimzi-kafka-operator.enabled
+
+  - name: iiot
     version: "1.0.0"
-    repository: "file://./charts/airflow-git-sync"
-    condition: airflow-git-sync.enabled
+    repository: "file://./charts/iiot"
+    condition: iiot.enabled

@@ -3,173 +3,23 @@
 # ------------------------------------------------------------------------------
 # Part of the Cloud-Native Big Data Platform (Umbrella Chart)
 #
-# Description: Definitions for PVs, PVCs, and local storage paths (OpenEBS).
+# Description: PVCs for workloads that don't own a StatefulSet
+# volumeClaimTemplate. Dynamically provisioned on global.storageClassName
+# (`local-storage`, OpenEBS local PV — see rke2/README.md),
+# WaitForFirstConsumer: the volume is created on whichever node the pod first
+# schedules to, and the pod stays on that node.
+#
+# On main these were static local PVs pinned by node-role labels (Redis,
+# StarRocks) plus an RWX EFS PVC for Airflow DAGs. StarRocks now gets its
+# volumes from the kube-starrocks chart's own storageSpec, and the DAGs come
+# from the Airflow chart's git-sync, so only Redis is left.
+#
 # For configuration, see: big-data-platform/values.yaml
 #
 # Managed via ArgoCD Sync Wave: -3
 # ------------------------------------------------------------------------------
 
-{{- $storageClass := .Values.global.storageClassName }}
-# Postgres, Airflow DAGs, and Airflow scheduler/triggerer logs no longer get
-# static local-hostpath PV/PVCs here — they're dynamically provisioned now:
-#   - Postgres: CNPG Cluster volumeClaimTemplates on ebs-gp3 (see charts/postgres)
-#   - Airflow DAGs: efs-airflow-dags StorageClass, PVC below (ReadWriteMany —
-#     git-sync/scheduler/triggerer/webserver mount it concurrently, possibly
-#     from different GP nodes; EBS is ReadWriteOnce-only and can't do that)
-#   - Airflow scheduler/triggerer logs: efs-airflow-dags too (same RWX need)
-# NOTE: redis/starrocks below still use local-hostpath and have the same
-# theoretical durability exposure — not fixed here, worth a follow-up if they
-# ever show the same "reset after reschedule" symptom Postgres had.
-# MinIO's PV/PVC (and the dedicated MinIO node) are gone — replaced by S3.
-# =============================================================================
-# Airflow DAGs PVC — dynamically provisioned on efs-airflow-dags (RWX).
-# No static PV: EFS CSI's efs-ap provisioning mode creates an Access Point
-# per PVC automatically. Name matches airflow.dags.persistence.existingClaim.
-# EFS-backed mounts were intermittently timing out in this environment
-# (access-point mounts REQUIRE TLS, and that handshake kept exceeding the
-# CSI driver's default 15s budget) — fixed at the source in eks-addons.tf
-# (aws_eks_addon.efs_csi_driver's node.efsUtilsConfOverrides), not by
-# avoiding EFS.
-# =============================================================================
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: airflow-dags-shared-pvc
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  accessModes:
-    - ReadWriteMany
-  storageClassName: efs-airflow-dags
-  resources:
-    requests:
-      storage: {{ .Values.airflow.size }}
-
----
-# Airflow logs no longer need a static local PV here — the official
-# chart's logs.persistence creates its own PVC (named "<release>-logs",
-# a single PVC shared across scheduler/api-server/triggerer/dag-processor,
-# NOT a per-StatefulSet volumeClaimTemplate) on efs-airflow-dags, same
-# RWX reasoning as airflow-dags-shared-pvc above. Configured in
-# values.yaml under airflow.logs.persistence.
-
----
-# =============================================================================
-# StarRocks FE PV/PVC
-# =============================================================================
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: starrocks-fe-pv
-  labels:
-    app: starrocks-fe
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  capacity:
-    storage: {{ .Values.starrocksFe.size }}
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ $storageClass }}
-  volumeMode: Filesystem
-  local:
-    path: {{ .Values.starrocksFe.localPath }}
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: {{ (keys .Values.starrocksFe.nodeSelector | first) }}
-              operator: Exists
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: starrocks-fe-meta-pvc
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: {{ $storageClass }}
-  resources:
-    requests:
-      storage: {{ .Values.starrocksFe.size }}
-  volumeName: starrocks-fe-pv
-
----
-# =============================================================================
-# StarRocks BE PV/PVC
-# =============================================================================
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: starrocks-be-pv
-  labels:
-    app: starrocks-be
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  capacity:
-    storage: {{ .Values.starrocksBe.size }}
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ $storageClass }}
-  volumeMode: Filesystem
-  local:
-    path: {{ .Values.starrocksBe.localPath }}
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: {{ (keys .Values.starrocksBe.nodeSelector | first) }}
-              operator: Exists
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: starrocks-be-meta-pvc
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: {{ $storageClass }}
-  resources:
-    requests:
-      storage: {{ .Values.starrocksBe.size }}
-  volumeName: starrocks-be-pv
-
----
-# =============================================================================
-# Redis PV/PVC
-# =============================================================================
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: redis-data-pv
-  labels:
-    app: redis
-  annotations:
-    argocd.argoproj.io/sync-wave: "-3"
-spec:
-  capacity:
-    storage: {{ .Values.redis.size }}
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ $storageClass }}
-  volumeMode: Filesystem
-  local:
-    path: {{ .Values.redis.localPath }}
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: {{ (keys .Values.redis.nodeSelector | first) }}
-              operator: Exists
----
+{{- if .Values.redis.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -179,8 +29,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ $storageClass }}
+  storageClassName: {{ .Values.global.storageClassName }}
   resources:
     requests:
       storage: {{ .Values.redis.size }}
-  volumeName: redis-data-pv
+{{- end }}

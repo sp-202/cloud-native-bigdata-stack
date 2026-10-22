@@ -1,5 +1,8 @@
 # Builder Stage
-# Using eclipse-temurin:17-jdk-noble (Ubuntu 24.04, Python 3.12 by default) — arm64 only
+# eclipse-temurin:17-jdk-noble (Ubuntu 24.04, Python 3.12 by default), multi-arch. Stock
+# Apache Spark from the Apache archive -- this branch (rke2) carries no Comet: everything in
+# the image is JVM or pure Python, so the same Dockerfile builds for linux/amd64 (the RKE2
+# nodes) or any other platform buildx is asked for.
 FROM eclipse-temurin:17-jdk-noble AS builder
 
 ENV SPARK_VERSION=3.5.8 \
@@ -10,27 +13,30 @@ ENV SPARK_VERSION=3.5.8 \
     AWS_SDK_V2_VERSION=2.29.52 \
     GRAVITINO_VERSION=1.2.0 \
     POSTGRES_VERSION=42.6.0 \
-    COMET_VERSION=1.0.0-preview \
+    KAFKA_CLIENTS_VERSION=3.4.1 \
+    COMMONS_POOL2_VERSION=2.11.1 \
     SPARK_HOME=/opt/spark
 
 RUN apt-get update && apt-get install -y wget curl zip unzip
 
-# Base Spark arm64 build pulled from S3 by the workflow
-# (docker/spark/spark-3.5.8-comet-v1.tar.gz).
-# new comet jar added
-COPY spark-3.5.8-comet-v1.tar.gz /tmp/spark-comet.tar.gz
-
-RUN mkdir -p /tmp/spark-extract && \
-    tar -xzf /tmp/spark-comet.tar.gz -C /tmp/spark-extract && \
-    mv /tmp/spark-extract/*/ ${SPARK_HOME} && \
-    rm -rf /tmp/spark-extract /tmp/spark-comet.tar.gz
+# Official binary distribution (Hadoop 3, Scala 2.13), verified against the published SHA-512.
+# The .sha512 file comes in two layouts across releases ("name: HEX HEX ..." split over lines,
+# or sha512sum's "HEX  name"); squeezing whitespace and taking the first 128-hex-char run reads
+# both.
+RUN set -eu; \
+    tgz="spark-${SPARK_VERSION}-bin-hadoop3-scala${SCALA_VERSION}.tgz"; \
+    base="https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}"; \
+    wget -q "${base}/${tgz}" -O /tmp/spark.tgz; \
+    wget -q "${base}/${tgz}.sha512" -O /tmp/spark.tgz.sha512; \
+    want=$(tr -d ' \n\r\t' < /tmp/spark.tgz.sha512 | grep -oiE '[0-9a-f]{128}' | head -1 | tr 'A-F' 'a-f'); \
+    have=$(sha512sum /tmp/spark.tgz | cut -d' ' -f1); \
+    [ -n "$want" ] && [ "$want" = "$have" ] || { echo "SHA-512 mismatch for ${tgz}" >&2; exit 1; }; \
+    mkdir -p /tmp/spark-extract; \
+    tar -xzf /tmp/spark.tgz -C /tmp/spark-extract; \
+    mv /tmp/spark-extract/*/ ${SPARK_HOME}; \
+    rm -rf /tmp/spark-extract /tmp/spark.tgz /tmp/spark.tgz.sha512
 
 RUN rm -rf $SPARK_HOME/examples $SPARK_HOME/data $SPARK_HOME/tests $SPARK_HOME/licenses
-
-# Comet acceleration jar, built separately (arm64) and pulled from S3 by the
-# workflow (docker/spark/comet-spark-spark3.5_2.13-${COMET_VERSION}.jar) —
-# not bundled inside the base tarball above.
-COPY comet-spark-spark3.5_2.13-${COMET_VERSION}.jar ${SPARK_HOME}/jars/
 
 # Download JARs into WORKDIR — no -P flag needed
 # Iceberg-native setup: iceberg-spark-runtime (core) + iceberg-aws-bundle (S3FileIO with shaded AWS SDK v2)
@@ -47,13 +53,19 @@ RUN wget https://jdbc.postgresql.org/download/postgresql-${POSTGRES_VERSION}.jar
     wget https://repo1.maven.org/maven2/org/apache/gravitino/gravitino-spark-connector-runtime-3.5_2.13/${GRAVITINO_VERSION}/gravitino-spark-connector-runtime-3.5_2.13-${GRAVITINO_VERSION}.jar && \
     wget https://repo1.maven.org/maven2/org/apache/spark/spark-connect_2.13/${SPARK_VERSION}/spark-connect_2.13-${SPARK_VERSION}.jar
 
+# Structured Streaming from Kafka (the IIoT dcs.raw topic, charts/iiot). Pinned to what
+# spark-sql-kafka 3.5.x is built against (kafka-clients 3.4.1, commons-pool2 2.11.1), so jobs
+# need no --packages download at submit time.
+RUN wget https://repo1.maven.org/maven2/org/apache/spark/spark-sql-kafka-0-10_2.13/${SPARK_VERSION}/spark-sql-kafka-0-10_2.13-${SPARK_VERSION}.jar && \
+    wget https://repo1.maven.org/maven2/org/apache/spark/spark-token-provider-kafka-0-10_2.13/${SPARK_VERSION}/spark-token-provider-kafka-0-10_2.13-${SPARK_VERSION}.jar && \
+    wget https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/${KAFKA_CLIENTS_VERSION}/kafka-clients-${KAFKA_CLIENTS_VERSION}.jar && \
+    wget https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/${COMMONS_POOL2_VERSION}/commons-pool2-${COMMONS_POOL2_VERSION}.jar
+
 # No jar may bundle its own unrelocated SLF4J. Spark 3.5 ships slf4j-api 2.0.7 with a log4j 2.x
 # provider; a second org/slf4j/LoggerFactory from an older API (geotools-wrapper 1.8.1-33.1
 # carried 1.7.36) can win the classpath race, find no 1.x binding and fall back to NOP --
-# silently discarding every Spark and Comet JVM log line, which is what happened on the
-# 29 Sep runs. Sedona, geotools-wrapper and h3 were removed for that reason (unused by the
-# TPC-H jobs; Comet loads Sedona expressions only when Sedona is on the classpath). This
-# check fails the build if any jar added later reintroduces the problem.
+# silently discarding every Spark JVM log line, which is what happened on the 29 Sep runs.
+# This check fails the build if any jar added later reintroduces the problem.
 RUN bad=""; for j in $SPARK_HOME/jars/*.jar; do \
       case "$(basename "$j")" in slf4j-*|jcl-over-slf4j-*|jul-to-slf4j-*|log4j-slf4j*) continue ;; esac; \
       if unzip -Z1 "$j" 2>/dev/null | grep -q '^org/slf4j/LoggerFactory.class$'; then bad="$bad $(basename "$j")"; fi; \
@@ -66,32 +78,12 @@ FROM eclipse-temurin:17-jdk-noble
 ENV SPARK_HOME=/opt/spark
 ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
 
-# Comet native telemetry defaults, as image ENV rather than in spark-env.sh below: on
-# Kubernetes only the DRIVER reads spark-env.sh (entrypoint.sh -> spark-submit -> spark-class
-# -> load-spark-env.sh). Executors -- where Comet's native code runs -- are started as a bare
-# `java ... KubernetesExecutorBackend` and never source it (Spark v3.5.8
-# kubernetes/dockerfiles/spark/entrypoint.sh). Image ENV reaches both.
-#
-# Span export queue (OpenTelemetry SDK BatchSpanProcessor), used when a job sets
-# spark.comet.otel.traces.endpoint. The default 2048 drops spans when a stage's tasks finish
-# together; spans past the queue are DROPPED, never waited for, so this cannot slow a task.
-# 2 s export interval instead of 5 s: less to lose if an executor dies abruptly (a clean stop
-# flushes everything regardless -- CometExecutorPlugin.shutdown).
-#
-# Per-pod identity (OTEL_SERVICE_NAME, OTEL_RESOURCE_ATTRIBUTES with pod/node names) stays in
-# each SparkApplication's executor env: it needs the Downward API, which an image cannot use.
-# RUST_LOG is unset on purpose: Comet's native default is `info`; a job can raise it with
-# spark.executorEnv.RUST_LOG.
-ENV OTEL_BSP_MAX_QUEUE_SIZE=32768 \
-    OTEL_BSP_SCHEDULE_DELAY=2000
-
 RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     tini \
     curl \
     python3 \
     python3-pip \
-    python3-dev \
     && ln -sf /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
@@ -105,44 +97,24 @@ RUN cp $SPARK_HOME/kubernetes/dockerfiles/spark/entrypoint.sh /opt/entrypoint.sh
     chmod +x /opt/entrypoint.sh
 
 # Baseline spark-defaults.conf — executor defaults (no ConfigMap mounted on executors).
-# new line added for comet jar
 # UNITS. Spark and Hadoop disagree on the default unit per key, so a bare integer means
 # different things on adjacent lines:
 #   spark.network.timeout, spark.files.fetchTimeout  -> timeConf(SECONDS)
 #   spark.executor.heartbeatInterval                 -> timeConf(MILLISECONDS), default "10s"
 #   fs.s3a.*.timeout                                 -> milliseconds (Hadoop 3.3.4)
-# This block previously read `heartbeatInterval 10` (10ms, not 10s), `connection.timeout 60`
-# (60ms against a Hadoop default of 200000) and `connection.establish.timeout 30` (30ms against
-# a default of 5000). Sub-second S3 deadlines make nearly every read time out and retry, which
-# looks like network trouble rather than configuration.
+# Suffix anything Spark accepts a suffix for. fs.s3a.connection.timeout /
+# connection.establish.timeout are left at hadoop-aws's in-code defaults (200000ms / 5000ms),
+# sized for 128MB multipart uploads.
 #
-# Comet's native S3 store reads the same fs.s3a.* keys and also treats bare integers as
-# milliseconds (get_config_duration_ms in native/core/src/parquet/objectstore/s3.rs), so these
-# values reach the native reader too. Suffix anything Spark accepts a suffix for.
-#
-# fs.s3a.connection.timeout and fs.s3a.connection.establish.timeout are deliberately NOT set.
-# The key is shared by two readers that want different values, and neither ships a default in
-# a *-default.xml -- each applies its own in code when the key is absent, which is the only way
-# both get what they need:
-#   hadoop-aws  -> 200000ms request / 5000ms connect. Sized for 128MB multipart part uploads
-#                  (fs.s3a.multipart.size), where a tight deadline would abort a healthy upload.
-#   Comet native-> 15000ms request / 3000ms connect. Sized for merged column ranges, which
-#                  complete in well under a second on a healthy connection.
-# Setting the key globally forces one number on both. In particular `200000` (the hadoop-aws
-# figure) gives the native reader a 200s whole-request deadline, so a GET that goes silent
-# mid-transfer under ENA inbound-bandwidth shaping holds its task slot for 200s instead of
-# failing over at 15s -- which is precisely the stall this deployment is trying to bound.
-# Per-bucket overrides cannot separate them here either: both readers hit the same bucket.
-#
-# fs.s3a.connection.acquisition.timeout is dropped: it is a Hadoop 3.4+ key, ignored by the
-# 3.3.4 hadoop-aws bundled here, but still picked up by Comet's native reader.
+# No S3 endpoint or credentials here: the image works against any S3. On RKE2 the job sets
+# spark.hadoop.fs.s3a.endpoint (SeaweedFS, path-style, no SSL) and gets AWS_ACCESS_KEY_ID /
+# AWS_SECRET_ACCESS_KEY from the lakehouse-s3 Secret (examples/spark-jobs/rke2-*.yaml).
 #
 # spark.plugins and spark.sql.extensions are deliberately NOT set here. Neither is additive: a
-# job that sets either in its SparkConf (as the TPC-H SparkApplication does, for Comet) replaces
-# this value outright rather than adding to it, so baking them creates the illusion that
-# Gravitino/Iceberg are active when they have been silently dropped. Declare the full
-# list per job instead, e.g.
-#   spark.plugins: "org.apache.spark.CometPlugin,org.apache.gravitino.spark.connector.plugin.GravitinoSparkPlugin"
+# job that sets either in its SparkConf replaces this value outright rather than adding to it,
+# so baking them creates the illusion that Gravitino/Iceberg are active when they have been
+# silently dropped. Declare the full list per job instead, e.g.
+#   spark.plugins: "org.apache.gravitino.spark.connector.plugin.GravitinoSparkPlugin"
 RUN printf "spark.network.timeout 120s\n\
 spark.files.fetchTimeout 60s\n\
 spark.executor.heartbeatInterval 10s\n\
@@ -153,44 +125,13 @@ spark.sql.gravitino.metalake enterprise_metalake\n\
 spark.sql.gravitino.uri http://gravitino.default.svc.cluster.local:8090\n\
 spark.sql.gravitino.enableIcebergSupport true\n" > $SPARK_HOME/conf/spark-defaults.conf
 
-# spark-env.sh — sets PYSPARK_PYTHON/LD_LIBRARY_PATH/LD_PRELOAD before the
-# JVM starts (must live here, not spark-defaults.conf: PyO3's
-# auto-initialize reads these at interpreter init, before
-# spark-defaults.conf is even parsed).
-#
-# DRIVER ONLY on Kubernetes: executors never source this file (see the ENV
-# block at the top of this stage). That is why the TPC-H jobs repeat
-# COMET_NATIVE_SCAN_CACHE_ENABLED as spark.executorEnv.*, and why nothing
-# below reaches an executor -- including LD_PRELOAD, so PyO3/Python UDFs on
-# executors run without it. Executor-side settings belong in image ENV or in
-# the job's executor env, not here.
-#
-# python3 here is the system Python installed above via apt — no venv,
-# unlike local dev. pandas/pyarrow/numpy already live in its site-packages
-# (--break-system-packages pip install above), already on its default
-# sys.path, so no PYTHONPATH/VIRTUAL_ENV override is needed the way a venv
-# would require.
-#
-# aarch64-linux-gnu, not x86_64-linux-gnu: this image is arm64-only (see
-# the builder stage's base-image comment) — the multiarch lib path has to
-# match the actual architecture or LD_PRELOAD silently points at nothing.
-#
-# LD_PRELOAD forces libpython to load with RTLD_GLOBAL: PyO3 defaults to
-# RTLD_LOCAL, which hides Python's C API symbols (PyExc_ValueError etc.)
-# from the global symbol table. pyarrow's libarrow_python.so needs those
-# symbols visible globally for Comet's native PyO3 bridge to resolve them.
-#
-# NOT independently verified against this exact image (no running
-# container to exec into from here) — apt's python3-dev on Ubuntu Noble
-# should provide libpython3.12.so.1.0 at this path, but confirm with
-# `docker run --rm <image> find / -name "libpython3*"` before relying on
-# it if PyO3 init fails.
+# spark-env.sh — DRIVER ONLY on Kubernetes (entrypoint.sh -> spark-submit -> load-spark-env.sh);
+# executors start as a bare `java ... KubernetesExecutorBackend` and never source it.
+# python3 is the system Python installed above — pandas/pyarrow/numpy are already in its
+# site-packages, so no PYTHONPATH/venv override is needed.
 RUN printf "#!/usr/bin/env bash\n\
 export PYSPARK_PYTHON=/usr/bin/python3\n\
-export PYSPARK_DRIVER_PYTHON=/usr/bin/python3\n\
-export COMET_NATIVE_SCAN_CACHE_ENABLED=false\n\
-export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/lib:\${LD_LIBRARY_PATH}\n\
-export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libpython3.12.so.1.0\n" > $SPARK_HOME/conf/spark-env.sh && \
+export PYSPARK_DRIVER_PYTHON=/usr/bin/python3\n" > $SPARK_HOME/conf/spark-env.sh && \
     chmod +x $SPARK_HOME/conf/spark-env.sh
 
 ENTRYPOINT ["/opt/entrypoint.sh"]

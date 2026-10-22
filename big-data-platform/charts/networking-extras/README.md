@@ -1,18 +1,19 @@
-# 📦 Networking-extras Sub-chart
+# Networking-extras Sub-chart
 
-Additional networking resources for advanced routing and observability.
+Traefik IngressRoutes plus an optional NetworkPolicy for the `default` namespace.
 
-## 🚀 Overview
-- **Role**: IngressRoute extensions and specialized load-balancing rules.
-- **Sync Wave**: `0` (Concurrent with apps).
+## Components
+- **ArgoCD IngressRoute**: `argocd.<global.domain>` -> `argocd-server` (namespace `argocd`).
+- **Traefik dashboard IngressRoute**: `traefik.<global.domain>/dashboard/`.
+- **default-namespace-boundary** (off by default): plain `networking.k8s.io/v1` NetworkPolicy,
+  enforced by Canal. Needs `networkPolicy.nodeCIDRs` when enabled — see the template header.
 
-## 📂 Components
-- **ArgoCD IngressRoute**: Secure access to the ArgoCD dashboard.
-- **Hubble UI IngressRoute**: Visibility into Cilium network flows.
-- **S3 Redirects**: Specialized routing for internal S3-compatible API calls.
-
-## 🛠 Configuration
+## Configuration
 ```yaml
 networking-extras:
   enabled: true
+  networkPolicy:
+    enabled: false
+    nodeCIDRs: ["192.168.1.0/24"]
+    podCIDR: "10.42.0.0/16"
 ```

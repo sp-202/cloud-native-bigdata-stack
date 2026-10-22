@@ -4,36 +4,24 @@
 # ------------------------------------------------------------------------------
 # Part of the Cloud-Native Big Data Platform (Umbrella Chart)
 #
-# Why this exists: kube-prometheus-stack's Prometheus (see values.yaml) had no
-# volumeClaimTemplate before this change, so it ran on emptyDir — every pod
-# reschedule (Karpenter consolidation, node replacement, AMI rollout) wiped
-# ALL metrics history. storageSpec.volumeClaimTemplate (ebs-gp3, network-
-# attached, survives node loss) fixes that for the *live* window, and the
-# Thanos sidecar injected via prometheus.prometheusSpec.thanos below uploads
-# each 2h TSDB block to S3 so history also survives a full Prometheus pod
-# replacement, not just individual node loss.
+# Why this exists: Prometheus keeps only a short buffer on its local volume
+# (values.yaml, retention 24h). The Thanos sidecar injected via
+# prometheus.prometheusSpec.thanos uploads each sealed 2h TSDB block to
+# SeaweedFS (s3://lakehouse/thanos/), so history survives a Prometheus pod
+# or node loss — with local-storage, losing the node means losing its PVC.
 #
-# Reuses the same AWS lakehouse S3 bucket as network-logs.tf (thanos/ prefix,
-# not a new bucket), but NOT the shared node-role/IMDS IAM pattern
-# everything else here uses. Auth is IRSA (terraform-aws-k8s-ha:
-# observability-irsa.tf): a dedicated thanos-s3-writer IAM role, trusted
-# only by the two ServiceAccounts below, scoped to only the thanos/ prefix
-# — least privilege per workload instead of "every pod on the node can
-# touch this bucket." The objstore Secret below carries no
-# access_key/secret_key either way; with IRSA the AWS SDK picks up
-# AWS_ROLE_ARN/AWS_WEB_IDENTITY_TOKEN_FILE (injected by the EKS
-# pod-identity webhook off each ServiceAccount's eks.amazonaws.com/role-arn
-# annotation) instead of the node's IMDS role.
+# Credentials: the objstore Secret below carries no access_key/secret_key.
+# Thanos's S3 client falls back to AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
+# from the environment, which the Store Gateway and Compactor (here) and
+# the sidecar (values.yaml prometheusSpec.containers) all get via
+# `envFrom: secretRef: lakehouse-s3`.
 #
-# Components: Sidecar (injected into Prometheus itself, not deployed here —
-# its ServiceAccount annotation lives in values.yaml next to the rest of
-# kube-prometheus-stack's config) + Query (merges live sidecar data with
-# historical S3 data for one query endpoint) + Store Gateway (serves
-# historical blocks from S3) + Compactor (exactly one replica — running two
-# corrupts the block index; downsamples old data so a year of history
-# doesn't cost a year of raw-resolution storage). Store Gateway and
-# Compactor are separate pods, not sidecars, so they share a dedicated
-# thanos-s3 ServiceAccount (below) trusting the same IAM role.
+# Components: Sidecar (injected into Prometheus itself, not deployed here)
+# + Query (merges live sidecar data with historical S3 data for one query
+# endpoint) + Store Gateway (serves historical blocks from S3) + Compactor
+# (exactly one replica — running two corrupts the block index; downsamples
+# old data so a year of history doesn't cost a year of raw-resolution
+# storage).
 #
 # Managed via ArgoCD Sync Wave: 0 (same tier as the rest of monitoring)
 # ------------------------------------------------------------------------------
@@ -44,7 +32,6 @@ metadata:
   name: thanos-s3
   namespace: default
   annotations:
-    eks.amazonaws.com/role-arn: {{ .Values.global.thanosS3RoleArn }}
     argocd.argoproj.io/sync-wave: "0"
 ---
 apiVersion: v1
@@ -71,9 +58,11 @@ stringData:
     type: S3
     prefix: thanos
     config:
-      bucket: {{ .Values.global.awsLakehouse.bucket }}
-      endpoint: s3.{{ .Values.global.awsLakehouse.region }}.amazonaws.com
-      region: {{ .Values.global.awsLakehouse.region }}
+      bucket: {{ .Values.global.s3.bucket }}
+      endpoint: {{ .Values.global.s3.endpointHost }}
+      region: {{ .Values.global.s3.region }}
+      insecure: true
+      bucket_lookup_type: path
 ---
 # =============================================================================
 # Thanos Query — single endpoint over live (via Prometheus's sidecar) +
@@ -218,6 +207,9 @@ spec:
       containers:
         - name: thanos-store-gateway
           image: {{ .Values.image }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.global.s3.secretName }}
           args:
             - store
             - --log.level=info
@@ -260,7 +252,7 @@ spec:
         name: store-data
       spec:
         accessModes: ["ReadWriteOnce"]
-        storageClassName: {{ .Values.global.storageClassNameEbs }}
+        storageClassName: {{ .Values.global.storageClassName }}
         resources:
           requests:
             storage: {{ .Values.storeGateway.storageSize }}
@@ -322,6 +314,9 @@ spec:
       containers:
         - name: thanos-compactor
           image: {{ .Values.image }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.global.s3.secretName }}
           args:
             - compact
             - --log.level=info
@@ -361,7 +356,7 @@ spec:
         name: compact-data
       spec:
         accessModes: ["ReadWriteOnce"]
-        storageClassName: {{ .Values.global.storageClassNameEbs }}
+        storageClassName: {{ .Values.global.storageClassName }}
         resources:
           requests:
             storage: {{ .Values.compactor.storageSize }}

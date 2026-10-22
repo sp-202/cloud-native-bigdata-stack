@@ -14,18 +14,12 @@ data:
       labels:
         monitoring: "true"
     spec:
-      # Single Spark tier now (Karpenter's spark-node NodePool covers both
-      # spot and on-demand capacity under one node-role label — no more
-      # separate spark-critical/spark-worker pools to OR between).
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: node-role.kubernetes.io/spark-node
-                    operator: Exists
+      # No node pinning: all nodes are identical. global.nodeSelector.spark
+      # applies if nodes are ever labeled for Spark.
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.spark | nindent 8 }}
       tolerations:
-        # Tolerate spot interruption taint if applied by NTH
+        # Move executors off a dead node quickly instead of the default 300s.
         - key: "node.kubernetes.io/unreachable"
           operator: "Exists"
           effect: "NoExecute"
@@ -34,13 +28,6 @@ data:
           operator: "Exists"
           effect: "NoExecute"
           tolerationSeconds: 30
-        # spark-node's NodePool taint (terraform-aws-k8s-ha/karpenter-k8s.tf)
-        # — without this, executors couldn't schedule there at all despite
-        # matching the nodeAffinity above.
-        - key: "spark-only"
-          value: "true"
-          effect: "NoSchedule"
-          operator: "Equal"
       volumes:
         - name: spark-shuffle
           hostPath:
@@ -48,6 +35,10 @@ data:
             type: DirectoryOrCreate
       containers:
         - name: spark-kubernetes-executor
+          # SeaweedFS credentials for S3A.
+          envFrom:
+            - secretRef:
+                name: {{ .Values.global.s3.secretName }}
           volumeMounts:
             - name: spark-shuffle
               mountPath: {{ .Values.executor.localDir }}

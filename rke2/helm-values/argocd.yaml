@@ -1,0 +1,99 @@
+# Argo CD (chart argo/argo-cd 7.8.23, same as main) — ported from
+# terraform-aws-k8s-ha argocd.tf. Single replicas (main ran 2 of each across
+# core nodes) to keep the footprint small on 4 nodes; Argo CD being briefly
+# down only pauses syncs, it never touches running workloads.
+server:
+  extraArgs: ["--insecure"]      # TLS ends at Traefik (argocd.<domain>)
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  service:
+    type: ClusterIP
+configs:
+  params:
+    server.insecure: true
+  cm:
+    kustomize.buildOptions: --enable-helm
+    resource.customizations.health.networking.k8s.io_Ingress: |
+      hs = {}
+      hs.status = "Healthy"
+      hs.message = ""
+      return hs
+    # Without these, Argo CD treats CNPG Cluster/Database as Healthy the
+    # instant they exist, and the wave -1 jobs (gravitino-schema-init,
+    # airflow-db-migrate) start against a Postgres still mid-bootstrap.
+    # Exact-match only — no string.find in the Lua sandbox (it crashed
+    # health evaluation cluster-wide on main).
+    resource.customizations.health.postgresql.cnpg.io_Cluster: |
+      hs = {}
+      if obj.status ~= nil and obj.status.phase ~= nil then
+        if obj.status.phase == "Cluster in healthy state" then
+          hs.status = "Healthy"
+          hs.message = obj.status.phase
+          return hs
+        end
+        hs.status = "Progressing"
+        hs.message = obj.status.phase
+        return hs
+      end
+      hs.status = "Progressing"
+      hs.message = "Waiting for CloudNativePG Cluster status"
+      return hs
+    resource.customizations.health.postgresql.cnpg.io_Database: |
+      hs = {}
+      if obj.status ~= nil then
+        if obj.status.applied == true then
+          hs.status = "Healthy"
+          hs.message = "Database applied"
+          return hs
+        end
+        if obj.status.applied == false and obj.status.message ~= nil and obj.status.message ~= "" then
+          hs.status = "Degraded"
+          hs.message = obj.status.message
+          return hs
+        end
+      end
+      hs.status = "Progressing"
+      hs.message = "Waiting for CloudNativePG Database to be applied"
+      return hs
+    # CRDs are pre-installed server-side by scripts/apply-crds.sh (the Spark
+    # Operator ones exceed the 262KB annotation limit); Argo CD never manages
+    # them. Pods are excluded to keep the UI/controller cache small.
+    resource.exclusions: |
+      - apiGroups: [""]
+        kinds: ["Pod"]
+        clusters: ["https://kubernetes.default.svc"]
+      - apiGroups: ["apiextensions.k8s.io"]
+        kinds: ["CustomResourceDefinition"]
+        clusters: ["https://kubernetes.default.svc"]
+# Requests sized for a handful of Applications on 16 GB nodes; the application
+# controller and repo-server (helm template of the umbrella chart) are the
+# hungry ones.
+controller:
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 1536Mi }
+dex:
+  enabled: false
+notifications:
+  enabled: false
+applicationSet:
+  enabled: true
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { memory: 256Mi }
+redis:
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { memory: 256Mi }
+repoServer:
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+  # git ls-remote/fetch to GitHub hit the 15s default HTTP timeout with no
+  # retry on main; same knobs here (home/office uplinks are no faster).
+  env:
+    - name: ARGOCD_GIT_REQUEST_TIMEOUT
+      value: 60s
+    - name: ARGOCD_GIT_ATTEMPTS_COUNT
+      value: "3"

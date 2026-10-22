@@ -30,8 +30,6 @@ spec:
       nodeSelector:
         {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
       serviceAccountName: jupyterhub
-      # No wait-for-minio init container — real S3 doesn't need a
-      # readiness wait the way the in-cluster MinIO pod did.
       containers:
         - name: jupyterhub
           image: {{ .Values.global.jupyterhubImage }}
@@ -44,13 +42,10 @@ spec:
               value: {{ .Values.sparkRemote | quote }}
             - name: PYSPARK_PYTHON
               value: "python3"
-            # No AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/S3 endpoint — the
-            # node's IAM role provides S3 credentials via boto3/Hadoop's
-            # default credential chain.
             - name: LAKEHOUSE_BUCKET
               valueFrom:
                 secretKeyRef:
-                  name: lakehouse-s3
+                  name: {{ .Values.global.s3.secretName }}
                   key: bucket
             - name: JUPYTER_ENABLE_LAB
               value: "yes"
@@ -58,6 +53,12 @@ spec:
               value: ""
             - name: GRANT_SUDO
               value: "yes"
+          # AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_ENDPOINT_URL: boto3,
+          # s3fs and the AWS CLI all read these, so notebooks reach SeaweedFS
+          # with no extra config.
+          envFrom:
+            - secretRef:
+                name: {{ .Values.global.s3.secretName }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           readinessProbe:

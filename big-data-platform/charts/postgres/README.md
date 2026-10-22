@@ -13,7 +13,7 @@ This sub-chart deploys a PostgreSQL instance used as the metadata backbone for t
 - **ConfigMap**: Initialization scripts (`postgres-init`).
 
 ## 💾 Persistence
-Uses a PersistentVolumeClaim `postgres-data-pvc` backed by OpenEBS local hostpath storage.
+CloudNativePG `Cluster`, single instance (`postgres.replicas: 1`), one PVC on `local-storage` (node-local). Raise `replicas` for streaming replicas + failover.
 
 ## 🛠 Configuration
 Configuration is managed via the parent `values.yaml` under the `postgres` key.

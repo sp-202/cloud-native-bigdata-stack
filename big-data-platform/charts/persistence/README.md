@@ -1,22 +1,9 @@
-# 📦 Persistence Sub-chart
+# Persistence Sub-chart
 
-Manages the storage foundation of the platform, including namespaces and persistent volumes.
+PVCs for workloads that don't own a StatefulSet volumeClaimTemplate.
 
-## 🚀 Overview
-- **Role**: Storage orchestration and namespace provisioning.
-- **Sync Wave**: `-3` (Foundational Layer).
-
-## 📂 Components
-- **Namespaces**: `cloudflare`, `monitoring`, `spark-operator`.
-- **Volumes**: 
-  - Dynamic hostpath storage for Postgres, MinIO, and Airflow.
-  - Spark event-log volume definitions.
-
-## 💾 Storage Class
-Primary usage of **OpenEBS Local Hostpath** for high-performance node-local storage.
-
-## 🛠 Configuration
-```yaml
-persistence:
-  enabled: true
-```
+- **Sync Wave**: `-3`
+- **PVCs**: `redis-data-pvc`, only when `persistence.redis.enabled` (Redis is off while Superset is off).
+  StarRocks volumes come from the kube-starrocks chart's own `storageSpec`.
+- **StorageClass**: `global.storageClassName` (`local-storage`, OpenEBS local PV — hostpath or
+  LVM, chosen at bootstrap; see `rke2/README.md`). WaitForFirstConsumer, RWO.

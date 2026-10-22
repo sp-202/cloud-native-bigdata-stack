@@ -6,7 +6,8 @@
 # Description: Bootstraps the Gravitino metadata lake after the server is ready.
 #   1. Creates metalake "enterprise_metalake" (idempotent — 409 = already exists)
 #   2. Registers catalog "sales_catalog" as a lakehouse-iceberg catalog backed by
-#      the iceberg_catalog PostgreSQL DB + S3FileIO (IAM role auth).
+#      the iceberg_catalog PostgreSQL DB + S3FileIO on SeaweedFS (static keys
+#      from the lakehouse-s3 Secret).
 #
 # This is REQUIRED for the dynamic-config-provider mode to work.
 # Without it, the Iceberg REST Catalog (port 9001) has no catalog to serve and
@@ -92,7 +93,7 @@ spec:
                 "name": "CATALOG_PLACEHOLDER",
                 "type": "RELATIONAL",
                 "provider": "lakehouse-iceberg",
-                "comment": "Iceberg tables backed by PostgreSQL JDBC + S3FileIO (IAM role auth)",
+                "comment": "Iceberg tables backed by PostgreSQL JDBC + S3FileIO on SeaweedFS",
                 "properties": {
                   "catalog-backend": "jdbc",
                   "uri": "JDBC_URI_PLACEHOLDER",
@@ -100,15 +101,20 @@ spec:
                   "jdbc-user": "JDBC_USER_PLACEHOLDER",
                   "jdbc-password": "JDBC_PASSWORD_PLACEHOLDER",
                   "warehouse": "WAREHOUSE_PLACEHOLDER",
-                  "io-impl": "org.apache.iceberg.aws.s3.S3FileIO"
+                  "io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+                  "s3-endpoint": "S3_ENDPOINT_PLACEHOLDER",
+                  "s3-region": "S3_REGION_PLACEHOLDER",
+                  "s3-path-style-access": "true",
+                  "s3-access-key-id": "S3_ACCESS_KEY_PLACEHOLDER",
+                  "s3-secret-access-key": "S3_SECRET_KEY_PLACEHOLDER"
                 }
               }
               CATALOG_JSON
-              # No s3-endpoint/s3-access-key-id/s3-secret-access-key/
-              # s3-path-style-access properties — those were MinIO-only.
-              # Omitting them makes Iceberg's S3FileIO fall back to the AWS
-              # SDK's default credential chain (the node's IAM role) and
-              # real S3's default virtual-hosted-style endpoint.
+              # s3-* properties: these are what the IRC (dynamic-config-
+              # provider) and Spark's GravitinoIcebergCatalog actually use to
+              # open S3FileIO against SeaweedFS — in-cluster HTTP endpoint,
+              # path-style, static keys. Keys are generated hex, so they are
+              # safe as sed replacements.
 
               # Substitute env vars into the JSON
               sed -i \
@@ -117,6 +123,10 @@ spec:
                 -e "s|JDBC_USER_PLACEHOLDER|${ICEBERG_JDBC_USER}|g" \
                 -e "s|JDBC_PASSWORD_PLACEHOLDER|${ICEBERG_JDBC_PASSWORD}|g" \
                 -e "s|WAREHOUSE_PLACEHOLDER|${ICEBERG_WAREHOUSE}|g" \
+                -e "s|S3_ENDPOINT_PLACEHOLDER|${AWS_ENDPOINT_URL}|g" \
+                -e "s|S3_REGION_PLACEHOLDER|${AWS_REGION}|g" \
+                -e "s|S3_ACCESS_KEY_PLACEHOLDER|${AWS_ACCESS_KEY_ID}|g" \
+                -e "s|S3_SECRET_KEY_PLACEHOLDER|${AWS_SECRET_ACCESS_KEY}|g" \
                 /tmp/catalog.json
 
               HTTP=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
@@ -141,12 +151,13 @@ spec:
                 secretKeyRef:
                   name: gravitino-db-role
                   key: password
-            # Real value injected via ArgoCD Application-level helm.parameters
-            # (gravitino.icebergCatalog.warehouse) — the S3 bucket name is
-            # only known after `terraform apply`, so it can't be hardcoded
-            # in values.yaml either. See post-cluster-bootstrap.sh.
             - name: ICEBERG_WAREHOUSE
               value: "{{ .Values.gravitino.icebergCatalog.warehouse }}"
+          # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_ENDPOINT_URL /
+          # AWS_REGION for the s3-* catalog properties above.
+          envFrom:
+            - secretRef:
+                name: {{ .Values.global.s3.secretName }}
           resources:
             requests:
               cpu: "50m"

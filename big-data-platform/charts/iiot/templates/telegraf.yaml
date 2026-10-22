@@ -1,0 +1,129 @@
+{{- if and .Values.enabled .Values.telegraf.enabled }}
+{{- $t := .Values.telegraf }}
+{{- $ns := .Release.Namespace }}
+# ------------------------------------------------------------------------------
+# IIoT - Telegraf, two independent pipelines from the same MQTT topics
+# ------------------------------------------------------------------------------
+#   telegraf-kafka  MQTT -> Kafka topic (raw stream for Spark)
+#   telegraf-vm     MQTT -> VictoriaMetrics (7-day live store for Grafana)
+#
+# Two Deployments, each with its own persistent QoS 1 MQTT session (distinct
+# client_id), rather than one Telegraf with two outputs: a Kafka outage fills
+# only telegraf-kafka's buffer/broker queue and never delays the live
+# VictoriaMetrics feed, and each side restarts/scales on its own.
+#
+# MQTT password from Secret mosquitto-credentials (Telegraf expands
+# ${MQTT_PASSWORD} in its config at load time).
+#
+# Managed via ArgoCD Sync Wave: 2 (after Kafka, wave 1)
+# ------------------------------------------------------------------------------
+{{- $outputs := dict
+  "kafka" (printf `[[outputs.kafka]]
+  brokers = ["%s-kafka-bootstrap.%s.svc.cluster.local:9092"]
+  topic = "%s"
+  # Message key = MQTT topic: one DCS tag always lands in one partition, so
+  # Spark sees each tag's samples in order.
+  routing_tag = "topic"
+  data_format = "json"
+  json_timestamp_units = "1ms"
+  # zstd
+  compression_codec = 4
+  # acks=all with the topic's min.insync.replicas=2: no loss on one broker failure.
+  required_acks = -1
+  max_retry = 10
+  # Kafka may come up after this pod; keep retrying instead of exiting.
+  startup_error_behavior = "retry"` .Values.kafka.clusterName $ns .Values.kafka.topic.name)
+  "vm" (printf `[[outputs.influxdb]]
+  # VictoriaMetrics accepts Influx line protocol on /write.
+  urls = ["http://victoria-metrics.%s.svc.cluster.local:8428"]
+  skip_database_creation = true
+  content_encoding = "gzip"
+  timeout = "10s"
+  startup_error_behavior = "retry"` $ns)
+}}
+{{- range $name := list "kafka" "vm" }}
+{{- $p := index $t.pipelines $name }}
+{{- if $p.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: telegraf-{{ $name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+data:
+  telegraf.conf: |
+    [agent]
+      interval = "10s"
+      flush_interval = {{ $p.flushInterval | quote }}
+      metric_batch_size = {{ $p.batchSize | int }}
+      # Metrics held in memory while the output is unreachable; beyond it the
+      # oldest are dropped (and MQTT QoS 1 keeps queueing in Mosquitto).
+      metric_buffer_limit = {{ $p.bufferLimit | int }}
+      omit_hostname = true
+
+    [[inputs.mqtt_consumer]]
+      servers = ["tcp://mosquitto.{{ $ns }}.svc.cluster.local:1883"]
+      topics = {{ toJson $t.topics }}
+      qos = 1
+      persistent_session = true
+      client_id = "telegraf-{{ $name }}"
+      username = "${MQTT_USERNAME}"
+      password = "${MQTT_PASSWORD}"
+      # Ack to the broker only once delivered to the output: bounded in-flight.
+      max_undelivered_messages = 5000
+      topic_tag = "topic"
+      name_override = {{ $t.measurement | quote }}
+{{ $t.parser | indent 6 }}
+
+{{ index $outputs $name | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telegraf-{{ $name }}
+  labels:
+    app: telegraf-{{ $name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  replicas: 1
+  # Recreate: two pods with the same MQTT client_id would kick each other off.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: telegraf-{{ $name }}
+  template:
+    metadata:
+      labels:
+        app: telegraf-{{ $name }}
+      annotations:
+        checksum/config: {{ list $t (index $outputs $name) | toJson | sha256sum }}
+    spec:
+      nodeSelector:
+        {{- toYaml $.Values.global.nodeSelector.data | nindent 8 }}
+      containers:
+        - name: telegraf
+          image: {{ $t.image | quote }}
+          args: ["--config", "/etc/telegraf/telegraf.conf"]
+          env:
+            - name: MQTT_USERNAME
+              value: {{ $.Values.mosquitto.users.telegraf | quote }}
+            - name: MQTT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-credentials
+                  key: telegraf-password
+          resources:
+            {{- toYaml $p.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/telegraf
+      volumes:
+        - name: config
+          configMap:
+            name: telegraf-{{ $name }}
+{{- end }}
+{{- end }}
+{{- end }}

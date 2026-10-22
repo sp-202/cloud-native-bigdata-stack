@@ -1,0 +1,100 @@
+# -----------------------------------------------------------------------------
+# SeaweedFS — the platform's S3 (replaces AWS S3 on main). Argo CD Application
+# applied by bootstrap-platform.sh before the big-data-platform Application.
+#
+#   S3 endpoint   http://seaweedfs-filer.storage.svc.cluster.local:8333
+#                 (S3 gateway embedded in the filer: one fewer Deployment)
+#   auth          on; identities from Secret storage/seaweedfs-s3-config, which
+#                 bootstrap-platform.sh generates with the same keys it puts in
+#                 lakehouse-s3 — keys live only in Secrets, never in git
+#   buckets       lakehouse, loki — created by bootstrap-platform.sh
+#
+# 2-NODE TEST PROFILE variant of seaweedfs.yaml (PLATFORM_PROFILE=2node):
+#   master  x1  (3 masters need 3 nodes: required anti-affinity)
+#   volume  x2  one per node, replication 001 still keeps 2 copies
+#   filer   x1
+# Everything else as below.
+#
+# Layout for 4 identical nodes (full profile):
+#   master  x3  raft quorum (survives one master loss), required anti-affinity
+#   volume  x3  replication 001 = every chunk on 2 different volume servers,
+#               so one node can die without losing objects
+#   filer   x1  metadata in its embedded leveldb on a local PVC. Not HA: if
+#               its node dies the S3 endpoint is down until the node is back
+#               (data on volume servers is unaffected). Enough for this lab;
+#               HA filer needs a shared metadata store (e.g. Postgres).
+# All volumes on `local-storage` (OpenEBS local PV).
+# -----------------------------------------------------------------------------
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: seaweedfs
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: big-data-platform
+  source:
+    repoURL: https://seaweedfs.github.io/seaweedfs/helm
+    chart: seaweedfs
+    targetRevision: 4.48.0
+    helm:
+      valuesObject:
+        master:
+          replicas: 1
+          defaultReplication: "001"
+          data:
+            type: persistentVolumeClaim
+            size: 5Gi
+            storageClass: local-storage
+          logs:
+            type: emptyDir
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+        volume:
+          replicas: 2
+          dataDirs:
+            - name: data1
+              type: persistentVolumeClaim
+              storageClass: local-storage
+              size: 100Gi
+              # 0 = derive from free space on the volume (hostpath backend
+              # does not enforce the PVC size; LVM does).
+              maxVolumes: 0
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 2Gi }
+        filer:
+          replicas: 1
+          defaultReplicaPlacement: "001"
+          data:
+            type: persistentVolumeClaim
+            size: 20Gi
+            storageClass: local-storage
+          logs:
+            type: emptyDir
+          s3:
+            enabled: true
+            port: 8333
+            enableAuth: true
+            existingConfigSecret: seaweedfs-s3-config
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 2Gi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: storage
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m

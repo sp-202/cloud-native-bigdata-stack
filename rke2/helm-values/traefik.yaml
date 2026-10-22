@@ -1,0 +1,74 @@
+# Traefik (chart traefik/traefik 26.1.0, same as main) — the cluster ingress.
+# Installed by bootstrap-platform.sh before ArgoCD (IngressRoute CRDs must
+# exist before the first platform sync).
+#
+# RKE2 port: a DaemonSet with hostPorts 80/443 instead of main's 2-replica
+# Deployment behind a Cloudflare tunnel. Every node except the dedicated
+# StarRocks one (tainted; Traefik doesn't tolerate it) answers on :80/:443
+# and :1883, so *.<node-ip>.sslip.io works for node-01..03; INGRESS_IP in
+# cluster.env picks which IP goes into the hostnames. RKE2's ingress-nginx is disabled
+# (install-rke2.sh) so it doesn't hold these ports.
+deployment:
+  kind: DaemonSet
+
+# With hostPorts the old and new pod on a node can't run side by side:
+# replace in place, one node at a time.
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+    maxSurge: 0
+
+ports:
+  web:
+    hostPort: 80
+  websecure:
+    hostPort: 443
+  traefik:
+    port: 9000
+  metrics:
+    port: 9101
+  # MQTT for the DCS bridge: mqtt://<node-ip>:1883 -> Mosquitto
+  # (charts/iiot mqtt-ingressroutetcp.yaml, plain TCP).
+  mqtt:
+    port: 1883
+    hostPort: 1883
+    expose: false
+    exposedPort: 1883
+    protocol: TCP
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# Dashboard at traefik.<domain>/dashboard/ (charts/networking-extras).
+additionalArguments:
+  - "--api.insecure=true"
+  - "--api.dashboard=true"
+
+service:
+  type: ClusterIP
+
+ingressRoute:
+  dashboard:
+    enabled: false
+
+securityContext:
+  runAsUser: 65532
+  runAsGroup: 65532
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+podSecurityContext:
+  runAsUser: 65532
+  runAsGroup: 65532
+  runAsNonRoot: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    memory: 256Mi

@@ -1,3 +1,8 @@
+> **Branch `rke2`:** the docs below describe the EKS build on `main`. For the on-prem RKE2
+> cluster (x86_64, Canal, OpenEBS local PV, SeaweedFS S3, sslip.io) follow
+> [`rke2/README.md`](rke2/README.md) — `rke2/install-cluster.sh` then
+> `rke2/bootstrap-platform.sh`.
+
 # 🚀 Cloud-Native Big Data Platform on Kubernetes (AWS EKS / Self-Managed)
 
 [![Version](https://img.shields.io/badge/version-1.0.1-blue)](CHANGELOG.md)

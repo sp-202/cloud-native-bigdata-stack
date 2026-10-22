@@ -1,0 +1,39 @@
+# OpenEBS (chart openebs/openebs) — local engines only. Installed by
+# bootstrap-platform.sh with `helm upgrade --install`, not ArgoCD: the chart's
+# pre-upgrade hook deletes its own localpv-provisioner Deployment, and ArgoCD
+# would run that hook (as PreSync) on every single sync.
+#
+# The platform's StorageClass is `local-storage`, created by
+# bootstrap-platform.sh on top of one of these engines (STORAGE_BACKEND):
+#   hostpath -> provisioner openebs.io/local (localpv-provisioner, always on)
+#   lvm      -> CSI local.csi.openebs.io (lvm-localpv; --set by the script)
+
+engines:
+  local:
+    lvm:
+      enabled: false          # bootstrap-platform.sh sets true for STORAGE_BACKEND=lvm
+    zfs:
+      enabled: false
+  replicated:
+    mayastor:
+      enabled: false
+
+# RKE2 already ships the VolumeSnapshot CRDs and snapshot-controller
+# (rke2-snapshot-controller*); a second copy from this chart would fight it.
+openebs-crds:
+  csi:
+    volumeSnapshots:
+      enabled: false
+
+localpv-provisioner:
+  # The chart's own openebs-hostpath class stays available but is not the
+  # default — local-storage is.
+  hostpathClass:
+    enabled: true
+    isDefaultClass: false
+
+# OpenEBS's bundled observability stack: the platform has its own Loki/Alloy.
+loki:
+  enabled: false
+alloy:
+  enabled: false

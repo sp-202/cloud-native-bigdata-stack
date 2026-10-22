@@ -1,5 +1,6 @@
 {{- if .Values.enabled }}
 {{- range $path, $_ := .Files.Glob "dashboards/*.json" }}
+{{- if not (has (base $path) ($.Values.disabledDashboards | default list)) }}
 ---
 # ------------------------------------------------------------------------------
 # Monitoring - Grafana Dashboards
@@ -23,5 +24,6 @@ metadata:
 data:
   {{ base $path }}: |-
 {{ $.Files.Get $path | indent 4 }}
+{{- end }}
 {{- end }}
 {{- end }}

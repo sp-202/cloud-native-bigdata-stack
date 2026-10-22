@@ -11,7 +11,7 @@ spec:
     - web
     - websecure
   routes:
-    - match: Host(`argocd.dailyblogstudio.com`)
+    - match: Host(`argocd.{{ .Values.global.domain }}`)
       kind: Rule
       services:
         - name: argocd-server

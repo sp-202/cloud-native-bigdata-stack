@@ -1,5 +1,0 @@
-apiVersion: v2
-name: headlamp
-description: Headlamp UI sub-chart
-type: application
-version: 1.0.0

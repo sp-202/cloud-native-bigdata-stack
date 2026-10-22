@@ -1571,45 +1571,6 @@
         "type": "loki",
         "uid": "${ds}"
       },
-      "description": "Hit/miss and origin-byte summaries from each executor (COMET_RANGE_CACHE_REPORT_EVERY).",
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 87
-      },
-      "id": 328,
-      "title": "S3 range cache (Comet native)",
-      "type": "logs",
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": true,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${ds}"
-          },
-          "editorMode": "code",
-          "expr": "{spark_app_selector=\"$spark_app\"} |= \"COMET RANGE CACHE\"",
-          "legendFormat": "",
-          "range": true,
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "${ds}"
-      },
       "description": "gc-*.log and diag*.log tailed from /mnt/spark-nvme on the spark nodes (job spark-node-files).",
       "gridPos": {
         "h": 9,
@@ -1638,84 +1599,6 @@
           },
           "editorMode": "code",
           "expr": "{job=\"spark-node-files\"}",
-          "legendFormat": "",
-          "range": true,
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "${ds}"
-      },
-      "description": "cilium-agent log lines about full or pressured BPF maps, map insertion failures and conntrack/NAT garbage collection. Pair with the 'Cilium BPF maps' row in the Kubernetes dashboard.",
-      "gridPos": {
-        "h": 9,
-        "w": 24,
-        "x": 0,
-        "y": 96
-      },
-      "id": 330,
-      "title": "Cilium agent: BPF map / conntrack / NAT warnings",
-      "type": "logs",
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": true,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${ds}"
-          },
-          "editorMode": "code",
-          "expr": "{namespace=\"kube-system\", container=\"cilium-agent\"} |~ \"(?i)(map is full|map.*pressure|insertion fail|ct.?map|nat.?map|conntrack|garbage collect|no space left|bpf map)\"",
-          "legendFormat": "",
-          "range": true,
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "${ds}"
-      },
-      "description": "Non-FORWARDED flow records from Cilium's export (FORWARDED is counted in Prometheus but not stored in Loki).",
-      "gridPos": {
-        "h": 9,
-        "w": 24,
-        "x": 0,
-        "y": 105
-      },
-      "id": 331,
-      "title": "Hubble: dropped and errored flows",
-      "type": "logs",
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": true,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${ds}"
-          },
-          "editorMode": "code",
-          "expr": "{job=\"hubble\"}",
           "legendFormat": "",
           "range": true,
           "refId": "A"

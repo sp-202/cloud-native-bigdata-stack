@@ -1,9 +1,20 @@
 # =============================================================================
 # big-data-platform — Root values.yaml
-# Data Platform as Code (DPaC) on AWS EC2 (ARM64/Graviton)
+# Data Platform as Code (DPaC) on on-prem RKE2 (x86_64) — branch `rke2`
 #
 # This single file centralizes 60+ variables that were previously scattered
 # across global-config.env and hardcoded in static manifests.
+#
+# RKE2 port (vs. the EKS stack on `main`):
+#   * storage    OpenEBS local PV (hostpath or LVM CSI) behind one StorageClass,
+#                `local-storage`, replaces EBS/EFS
+#   * objects    SeaweedFS S3 (namespace `storage`) replaces AWS S3; credentials
+#                come from the `lakehouse-s3` Secret, not IRSA/IMDS
+#   * network    Canal (RKE2 default CNI) replaces Cilium — no Hubble
+#   * ingress    Traefik DaemonSet on hostPorts 80/443, hosts are
+#                *.<node-ip>.sslip.io (global.domain, set at deploy time)
+#   * nodes      4 identical nodes, no node tiers/Karpenter — no nodeSelectors
+# Cluster + platform bootstrap: rke2/README.md
 # =============================================================================
 
 # --- Override Helpers ---
@@ -30,20 +41,11 @@ cloudnative-pg:
   fullnameOverride: "cloudnative-pg"
   commonAnnotations:
     argocd.argoproj.io/sync-wave: "-3"
-  # A single replica means the admission webhook (cnpg-webhook-service)
-  # has exactly one backend serving every Cluster/Database create/update
-  # for the whole cluster, synchronously, with a 30s deadline. Webhook
-  # requests don't need leader election (only the reconciliation loop
-  # does — CNPG's own controller-runtime manager elects a leader
-  # independently of webhook serving), so a 2nd replica is pure added
-  # capacity/redundancy with no correctness downside. Confirmed live:
-  # even with the CPU floor below and the Cilium apiserver-ingress policy
-  # fix (networking-extras chart) both in place, ArgoCD's sync still hit
-  # intermittent "context deadline exceeded" calling this webhook while
-  # the single pod was otherwise idle (3m CPU) — a second replica removes
-  # the single-point-of-contention regardless of the exact per-request
-  # cause.
-  replicaCount: 2
+  # One operator replica: it manages a single Postgres instance here. main
+  # ran 2 because a lone webhook backend intermittently hit "context
+  # deadline exceeded" during ArgoCD's first big sync on EKS; if that shows
+  # up here, raise this to 2 (webhook serving needs no leader election).
+  replicaCount: 1
   # The operator ran BestEffort (no requests/limits) by default — zero
   # guaranteed CPU share. It also serves the mutating/validating admission
   # webhooks (cnpg-webhook-service) that every postgresql.cnpg.io Cluster/
@@ -51,15 +53,12 @@ cloudnative-pg:
   # deadline. Confirmed live: on a node with CPU limits overcommitted to
   # ~120% during a fresh-deploy pod-startup storm, this pod's webhook
   # handler got starved and ArgoCD's sync started failing with
-  # "failed calling webhook ... context deadline exceeded" — the exact
-  # same CPU-starvation failure class already root-caused and fixed for
-  # the EFS CSI driver node plugin (eks-addons.tf, node.resources). Same
-  # fix here: a real CPU request gives the scheduler grounds to guarantee
-  # this pod a share instead of leaving it BestEffort. Deliberately NO cpu
-  # limit — confirmed live elsewhere that a cpu limit on a latency-sensitive
-  # pod causes hard CFS throttling mid-request (RST_STREAM/CANCEL for the
-  # EFS CSI driver's TLS handshake), the same failure class as this webhook
-  # timeout; the request alone already gives a guaranteed floor.
+  # "failed calling webhook ... context deadline exceeded". A real CPU
+  # request gives the scheduler grounds to guarantee this pod a share
+  # instead of leaving it BestEffort. Deliberately NO cpu limit — a cpu
+  # limit on a latency-sensitive pod causes hard CFS throttling
+  # mid-request, the same failure class as this webhook timeout; the
+  # request alone already gives a guaranteed floor.
   resources:
     requests:
       cpu: "100m"
@@ -67,129 +66,81 @@ cloudnative-pg:
     limits:
       memory: "256Mi"
 
-# --- Namespace Toggles ---
-namespaces:
-  createDashboard: true
-
 # =============================================================================
 # GLOBAL — shared across ALL sub-charts via .Values.global.*
 # =============================================================================
 global:
   # --- Platform Routing & Domain ---
-  domain: "dailyblogstudio.com"
-  cfTunnelId: "91e5be1d-3b51-4cac-aebf-d330aafda394"
+  # Every UI is <name>.<domain> through Traefik (charts/ingress,
+  # charts/networking-extras). sslip.io resolves any "<anything>.<IP>.sslip.io"
+  # to <IP>, so with domain "192.168.1.10.sslip.io" grafana.192.168.1.10.sslip.io
+  # lands on that node's Traefik — no DNS server or tunnel needed. The real
+  # value is injected by rke2/bootstrap-platform.sh as an ArgoCD Helm
+  # parameter (INGRESS_IP in rke2/cluster.env); this placeholder only keeps a
+  # local `helm template` rendering.
+  domain: "127.0.0.1.sslip.io"
 
   # --- Container Images ---
-  sparkImage: "subhodeep2022/spark-bigdata:spark-3.5.8-v13-iceberg-gravitino"
-  # Always, not IfNotPresent: the image is rebuilt under the same tag and the golden AMI
-  # pre-pulls an older copy of it (packer/images/spark.txt), which IfNotPresent silently runs.
+  # All x86_64 (linux/amd64) on this branch. The Spark image is stock Apache
+  # Spark + Iceberg/Gravitino/hadoop-aws, no Comet (docker/spark/README.md).
+  sparkImage: "subhodeep2022/spark-bigdata:spark-3.5.8-v14-iceberg-gravitino-kafka-oss"
+  # Always, not IfNotPresent: the image is rebuilt under the same tag.
   sparkImagePullPolicy: Always
   jupyterhubImage: "subhodeep2022/spark-bigdata:jupyterhub-4.0.7-pyspark-scala-sql-prod-v3"
   airflowImage: "apache/airflow:3.2.0"
-  gitSyncImage: "subhodeep2022/k8s-git-sync:v2-prod"
 
-  # --- S3 ---
-  # No endpoint/accessKey/secretKey — real S3's default endpoint applies, and
-  # every workload gets credentials from the node's IAM role instead of
-  # static keys. pathStyleAccess/sslEnabled still apply to real S3 (virtual-
-  # hosted-style + TLS, the opposite of MinIO's old defaults).
+  # --- S3 (SeaweedFS, rke2/argocd/seaweedfs.yaml) ---
+  # In-cluster SeaweedFS S3 gateway (filer-embedded, namespace `storage`).
+  # Plain HTTP + path-style, the opposite of real S3's defaults. Credentials
+  # are NOT here: rke2/bootstrap-platform.sh creates the `lakehouse-s3`
+  # Secret (in default and kube-system) with the AWS-SDK-standard keys
+  #   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_ENDPOINT_URL,
+  #   S3_ENDPOINT (host:port, no scheme), bucket
+  # so any pod that does `envFrom: secretRef: lakehouse-s3` gets working
+  # credentials for aws-cli, boto3, the AWS Java SDKs, Hadoop S3A, Loki,
+  # Thanos and Tempo without a single key in git.
   s3:
-    pathStyleAccess: false
-    sslEnabled: true
+    secretName: "lakehouse-s3"
+    endpoint: "http://seaweedfs-filer.storage.svc.cluster.local:8333"
+    # host:port form, for clients that take scheme and host separately
+    # (Loki, Thanos, Tempo — all with insecure/plain-HTTP set).
+    endpointHost: "seaweedfs-filer.storage.svc.cluster.local:8333"
+    # SeaweedFS ignores the region, but every AWS SDK insists on one.
+    region: "us-east-1"
+    pathStyleAccess: true
+    sslEnabled: false
+    # Buckets created by rke2/bootstrap-platform.sh (S3 prefixes need no
+    # creation). lakehouse holds iceberg/, spark-events/, thanos/, tempo/,
+    # airflow-logs/; loki gets its own bucket because Loki treats the whole
+    # bucket as its storage root (no prefix option).
+    bucket: "lakehouse"
+    lokiBucket: "loki"
 
   # --- Node Selectors ---
-  # Labels are applied by the node-auto-labeler DaemonSet in the bootstrap script.
-  # The auto-labeler reads the `node-role` K8s label set by Terraform on each node
-  # and creates node-role.kubernetes.io/<role>=  e.g. spark-node → node-role.kubernetes.io/spark-node
-  # sparkWorker/spark-worker removed — that was the static spot-fleet ASG's
-  # node-role, deleted along with it in favor of Karpenter. Karpenter's
-  # spark-node NodePool covers both spot and on-demand capacity under the
-  # same node-role label; spot-vs-on-demand is already distinguishable via
-  # Karpenter's own native karpenter.sh/capacity-type label if ever needed,
-  # no separate custom node-role required for that.
-  #
-  # Two always-on tiers (replacing the old single "gp" tier):
-  #   core: cluster/platform-control-plane-adjacent services — ArgoCD,
-  #     Traefik, CoreDNS, cert-manager, cloudflared, CSI controllers,
-  #     Karpenter's own controller, Spark Operator (all wired in Terraform,
-  #     not here — see compute-core-node.tf).
-  #   data: data/app-plane services — Postgres, Airflow, Gravitino, Redis,
-  #     kube-prometheus-stack, Spark History Server.
-  # Only core/data/spark are used by local chart templates
-  # (.Values.global.nodeSelector.x). Superset/StarRocks don't have entries
-  # here — they're external charts with their own top-level nodeSelector
-  # value, not something that reads our global.* convention; see the
-  # superset/starrocks blocks below instead (their fallback, while their own
-  # dedicated node groups are disabled, is the core tier).
+  # All four nodes are identical, so nothing is pinned: these stay empty maps
+  # (templates render `nodeSelector: {}`) and the scheduler spreads pods.
+  # To dedicate nodes later, label them and fill these in — local chart
+  # templates read .Values.global.nodeSelector.<tier>.
   nodeSelector:
-    core:
-      node-role.kubernetes.io/core-node: ""
-    data:
-      node-role.kubernetes.io/data-node: ""
-    spark:
-      node-role.kubernetes.io/spark-node: ""
-
+    core: {}
+    data: {}
+    spark: {}
 
   # --- Storage ---
-  storageClassName: "openebs-hostpath"
-  # Network-attached EBS (terraform-aws-k8s-ha: kubernetes_storage_class.ebs_gp3)
-  # — for the handful of things that must survive node replacement/Karpenter
-  # consolidation, unlike openebs-hostpath above which is tied to one node's
-  # local disk. Used by Prometheus/Thanos/Loki below, not the general default,
-  # since it costs real EBS $/GB-month vs. hostpath's free local disk.
-  storageClassNameEbs: "ebs-gp3"
-
-  # --- AWS Lakehouse S3 bucket (terraform-aws-k8s-ha: storage-s3-lakehouse.tf) ---
-  # The specific, named lakehouse bucket — global.s3 above is generic
-  # pathStyle/SSL connection settings shared by whatever S3 endpoint a given
-  # workload resolves to, not a bucket name itself. This cluster is
-  # destroyed and rebuilt per benchmark run (see issues.md), so anything
-  # that needs to survive a full teardown (Thanos's Prometheus history) has
-  # to live in this externally-managed bucket, not on any node-local
-  # OpenEBS-hostpath PV. Every other workload that touches this bucket gets
-  # credentials from the node's instance-profile role via IMDS
-  # (aws_iam_policy.lakehouse_s3, granted on the whole bucket) — Thanos is
-  # the one exception, see thanosS3RoleArn below.
-  awsLakehouse:
-    bucket: "k8s-ha-cluster-lakehouse-ap-south-1-419772658418"
-    region: "ap-south-1"
-
-  # --- IRSA S3 roles (terraform-aws-k8s-ha: observability-irsa.tf) ---
-  # Thanos and Loki don't use the blanket node-role/IMDS pattern above —
-  # each gets its own IAM role, trusted only by its specific K8s
-  # ServiceAccount (via the OIDC provider already set up for Karpenter's
-  # own IRSA), scoped to only the S3 paths that one workload needs. Role
-  # ARNs are deterministic (IAM ARNs have no random suffix, unlike S3
-  # bucket names), so — like awsLakehouse.bucket above — they're hardcoded
-  # here rather than injected from Terraform at deploy time.
-  thanosS3RoleArn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-thanos-s3-writer"
-  lokiS3RoleArn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-loki-s3-writer"
-  # Tempo: lakehouse bucket, tempo/ prefix (charts/monitoring/templates/tempo.yaml). The role
-  # exists only after terraform-aws-k8s-ha observability-irsa.tf is applied; until then Tempo
-  # starts but every block flush fails as Access Denied.
-  tempoS3RoleArn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-tempo-s3-writer"
-  # Spark is the third IRSA consumer, added for a different reason than the
-  # two above (which exist for least-privilege). Spark already had S3 access
-  # via the node role/IMDS and it worked for the JVM side — but Comet's
-  # native Rust reader runs its own credential chain, and that chain failed
-  # intermittently at benchmark START ("no providers in chain provided
-  # credentials"): 14 executors x N reader threads all making their first
-  # IMDS credential fetch simultaneously, hitting IMDS's per-instance rate
-  # limit. IRSA's token is a local file, so that cold-start burst has
-  # nothing to throttle. See terraform-aws-k8s-ha storage-s3-tpch-benchmark.tf.
-  sparkS3RoleArn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-spark-s3"
-
-  # --- Loki's own dedicated S3 bucket (terraform-aws-k8s-ha:
-  # observability-irsa.tf: aws_s3_bucket.loki_logs) — NOT a prefix inside
-  # awsLakehouse.bucket like Thanos gets. Loki's storage_config.aws S3
-  # client treats the whole configured bucket as its flat storage root; it
-  # has no bucket-internal prefix option the way Thanos's objstore config
-  # does, so sharing the lakehouse bucket would mean Loki owns the entire
-  # thing. A small dedicated bucket keeps it out of the lakehouse
-  # namespace instead.
-  awsLoki:
-    bucket: "k8s-ha-cluster-loki-logs-ap-south-1-419772658418"
-    region: "ap-south-1"
+  # `local-storage` is created by rke2/bootstrap-platform.sh and is the
+  # cluster default. Its backend is STORAGE_BACKEND in rke2/cluster.env:
+  #   hostpath  OpenEBS Local PV Hostpath — a directory per PVC, no disk prep,
+  #             sizes not enforced
+  #   lvm       OpenEBS Local PV LVM (CSI local.csi.openebs.io) — a real
+  #             logical volume per PVC from the node's LVM volume group:
+  #             enforced sizes, ext4/xfs, snapshots, online expansion
+  # Every PVC in this chart names `local-storage`, so switching backends never
+  # touches this file. Either way: WaitForFirstConsumer, RWO only, and the
+  # volume is tied to its node — a pod with a PVC only reschedules onto the
+  # same node. Data that must survive a node loss is replicated at the
+  # application layer where it matters (2 Prometheus replicas, SeaweedFS
+  # replication 001); Postgres is a single instance (postgres block below).
+  storageClassName: "local-storage"
 
   # --- PostgreSQL Connection (shared by Airflow, Superset, Gravitino) ---
   # host is CNPG's primary read-write service ("<cluster-name>-rw"), not a
@@ -216,44 +167,26 @@ global:
     apiUri: "http://gravitino.default.svc.cluster.local:8090"
 
 # =============================================================================
-# PERSISTENCE — PV/PVC definitions
+# PERSISTENCE — PVCs that aren't owned by a StatefulSet
+# Dynamically provisioned on global.storageClassName (local-storage) — no static
+# PVs or node-pinned host paths. The Airflow DAGs PVC is gone: DAGs come from
+# the official chart's own git-sync sidecar (airflow.dags.gitSync below), so
+# nothing needs ReadWriteMany.
 # =============================================================================
 persistence:
   enabled: true
-  # postgres no longer has a static local-hostpath PV/PVC here — see
-  # postgres.persistence below (StatefulSet volumeClaimTemplates on ebs-gp3).
-  # minio removed entirely — replaced by S3 (lakehouse-s3 Secret).
-  # DAGs PVC is dynamically provisioned on efs-airflow-dags now (RWX) —
-  # only .size is still read (see charts/persistence/templates/volumes.yaml).
-  airflow:
-    size: 5Gi
-  # Scheduler/triggerer logs no longer need static PVs — they're on ebs-gp3
-  # via airflow.logs.persistence.storageClassName, dynamically provisioned
-  # by the official chart's own StatefulSet volumeClaimTemplates.
-  # Coupled to starrocks.starrocks.starrocksFESpec/BeSpec.nodeSelector below
-  # in the actual chart values — the PV's nodeAffinity must always match
-  # wherever the pod is actually scheduled, or the PVC never binds. Flip
-  # both together if you ever move StarRocks to its dedicated node group.
-  starrocksFe:
-    size: 10Gi
-    localPath: "/mnt/spark-nvme/starrocks-fe"
-    nodeSelector:
-      node-role.kubernetes.io/core-node: ""
-  starrocksBe:
-    size: 10Gi
-    localPath: "/mnt/spark-nvme/starrocks-be"
-    nodeSelector:
-      node-role.kubernetes.io/core-node: ""
+  # Only Redis is left here (StarRocks gets its volumes from the kube-starrocks
+  # chart's own storageSpec). Keep enabled in step with redis.enabled.
   redis:
+    enabled: false
     size: 8Gi
-    localPath: "/var/openebs/local/redis-data"
-    nodeSelector:
-      node-role.kubernetes.io/data-node: ""
 
 # =============================================================================
-# POSTGRES — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
-# CloudNativePG Cluster CR (charts/postgres/templates/cluster.yaml) on
-# ebs-gp3 (network-attached, survives node replacement/pod reschedule).
+# POSTGRES — CloudNativePG Cluster CR (charts/postgres/templates/cluster.yaml)
+# Single instance (no HA) on local-storage: one pod, one PVC pinned to the
+# node it first lands on. Losing that node means restoring the DB — see
+# rke2/README.md "Backups". To go HA later, raise replicas to 3: CNPG adds
+# streaming replicas and failover with no other change.
 # image MUST be a CNPG-published postgresql image, not the plain Docker Hub
 # `postgres` image — CNPG's initdb/instance-manager expects that image's
 # specific UID/filesystem layout. Using vanilla `postgres:16` fails every
@@ -262,10 +195,10 @@ persistence:
 # =============================================================================
 postgres:
   enabled: true
-  replicas: 3
+  replicas: 1
   image: "ghcr.io/cloudnative-pg/postgresql:16"
   persistence:
-    storageClassName: "ebs-gp3"
+    storageClassName: "local-storage"
     size: 10Gi
   resources:
     requests:
@@ -276,10 +209,12 @@ postgres:
       memory: "4Gi"
 
 # =============================================================================
-# REDIS — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
+# REDIS — only Superset used it (cache + Celery broker; Airflow runs the
+# LocalExecutor). Off while Superset is off; turn on together with
+# persistence.redis.enabled.
 # =============================================================================
 redis:
-  enabled: true
+  enabled: false
   replicas: 1
   image: "redis:7.2-alpine"
   resources:
@@ -289,10 +224,6 @@ redis:
     limits:
       cpu: "1000m"
       memory: "1Gi"
-
-# MinIO removed entirely — replaced by S3 (one "lakehouse" bucket with
-# prefixes instead of MinIO's separate warehouse/spark-logs/notebooks/
-# airflow/delta-tables buckets; S3 prefixes don't need explicit creation).
 
 # =============================================================================
 # APACHE AIRFLOW (external dependency)
@@ -308,6 +239,18 @@ airflow:
   # what the official chart expects for each of these three settings.
   fernetKeySecretName: "airflow-credentials"
   webserverSecretKeySecretName: "airflow-credentials"
+  # Airflow 3 API-server signing keys. Left unset, the chart generates them
+  # with randAlphaNum at render time — Argo CD re-renders on every new commit,
+  # so they'd rotate on each push (logging everyone out, briefly breaking the
+  # api-server <-> scheduler log fetch). Pre-created once by
+  # rke2/bootstrap-platform.sh instead (keys api-secret-key / jwt-secret).
+  apiSecretKeySecretName: "airflow-api-secrets"
+  jwtSecretName: "airflow-api-secrets"
+  # The chart's bundled Redis is a Celery broker; LocalExecutor never uses it.
+  # Off, which also stops its randomly generated password/broker-url Secrets
+  # from churning on every render.
+  redis:
+    enabled: false
   postgresql:
     enabled: false
   data:
@@ -348,21 +291,43 @@ airflow:
       repository: apache/airflow
       tag: "3.2.0"
   dags:
-    # Built-in gitSync disabled — replaced by airflow-git-sync sub-chart which
-    # uses the custom image (git-sync + mc) and writes to the shared PVC.
-    # Airflow reads DAGs from the PVC via persistence below.
+    # The official chart's git-sync sidecar in every component that parses or
+    # runs DAGs (dag-processor, scheduler, triggerer), each with its own local
+    # copy. Replaces main's airflow-git-sync subchart + RWX EFS PVC: no
+    # ReadWriteMany storage exists on this cluster (local-storage is RWO), and
+    # per-pod clones of a small DAG repo need none. The chart points
+    # [core] dags_folder at <mount>/repo/<subPath>, which LocalDagBundle
+    # below picks up.
     gitSync:
-      enabled: false
-    persistence:
       enabled: true
-      existingClaim: airflow-dags-shared-pvc
-      subPath: "repo/dags"
+      repo: "https://github.com/sp-202/airflow-dags.git"
+      branch: "main"
+      rev: HEAD
+      subPath: "dags"
+      period: 60s
+      resources:
+        requests:
+          cpu: "50m"
+          memory: "64Mi"
+        limits:
+          memory: "256Mi"
+    persistence:
+      enabled: false
   # Airflow 3.x: DAG processor is a separate component that parses DAGs.
   # LocalDagBundle reads from the same folder git-sync mounts to ($AIRFLOW_HOME/dags).
+  statsd:
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
   dagProcessor:
     enabled: true
-    nodeSelector:
-      node-role.kubernetes.io/data-node: ""
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
     dagBundleConfigList:
       - name: airflow-dags
         classpath: "airflow.dag_processing.bundles.local.LocalDagBundle"
@@ -370,13 +335,28 @@ airflow:
   # Airflow 3.x's actual UI/API-serving Deployment — this is what
   # ingress.yaml's {{ .Release.Name }}-api-server backend actually points
   # at, not webserver below (kept for chart compat, may be otherwise unused
-  # in 3.x — not touched further here, out of scope for the node-tier split).
+  # in 3.x).
   apiServer:
-    nodeSelector:
-      node-role.kubernetes.io/data-node: ""
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "768Mi"
+      limits:
+        cpu: "1500m"
+        memory: "1536Mi"
   triggerer:
-    nodeSelector:
-      node-role.kubernetes.io/data-node: ""
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "384Mi"
+      limits:
+        cpu: "1000m"
+        memory: "768Mi"
+    # StatefulSet with its own RWO log volume.
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClassName: "local-storage"
   webserver:
     defaultUser:
       # This is the flag that actually disables the chart's own
@@ -394,8 +374,6 @@ airflow:
       # No password here — templates/airflow-db-migrate.yaml sources it from
       # the airflow-credentials Secret's admin-password key via env var.
     replicas: 1
-    nodeSelector:
-      node-role.kubernetes.io/data-node: ""
     resources:
       requests:
         cpu: "500m"
@@ -405,32 +383,39 @@ airflow:
         memory: "2Gi"
   scheduler:
     replicas: 1
-    nodeSelector:
-      node-role.kubernetes.io/data-node: ""
+    # LocalExecutor: tasks run inside this pod, so the limit is the task budget.
     resources:
       requests:
         cpu: "500m"
         memory: "1Gi"
       limits:
-        cpu: "2000m"
+        cpu: "4000m"
         memory: "2Gi"
+  # Task logs without ReadWriteMany. On main the logs PVC was RWX on EFS
+  # because scheduler/api-server/triggerer/dag-processor shared one volume.
+  # Here logs.persistence stays off, which makes the chart run the
+  # LocalExecutor scheduler as a StatefulSet with its own RWO log volume
+  # (sized by workers.persistence below, the chart's switch for that). Tasks
+  # write there and the api-server reads live logs from the scheduler's log
+  # server (:8793). Finished task logs are also uploaded to SeaweedFS
+  # (config.logging below), so they outlive that volume.
   logs:
     persistence:
+      enabled: false
+  workers:
+    persistence:
       enabled: true
-      # The official chart's logs PVC uses accessMode ReadWriteMany by
-      # default (scheduler/api-server/triggerer/dag-processor all need to
-      # read/write the SAME log files concurrently, and they can land on
-      # different data-nodes) — ebs-gp3 is EBS block storage, which cannot
-      # satisfy RWX at all (EBS only supports RWO/ReadOnlyMany). Needs an
-      # actual network filesystem — reusing the same EFS storage class
-      # provisioned for airflow-dags. EFS-backed mounts were intermittently
-      # timing out in this environment (access-point mounts REQUIRE TLS,
-      # and that handshake kept exceeding the CSI driver's default 15s
-      # budget) — fixed at the source in eks-addons.tf
-      # (aws_eks_addon.efs_csi_driver's node.efsUtilsConfOverrides), not by
-      # avoiding EFS.
-      storageClassName: efs-airflow-dags
       size: 10Gi
+      storageClassName: "local-storage"
+  # AIRFLOW_CONN_SEAWEEDFS_S3: an Airflow "aws" connection pointing at
+  # SeaweedFS (endpoint_url, path-style, static keys), stored as a JSON
+  # connection by rke2/bootstrap-platform.sh in the airflow-s3-connection
+  # Secret. Used by remote logging below, and usable from DAGs as
+  # aws_conn_id="seaweedfs_s3".
+  secret:
+    - envName: AIRFLOW_CONN_SEAWEEDFS_S3
+      secretName: airflow-s3-connection
+      secretKey: connection
 
   config:
     core:
@@ -452,31 +437,14 @@ airflow:
       auth_manager: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
     database:
       sql_alchemy_pool_size: "15"
-
-# =============================================================================
-# AIRFLOW GIT-SYNC (custom sub-chart)
-# Uses subhodeep2022/k8s-git-sync:v2-prod, writing the repo to
-# airflow-dags-shared-pvc at /dags/repo (symlink) — its only job now. A
-# separate s3-sync sidecar (official amazon/aws-cli image, IAM-role auth)
-# mirrors /dags/repo to S3, replacing the image's own mc-based exechook.
-# =============================================================================
-airflow-git-sync:
-  enabled: true
-  image: "subhodeep2022/k8s-git-sync:v2-prod"
-  repo: "https://github.com/sp-202/airflow-dags.git"
-  branch: "main"
-  period: "60s"
-  resources:
-    requests:
-      cpu: "100m"
-      memory: "128Mi"
-    limits:
-      cpu: "250m"
-      memory: "256Mi"
+    logging:
+      remote_logging: "True"
+      remote_base_log_folder: "s3://lakehouse/airflow-logs"
+      remote_log_conn_id: "seaweedfs_s3"
 
 # =============================================================================
 # APACHE GRAVITINO 1.2.0 — Unified Metadata Lake + Iceberg REST Catalog (IRC)
-# GP node — moderate CPU/memory; IRC handles Spark & StarRocks catalog traffic.
+# Moderate CPU/memory; IRC handles Spark & StarRocks catalog traffic.
 #
 # Architecture:
 #   Port 8090 → Main REST API + Web UI v2 (metalake, catalog, table management)
@@ -496,23 +464,18 @@ gravitino:
   image:
     repository: apache/gravitino
     tag: "1.3.0"
-  # Matches .Values.global.nodeSelector.data used elsewhere — this chart's
-  # values.yaml is separate (external dependency), so it's repeated literally
-  # rather than templated (values.yaml itself is plain data, not Go-templated).
-  nodeSelector:
-    node-role.kubernetes.io/data-node: ""
   resources:
     requests:
-      cpu: "500m"
+      cpu: "250m"
       memory: "1Gi"
     limits:
       cpu: "2000m"
-      memory: "4Gi"
+      memory: "2560Mi"
   # entity.jdbcPassword is NOT set here — the official chart renders it as
   # plaintext into a ConfigMap (SKIP_CONFIG_REWRITE=true disables the
   # env-var-override mechanism our old custom chart relied on), so it can't
   # use a Secret reference at all. The real value is injected by
-  # post-cluster-bootstrap.sh as an ArgoCD Application-level Helm parameter
+  # rke2/bootstrap-platform.sh as an ArgoCD Application-level Helm parameter
   # (gravitino.entity.jdbcPassword) instead — never touches this file/git.
   entity:
     jdbcUrl: "jdbc:postgresql://postgres-rw.default.svc.cluster.local:5432/gravitino?currentSchema=public"
@@ -532,34 +495,35 @@ gravitino:
       uri: "http://localhost:8090"
       metalake: "enterprise_metalake"
     ioImpl: "org.apache.iceberg.aws.s3.S3FileIO"
-    # No s3.accessKeyId/secretAccessKey/endpoint/pathStyleAccess — omitting
-    # them makes Iceberg's S3FileIO fall back to the AWS SDK's default
-    # credential chain (the node's IAM role) and real S3's default
-    # virtual-hosted-style endpoint. Only region needs to be explicit.
-    s3:
-      region: "us-east-1"
+    # No icebergRest.s3 block, deliberately: the chart would render the
+    # access/secret key into gravitino.conf (a ConfigMap — no Secret
+    # reference possible). In dynamic-config-provider mode the IRC opens
+    # S3FileIO with the catalog's own s3-* properties, which
+    # templates/gravitino-init.yaml registers from the lakehouse-s3 Secret
+    # (endpoint, region, path-style, keys) — so credentials stay in that
+    # Secret only.
   # icebergCatalog is this platform's own key (read by templates/gravitino-init.yaml
   # and templates/gravitino-schema-init.yaml), not part of the official chart's
-  # schema — the catalog's own JDBC backend DB, name/user are safe as plain
-  # values; warehouse (real S3 bucket path) and password are both injected via
-  # ArgoCD helm.parameters at deploy time (bucket name is only known after
-  # `terraform apply`, so it can't be hardcoded here either).
+  # schema — the catalog's own JDBC backend DB, name/user and warehouse are
+  # plain values; the DB password comes from the gravitino-db-role Secret and
+  # the S3 keys from lakehouse-s3 (gravitino-init.yaml).
   icebergCatalog:
+    warehouse: "s3://lakehouse/iceberg/"
     db:
       name: "iceberg_catalog"
       user: "gravitino"
 
 # =============================================================================
-# SPARK HISTORY SERVER — Spark node (i4g.8xlarge: 32 vCPU / 256 GB)
-# Light read workload; runs on spark node so it can access local NVMe event logs
+# SPARK HISTORY SERVER — reads event logs from SeaweedFS
 # =============================================================================
 spark-history-server:
   enabled: true
   replicas: 1
-  daemonMemory: "3g"
-  # Where the TPC-H jobs write spark.eventLog.dir (examples/spark-jobs/*.yaml). Unset, it
-  # falls back to s3a://<lakehouse bucket from the lakehouse-s3 Secret>/spark-events/.
-  logDirectory: "s3a://tpc-419772658418/spark-event-logs/"
+  daemonMemory: "1g"
+  # Where jobs write spark.eventLog.dir (examples/spark-jobs/rke2-iceberg-smoke-test.yaml).
+  # rke2/bootstrap-platform.sh puts a marker object under it: the history
+  # server refuses to start on a log directory that does not exist yet.
+  logDirectory: "s3a://lakehouse/spark-events/"
   retainedApplications: 2000
   storeSizeLimit: "20Gi"
   # The history server rebuilds each app's UI by replaying its event log under ITS OWN
@@ -571,17 +535,20 @@ spark-history-server:
     retainedTasks: 100000
     retainedDeadExecutors: 20
     retainedExecutions: 1000
+  # Heap 1g + disk-backed KV store (storeSizeLimit): enough for a few hundred
+  # retained apps on 16 GB nodes.
   resources:
     requests:
-      cpu: "500m"
-      memory: "3Gi"
+      cpu: "250m"
+      memory: "1536Mi"
     limits:
       cpu: "2000m"
-      memory: "5Gi"
+      memory: "2Gi"
 
 # =============================================================================
-# SPARK CONNECT SERVER — Spark node (Karpenter-managed, c7gd/m7gd/r7gd)
-# Driver and executors both land on Karpenter's spark-node NodePool.
+# SPARK CONNECT SERVER — OFF by default; code kept for manual use (set enabled
+# and ingress.spark-connect-server.enabled together). Its 8-16Gi driver would
+# not fit beside the rest on 16 GB nodes — shrink resources before enabling.
 # =============================================================================
 spark-connect-server:
   enabled: false
@@ -597,18 +564,40 @@ spark-connect-server:
     minExecutors: 2
     maxExecutors: 8
   executor:
-    # Executor node targeting is handled by executor-pod-template-cm.yaml's
-    # nodeAffinity (single spark-node pool now) rather than nodeSelector here.
+    # Host directory for shuffle/spill, created on every node by
+    # rke2/scripts/prep-node.sh — point it at the fastest disk (bind-mount or
+    # symlink /mnt/spark-nvme there). The name is kept from main so the job
+    # manifests, Alloy and dashboards stay the same.
     localDir: "/mnt/spark-nvme"
     hostPath: "/mnt/spark-nvme/spark-shuffle"
 
 # =============================================================================
-# KUBE-STARROCKS (external dependency)
+# KUBE-STARROCKS (external dependency) — dedicated node
 # =============================================================================
+# StarRocks owns one whole node (STARROCKS_NODE in rke2/cluster.env,
+# default node-04). install-cluster.sh labels it
+# node-role.kubernetes.io/starrocks= and taints it dedicated=starrocks:NoSchedule,
+# so FE/BE land only there and nothing else does (DaemonSets aside).
+#
+# Sizing for a 16 GB / 20-core node with 2 GB held back for the OS
+# (kubelet system/kube-reserved): ~13.6 Gi allocatable.
+#   FE  3 Gi req / 4 Gi limit, JVM -Xmx3g   (chart default is -Xmx8192m — would
+#                                            be OOM-killed under a 4 Gi limit)
+#   BE  7 Gi req / 8.5 Gi limit, mem_limit 7G
+#   leaves ~2 Gi for node DaemonSets and page cache headroom.
+# Storage: FE meta + logs and BE data + logs on local-storage PVCs on that
+# node (main had no storageSpec at all: emptyDir, data lost on restart).
+#
+# Query from the LAN: mysql -h <any-node-ip> -P 30930 -uroot
 starrocks:
-  enabled: false
+  enabled: true
   # kube-starrocks is itself an umbrella with two subcharts: operator + starrocks.
   # FE/BE specs live under the "starrocks" subchart key, NOT under starrocksCluster.
+  operator:
+    starrocksOperator:
+      resources:
+        requests: { cpu: 100m, memory: 256Mi }
+        limits: { memory: 512Mi }
   starrocks:
     starrocksCluster:
       name: starrocks-cluster
@@ -622,18 +611,13 @@ starrocks:
       # false as falsy and emits empty string → null, failing CRD boolean validation.
       # StarRocks 3.3 ubuntu images support non-root (UID 1000).
       runAsNonRoot: true
-      # Defaults to the GP node — matches where its PV is currently pinned
-      # (persistence.starrocksFe.nodeSelector below). To actually move FE to
-      # the dedicated starrocks-node (terraform-aws-k8s-ha's
-      # compute-starrocks.tf, enable_starrocks_nodegroup): flip BOTH this
-      # value AND persistence.starrocksFe.nodeSelector together, or the PVC
-      # won't bind (nodeAffinity would point at a different node than the
-      # pod is scheduled on). Manual, not automatic — see conversation
-      # history for why an ArgoCD helm.parameters toggle doesn't work
-      # cleanly here (nodeSelector is a map; overriding one key adds an AND
-      # condition instead of replacing it).
       nodeSelector:
-        node-role.kubernetes.io/core-node: ""
+        node-role.kubernetes.io/starrocks: ""
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: starrocks
+          effect: NoSchedule
       service:
         type: NodePort
         ports:
@@ -642,35 +626,66 @@ starrocks:
             nodePort: 30930
       resources:
         requests:
-          cpu: "500m"
-          memory: "2Gi"
+          cpu: "2"
+          memory: "3Gi"
         limits:
-          cpu: "2000m"
+          cpu: "4"
           memory: "4Gi"
+      storageSpec:
+        name: fe
+        storageClassName: "local-storage"
+        storageSize: 10Gi
+        logStorageSize: 5Gi
+      # Chart default + -Xmx3072m instead of -Xmx8192m.
+      config: |
+        LOG_DIR = ${STARROCKS_HOME}/log
+        DATE = "$(date +%Y%m%d-%H%M%S)"
+        JAVA_OPTS="-Dlog4j2.formatMsgNoLookups=true -Xmx3072m -XX:+UseG1GC -Xlog:gc*:${LOG_DIR}/fe.gc.log.$DATE:time"
+        http_port = 8030
+        rpc_port = 9020
+        query_port = 9030
+        edit_log_port = 9010
+        mysql_service_nio_enabled = true
+        sys_log_level = INFO
     starrocksBeSpec:
       image:
         repository: starrocks/be-ubuntu
         tag: "3.3-latest"
       replicas: 1
       runAsNonRoot: true
-      # Same coupling as starrocksFESpec above — flip together with
-      # persistence.starrocksBe.nodeSelector.
       nodeSelector:
-        node-role.kubernetes.io/core-node: ""
+        node-role.kubernetes.io/starrocks: ""
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: starrocks
+          effect: NoSchedule
       resources:
         requests:
-          cpu: "500m"
-          memory: "2Gi"
+          cpu: "8"
+          memory: "7Gi"
         limits:
-          cpu: "2000m"
-          memory: "4Gi"
-      storageVolumes:
-        - name: be-storage
-          storageClassName: "openebs-hostpath"
-          storageSize: 20Gi
+          cpu: "16"
+          memory: "8704Mi"
+      storageSpec:
+        name: be
+        storageClassName: "local-storage"
+        storageSize: 100Gi
+        logStorageSize: 10Gi
+      # Chart default + explicit mem_limit below the container limit (BE would
+      # otherwise size itself from the host's 16 GB).
+      config: |
+        be_port = 9060
+        webserver_port = 8040
+        heartbeat_service_port = 9050
+        brpc_port = 8060
+        sys_log_level = INFO
+        default_rowset_type = beta
+        mem_limit = 7G
 
 # =============================================================================
-# JUPYTERHUB — GP node (im4gn.4xlarge: 16 vCPU / 64 GB)
+# JUPYTERHUB — OFF by default; code kept for manual use (set enabled and
+# ingress.jupyterhub.enabled together; it talks to Spark Connect).
 # =============================================================================
 jupyterhub:
   enabled: false
@@ -707,6 +722,15 @@ ingress:
     enabled: false
   spark-connect-server:
     enabled: false
+  # spark-history.<domain> — keep in step with spark-history-server.enabled
+  spark-history-server:
+    enabled: true
+  # victoriametrics.<domain>/vmui — keep in step with iiot.victoriametrics.enabled
+  victoriametrics:
+    enabled: true
+  # starrocks.<domain> — FE web UI (8030); keep in step with starrocks.enabled
+  starrocks:
+    enabled: true
 
 # =============================================================================
 # SPARK OPERATOR (external dependency)
@@ -714,12 +738,7 @@ ingress:
 spark-operator:
   enabled: true
   fullnameOverride: "spark-operator"
-  # Top-level nodeSelector is a no-op here — the chart's controller
-  # Deployment actually reads .Values.controller.nodeSelector (confirmed by
-  # inspecting templates/controller/deployment.yaml), not a top-level key.
   controller:
-    nodeSelector:
-      node-role.kubernetes.io/core-node: ""
     livenessProbe:
       timeoutSeconds: 10
       failureThreshold: 20
@@ -730,8 +749,7 @@ spark-operator:
       initialDelaySeconds: 30
     # Ran BestEffort by default (confirmed live: {} resources on the real
     # Deployment) — same CPU-starvation class already root-caused and
-    # fixed for cloudnative-pg and the EFS CSI driver node plugin this
-    # session. This one is worse than most: the chart's own values.yaml
+    # fixed for cloudnative-pg. This one is worse than most: the chart's own values.yaml
     # comment (spark-operator/values.yaml ~line 200) explicitly warns
     # "each job submission will spawn a JVM within the controller pods
     # using java -Xmx128m. Kubernetes may kill these Java processes at
@@ -740,7 +758,7 @@ spark-operator:
     # BestEffort that spawned JVM has zero guaranteed memory floor, and
     # this is a single shared controller submitting every SparkApplication
     # cluster-wide, not a per-job pod. CPU request only (no limit — same
-    # CFS-throttling reasoning as cloudnative-pg/EFS CSI); memory gets
+    # CFS-throttling reasoning as cloudnative-pg); memory gets
     # both, since the chart's own docs identify memory pressure as the
     # actual failure mode here, and unlike CPU, a memory limit is the
     # correct tool for capping a runaway/leaking JVM rather than something
@@ -753,8 +771,6 @@ spark-operator:
         memory: "512Mi"
   webhook:
     enable: true
-    nodeSelector:
-      node-role.kubernetes.io/core-node: ""
     livenessProbe:
       timeoutSeconds: 10
       failureThreshold: 20
@@ -781,22 +797,16 @@ spark-operator:
   spark:
     jobNamespaces:
       - default
+    # No IRSA annotation: S3 credentials reach drivers/executors through
+    # `envFrom: secretRef: lakehouse-s3` in each SparkApplication's
+    # driver/executor spec (examples/spark-jobs/rke2-iceberg-smoke-test.yaml).
     serviceAccount:
       create: true
       name: "spark-operator-spark"
-      # This annotation is what makes the EKS pod-identity webhook project
-      # AWS_ROLE_ARN + AWS_WEB_IDENTITY_TOKEN_FILE and the token itself into
-      # every driver/executor pod. Without it, setting those env vars by
-      # hand in a SparkApplication does nothing useful — the token FILE
-      # wouldn't exist, so the provider resolves to nothing. Literal ARN,
-      # not .Values.global.sparkS3RoleArn: this block is raw data handed to
-      # the spark-operator subchart, not Go-templated. Keep in sync with
-      # global.sparkS3RoleArn above by hand.
-      annotations:
-        eks.amazonaws.com/role-arn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-spark-s3"
 
 # =============================================================================
-# SUPERSET (external dependency)
+# SUPERSET — OFF on this branch and not a Chart.yaml dependency (see the note
+# there). This block is inert until the dependency is re-added.
 # =============================================================================
 superset:
   enabled: false
@@ -805,14 +815,6 @@ superset:
     enabled: false
   redis:
     enabled: false
-  # Defaults to the GP node — safe when enable_superset_nodegroup is false
-  # (the default), since that's the only node this could possibly schedule
-  # on. post-cluster-bootstrap.sh overrides this to superset-node via an
-  # ArgoCD helm.parameters entry (same mechanism as Gravitino's password —
-  # see argocd-app.sh) ONLY when enable_superset_nodegroup=true, so it's
-  # automatically correct either way without hand-editing this file.
-  nodeSelector:
-    node-role.kubernetes.io/core-node: ""
   image:
     repository: apachesuperset.docker.scarf.sh/apache/superset
     tag: "3.1.0"
@@ -971,24 +973,10 @@ superset:
         memory: "2Gi"
 
 # =============================================================================
-# METRICS SERVER (external dependency - required for Headlamp)
+# METRICS SERVER — not deployed by this chart: RKE2 ships rke2-metrics-server
+# (kube-system) by default, and a second copy would fight it over the
+# v1beta1.metrics.k8s.io APIService.
 # =============================================================================
-metrics-server:
-  enabled: true
-  fullnameOverride: "metrics-server"
-  nodeSelector:
-    node-role.kubernetes.io/core-node: ""
-  args:
-    - --kubelet-insecure-tls
-    - --kubelet-preferred-address-types=InternalIP
-  livenessProbe:
-    timeoutSeconds: 10
-    failureThreshold: 20
-    initialDelaySeconds: 60
-  readinessProbe:
-    timeoutSeconds: 10
-    failureThreshold: 20
-    initialDelaySeconds: 30
 
 # =============================================================================
 # CERT-MANAGER (external dependency)
@@ -1005,8 +993,6 @@ cert-manager:
   fullnameOverride: "cert-manager"
   crds:
     enabled: true
-  nodeSelector:
-    node-role.kubernetes.io/core-node: ""
   resources:
     requests:
       cpu: "50m"
@@ -1015,8 +1001,6 @@ cert-manager:
       cpu: "200m"
       memory: "256Mi"
   webhook:
-    nodeSelector:
-      node-role.kubernetes.io/core-node: ""
     resources:
       requests:
         cpu: "50m"
@@ -1025,8 +1009,6 @@ cert-manager:
         cpu: "200m"
         memory: "256Mi"
   cainjector:
-    nodeSelector:
-      node-role.kubernetes.io/core-node: ""
     resources:
       requests:
         cpu: "50m"
@@ -1042,16 +1024,13 @@ kube-prometheus-stack:
   enabled: true
   # Drops the "big-data-platform-" prefix (matches airflow/redis/postgres) —
   # also replaces the cryptic auto-truncated "kube-pro" name (Helm's own
-  # 63-char fullname truncation, since "big-data-platform-kube-prometheus-
-  # stack-operator" was too long) with the real chart name. Verified via
-  # `helm template` that the prometheus Service becomes
-  # "kube-prometheus-stack-prometheus" — updated the ingress backend
-  # (charts/ingress/templates/ingress.yaml) to match, same fix pattern as
-  # the airflow ingress bug.
+  # 63-char fullname truncation) with the real chart name. The prometheus
+  # Service becomes "kube-prometheus-stack-prometheus" (charts/ingress).
   fullnameOverride: "kube-prometheus-stack"
   prometheusOperator:
-    nodeSelector:
-      node-role.kubernetes.io/data-node: ""
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { memory: 256Mi }
     admissionWebhooks:
       # Without this, the chart renders its own admission-create/-patch Jobs
       # (helm.sh/hook annotations, meaningless to ArgoCD's `helm template`
@@ -1066,8 +1045,6 @@ kube-prometheus-stack:
   grafana:
     enabled: true
     fullnameOverride: "grafana"
-    nodeSelector:
-      node-role.kubernetes.io/data-node: ""
     admin:
       existingSecret: "grafana-credentials"
       userKey: admin-user
@@ -1082,435 +1059,129 @@ kube-prometheus-stack:
         folder: /tmp/dashboards
         searchNamespace: ALL
       datasources:
-        # Pinned so Tempo's trace-to-metrics links below can name it; dashboards use ${ds}.
+        # Pinned so dashboards and links can name it; dashboards use ${ds}.
         uid: prometheus
-        # Exemplars on the Prometheus datasource carry trace_id (spanmetrics); this makes the
-        # exemplar dots in Grafana link to the trace in Tempo.
-        exemplarTraceIdDestinations:
-          datasourceUid: tempo
-          traceIdLabelName: trace_id
     resources:
       requests:
-        cpu: "200m"
+        cpu: "100m"
         memory: "256Mi"
       limits:
         cpu: "500m"
         memory: "512Mi"
-    # Thanos Query merges this same Prometheus's live data with historical S3
-    # data (see charts/thanos) into one endpoint — point Grafana at it too so
-    # dashboards keep working across the retention cutoff below without
-    # switching datasources.
+    # VictoriaMetrics (charts/iiot): the live DCS time series, 7-day retention,
+    # Prometheus-compatible query API (PromQL/MetricsQL). Metric names follow
+    # Telegraf's <measurement>_<field>, e.g. dcs_value{topic="dcs/..."}.
+    # (main's Thanos, Tempo and Loki datasources are gone with those
+    # components — see the alloy/loki-stack/thanos/monitoring.tempo blocks.)
     additionalDataSources:
-      - name: Thanos
+      - name: VictoriaMetrics
+        uid: victoriametrics
         type: prometheus
         access: proxy
-        url: http://thanos-query.default.svc.cluster.local:9090
-        isDefault: false
-      # Comet's per-operator traces (charts/monitoring/templates/tempo.yaml). Links out:
-      #   * Logs for this span -> Loki lines carrying this trace_id: native stderr
-      #     (`trace_id=<hex>`) and JVM JSON (`"trace_id":"<hex>"` in contextMap).
-      #   * Metrics -> Hubble/Cilium for the span's pod over the span's time window. Hubble
-      #     cannot carry our trace_id: Cilium 1.19 extracts trace context only from L7 HTTP
-      #     `traceparent` headers (pkg/hubble/parser/seven/tracing.go), and Comet's traffic is
-      #     shuffle RPC, TLS to S3 and OTLP. So the join is pod + time, via the span's
-      #     k8s.pod.name resource attribute (set in the Spark job's OTEL_RESOURCE_ATTRIBUTES)
-      #     mapped onto Hubble's source_pod label.
-      - name: Tempo
-        uid: tempo
-        type: tempo
-        access: proxy
-        url: http://tempo.default.svc.cluster.local:3200
+        url: http://victoria-metrics.default.svc.cluster.local:8428
         isDefault: false
         jsonData:
-          tracesToLogsV2:
-            datasourceUid: loki
-            filterByTraceID: true
-            spanStartTimeShift: "-5m"
-            spanEndTimeShift: "5m"
-          tracesToMetrics:
-            datasourceUid: prometheus
-            spanStartTimeShift: "-2m"
-            spanEndTimeShift: "2m"
-            tags:
-              - key: k8s.pod.name
-                value: source_pod
-            queries:
-              - name: Hubble drops from this pod, by reason
-                query: sum by (reason) (rate(hubble_drop_total{$$__tags}[1m]))
-              - name: TCP flags from this pod (RST = resets)
-                query: sum by (flag) (rate(hubble_tcp_flags_total{$$__tags}[1m]))
-              # Same two as the local stack (datafusion-comet-geo dev/otel-test-env), checked
-              # there against Prometheus. Span variables, not $$__tags: $$__tags would add
-              # source_pod to these and stage_id to the Hubble ones, matching nothing.
-              # Counter value, not rate(): a stage shorter than the export + scrape interval
-              # is born with its final value and rate() sees no increase.
-              - name: Native seconds in this span's stage (total, all executors)
-                query: sum by (stage_id) (max_over_time(comet_jni_execute_plan_ns_total{stage_id="$${__span.tags.stage_id}"}[5m])) / 1e9
-              - name: p95 duration of this operator type
-                query: histogram_quantile(0.95, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{span_name="$${__span.name}"}[5m])))
-          nodeGraph:
-            enabled: true
+          timeInterval: 10s
   alertmanager:
     alertmanagerSpec:
-      nodeSelector:
-        node-role.kubernetes.io/data-node: ""
+      resources:
+        requests: { cpu: 10m, memory: 64Mi }
+        limits: { memory: 128Mi }
   prometheus:
-    # IRSA — Thanos sidecar runs as a container inside this same Prometheus
-    # pod, so it inherits whatever ServiceAccount the pod uses. The chart
-    # auto-creates this SA and already wires it into the Prometheus CR's
-    # serviceAccountName; this annotation is the only thing needed for the
-    # EKS pod-identity webhook to inject AWS_ROLE_ARN/
-    # AWS_WEB_IDENTITY_TOKEN_FILE, which the sidecar's AWS SDK picks up
-    # automatically — no access/secret keys anywhere in the objstore config.
-    serviceAccount:
-      annotations:
-        # Literal, not .Values.global.thanosS3RoleArn — raw data handed to
-        # the subchart, not a Go template. Keep in sync with global.thanosS3RoleArn
-        # above by hand.
-        eks.amazonaws.com/role-arn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-thanos-s3-writer"
     prometheusSpec:
-      # 2 independent replicas, each with its own StatefulSet-provisioned
-      # ebs-gp3 PVC (storageSpec below) and its own Thanos sidecar — no
-      # shared state, no ring, just two Prometheuses scraping the same
-      # targets so one dying doesn't drop metrics collection. Automatically
-      # gets a distinguishing "prometheus_replica" external label from
-      # prometheus-operator (spec.replicaExternalLabelName's default) —
-      # that's what charts/thanos's --query.replica-label flag uses to
-      # deduplicate the two replicas' otherwise-identical series back down
-      # to one, instead of Grafana showing everything doubled.
-      replicas: 2
-      # Accept pushes on /api/v1/write. Alloy (top-level `alloy:` block) writes Comet's OTLP
-      # metrics and its own delivery metrics to BOTH replicas by pod DNS name
-      # (prometheus-kube-prometheus-stack-prometheus-{0,1}.prometheus-operated), so each
-      # replica holds every sample and Thanos dedup on prometheus_replica still holds.
-      enableRemoteWriteReceiver: true
-      # Keep exemplars: Alloy's spanmetrics attach trace_id exemplars to the per-operator
-      # duration histograms (config.alloy section 5) and remote-writes them here; without this
-      # flag Prometheus accepts the samples and silently discards the exemplars.
-      enableFeatures:
-        - exemplar-storage
-      # "hard": with exactly 2 data-nodes (data_node_count, a fixed count —
-      # not a min/max range), this guarantees one replica per node instead
-      # of merely preferring it — the whole point of doing this is
-      # surviving a single node loss, which "soft" doesn't actually
-      # guarantee. Tradeoff: if a data-node is ever down and not yet
-      # replaced, the second replica stays Pending rather than doubling up
-      # on the remaining node — accepted, since a doubled-up pair defeats
-      # the purpose being solved here anyway.
-      podAntiAffinity: "hard"
+      # One replica, 7 days on its local volume. main ran 2 replicas + Thanos
+      # (S3 history) because its cluster was torn down after every run; this one
+      # is persistent, and on 16 GB nodes a second Prometheus plus the Thanos
+      # query/store/compactor trio cost ~4 Gi for little gain. Losing the node
+      # holding the PVC loses cluster-metrics history — plant data lives in
+      # VictoriaMetrics/Kafka, not here.
+      replicas: 1
       serviceMonitorSelectorNilUsesHelmValues: false
       podMonitorSelectorNilUsesHelmValues: false
-      nodeSelector:
-        node-role.kubernetes.io/data-node: ""
-      # 2Gi/8Gi (was 1Gi/4Gi): Hubble metrics now carry pod and namespace
-      # labels, Spark executor metrics are scraped for the first time, and
-      # Loki, promtail, Karpenter, node-local-dns and the EKS control plane
-      # are new targets: more series, and a head block that has to fit.
       resources:
         requests:
-          cpu: "500m"
-          memory: "2Gi"
+          cpu: "250m"
+          memory: "1536Mi"
         limits:
           cpu: "2000m"
-          memory: "8Gi"
-      # Periodic head backup — so a cluster shorter than ~3 h never loses its
-      # metrics again (29 Sep: a 2 h cluster, no sealed block, nothing in
-      # Thanos, and the EBS volumes deleted with the cluster).
-      #
-      # The Thanos sidecar ships only SEALED 2 h blocks; the operator pins
-      # block duration to 2 h when Thanos is on, and the head is sealed only
-      # once it spans ~3 h. This container, every INTERVAL (900 s):
-      #   1. POST /api/v1/admin/tsdb/snapshot?skip_head=false (admin API on)
-      #   2. uploads only the snapshot's HEAD block(s) — any block dir not
-      #      already persisted in /prometheus; sealed blocks are Thanos's job
-      #   3. to s3://<lakehouse>/thanos/periodic-snapshots/<pod>/<UTC ts>/<ULID>/
-      #   4. keeps the newest 2 per replica, deletes the local snapshot
-      # and once more on SIGTERM (pod shutdown, e.g. cluster teardown).
-      #
-      # Under thanos/ because the pod's IRSA role (thanos-s3-writer) is scoped
-      # to thanos/*; Thanos itself only reads ULID dirs directly under
-      # thanos/, so periodic-snapshots/ is ignored — no overlapping blocks for
-      # the compactor. To restore after a lost cluster, copy the newest
-      #   thanos/periodic-snapshots/<pod>/<ts>/<ULID>/  ->  thanos/<ULID>/
-      # (one replica is enough) and thanos-store picks it up.
-      #
-      # Runs as the pod's user (1000, fsGroup 2000), so it can remove the
-      # snapshots Prometheus wrote. No curl dependency: the admin call uses
-      # bash's /dev/tcp. Volume name/subPath are prometheus-operator's
-      # (prometheus-<CR name>-db, subPath prometheus-db).
-      containers:
-        - name: tsdb-head-backup
-          image: amazon/aws-cli:2.37.4
-          command: ["/bin/bash", "-c"]
-          args:
-            - |
-              set -u
-              DB=/prometheus
-              DEST="s3://${BUCKET}/thanos/periodic-snapshots/${POD_NAME}"
-              snap() {
-                exec 3<>/dev/tcp/127.0.0.1/9090 || { echo "prometheus not reachable"; return 1; }
-                printf 'POST /api/v1/admin/tsdb/snapshot?skip_head=false HTTP/1.0\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n' >&3
-                local resp name ts n=0 b u
-                resp=$(cat <&3); exec 3<&-
-                name=$(printf '%s' "$resp" | sed -n 's/.*"name": *"\([^"]*\)".*/\1/p')
-                [ -n "$name" ] || { echo "snapshot failed: ${resp: -200}"; return 1; }
-                ts=$(date -u +%Y%m%dT%H%M%SZ)
-                for b in "$DB/snapshots/$name"/*/; do
-                  u=$(basename "$b")
-                  [ -f "$b/meta.json" ] || continue
-                  [ -d "$DB/$u" ] && continue
-                  aws s3 cp --recursive --only-show-errors "$b" "$DEST/$ts/$u/" && n=$((n+1))
-                done
-                rm -rf "$DB/snapshots/$name"
-                echo "$ts: uploaded $n head block(s) to $DEST/$ts/"
-                if [ "$n" -gt 0 ]; then
-                  aws s3 ls "$DEST/" | awk '{print $2}' | sort -r | awk 'NR>2' | while read -r old; do
-                    aws s3 rm --recursive --only-show-errors "$DEST/$old"
-                  done
-                fi
-              }
-              trap 'echo "SIGTERM: final snapshot"; snap; exit 0' TERM INT
-              sleep 120 & wait $!
-              while true; do
-                snap
-                sleep "${INTERVAL}" & wait $!
-              done
-          env:
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: BUCKET
-              value: "k8s-ha-cluster-lakehouse-ap-south-1-419772658418"
-            - name: AWS_REGION
-              value: "ap-south-1"
-            - name: INTERVAL
-              value: "900"
-            - name: HOME
-              value: /tmp
-          resources:
-            requests:
-              cpu: 10m
-              memory: 64Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
-          volumeMounts:
-            - name: prometheus-kube-prometheus-stack-prometheus-db
-              mountPath: /prometheus
-              subPath: prometheus-db
-      # Enables POST /api/v1/admin/tsdb/snapshot, which is the ONLY way to get
-      # the current head into S3 on demand. This matters because the cluster
-      # is destroyed ~10-20 min after a benchmark finishes, and the sidecar
-      # can only ship SEALED blocks: Prometheus seals its first one about 3h
-      # in and every 2h after, so a benchmark run plus teardown inside that
-      # window uploads absolutely nothing. Verified on this cluster —
-      # prometheus_tsdb_blocks_loaded 0, thanos.shipper.json "uploaded": null,
-      # 1.8h after start.
-      #
-      # Shortening the block duration is NOT an option here, which is worth
-      # recording so nobody burns time on it: prometheus-operator manages
-      # those two flags itself whenever spec.thanos is set and rejects any
-      # attempt to override them via additionalArgs, erroring the whole
-      # StatefulSet reconcile with
-      #
-      #   can't set arguments which are already managed by the operator:
-      #   storage.tsdb.min-block-duration,storage.tsdb.max-block-duration
-      #
-      # (confirmed live against operator v0.71.2, then reverted).
-      #
-      # PRE-TEARDOWN PROCEDURE — run before destroying the cluster:
-      #   P=prometheus-kube-prometheus-stack-prometheus-0
-      #   kubectl exec -n default $P -c prometheus -- \
-      #     wget -qO- --post-data='' \
-      #     'http://127.0.0.1:9090/api/v1/admin/tsdb/snapshot?skip_head=false'
-      #   # then move the snapshot's block dirs into the TSDB root so the
-      #   # sidecar's shipper sees them as ordinary blocks:
-      #   kubectl exec -n default $P -c prometheus -- sh -c \
-      #     'mv /prometheus/snapshots/*/[0-9A-Z]* /prometheus/'
-      #   # sidecar rescans every 30s; confirm before teardown:
-      #   aws s3 ls s3://<lakehouse>/thanos/ --recursive
-      #
-      # skip_head=false is the whole point — it materialises the in-memory
-      # head as a real block, which is exactly the data a benchmark run
-      # produces and would otherwise lose.
-      # EKS control-plane metrics (Kubernetes >= 1.28) through the API
-      # server's metrics.eks.amazonaws.com group. Paths, relabel and TLS are
-      # AWS's own documented scrape config ("Fetch control plane raw metrics
-      # in Prometheus format"). Needs the RBAC in charts/monitoring/templates/
-      # eks-control-plane-metrics-rbac.yaml. EKS control-plane LOGS stay in
-      # CloudWatch (/aws/eks/k8s-ha-cluster/cluster: api, audit,
-      # authenticator, controllerManager, scheduler).
-      additionalScrapeConfigs:
-        - job_name: eks-kube-scheduler
-          metrics_path: /apis/metrics.eks.amazonaws.com/v1/ksh/container/metrics
-          scheme: https
-          kubernetes_sd_configs:
-            - role: endpoints
-          tls_config:
-            ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-            insecure_skip_verify: true
-          bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
-          relabel_configs:
-            - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
-              action: keep
-              regex: default;kubernetes;https
-        - job_name: eks-kube-controller-manager
-          metrics_path: /apis/metrics.eks.amazonaws.com/v1/kcm/container/metrics
-          scheme: https
-          kubernetes_sd_configs:
-            - role: endpoints
-          tls_config:
-            ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-            insecure_skip_verify: true
-          bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
-          relabel_configs:
-            - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
-              action: keep
-              regex: default;kubernetes;https
+          memory: "3Gi"
+      # Enables POST /api/v1/admin/tsdb/snapshot (on-demand backups).
       enableAdminAPI: true
-      # Was emptyDir (no storageSpec at all) — every pod reschedule (Karpenter
-      # consolidation, node replacement, AMI rollout) wiped ALL metrics
-      # history. This is a staging/buffer layer, not long-term storage: sized
-      # for a handful of completed 2h TSDB blocks plus compaction working
-      # space, not multi-day retention — Thanos (below) owns everything
-      # beyond that, and is what survives a full Prometheus pod replacement
-      # or cluster teardown, since even EBS gets deleted with the cluster.
       storageSpec:
         volumeClaimTemplate:
           spec:
-            # Literal, not .Values.global.storageClassNameEbs — this block is
+            # Literal, not .Values.global.storageClassName — this block is
             # raw data handed to the kube-prometheus-stack subchart, not a
-            # Go template, so {{ }} would never render here. Keep in sync
-            # with global.storageClassNameEbs above by hand.
-            storageClassName: "ebs-gp3"
+            # Go template, so {{ }} would never render here.
+            storageClassName: "local-storage"
             accessModes: ["ReadWriteOnce"]
             resources:
               requests:
-                storage: 50Gi
-      # Still a staging buffer, NOT long-term history (Thanos + S3 own that),
-      # and still NOT shrinking the 2h TSDB block duration to match — see the
-      # thanos block below for the cost trade-off behind keeping 2h.
-      #
-      # Upstream recommends retention >= 3x the block duration (so >= 6h),
-      # which is where the previous 6h came from — it was the documented
-      # floor, not an arbitrary pick. 24h keeps that floor and adds margin.
-      #
-      # Widened 6h -> 24h. This is a safety margin against a SILENTLY BROKEN
-      # sidecar, not against upload lag, and 6h was too short for that job: a
-      # bad objstore config uploads nothing while looking perfectly healthy,
-      # and this cluster shipped exactly that bug (prefix nested inside the S3
-      # config block — compactor and store-gateway crash-looped, and the
-      # sidecar would have silently written nothing). Anything past the
-      # retention window when the mistake is found is gone permanently.
-      #
-      # Costs almost nothing here. Measured on this cluster: 5,030 samples/s
-      # over 156k head series, ~2 bytes/sample compressed => ~870 MB/day,
-      # against a 50Gi volume sitting at 0% used (85 MB after the first hour).
-      # 24h is under 2% of the disk; 6h saved ~650 MB and bought one working
-      # day less to notice a problem.
-      retention: 24h
+                storage: 40Gi
+      retention: 7d
+      # Size cap as a backstop: the oldest blocks go first if 7 days of series
+      # ever outgrow the volume.
+      retentionSize: 35GB
       externalLabels:
-        cluster: k8s-ha-cluster
-      # Triggers prometheus-operator to inject a Thanos sidecar container
-      # into this same Prometheus pod — uploads blocks to S3 and serves the
-      # live-data StoreAPI that Thanos Query (charts/thanos) reads from.
-      #
-      # Upload cadence is 2h. Asked periodically ("can we make it 10m?"), so
-      # the reasoning is recorded here.
-      #
-      # The sidecar ships only *immutable, completed* TSDB blocks. Prometheus
-      # seals one roughly every 2h (its head compacts once it spans 1.5x the
-      # block duration, so ~3h in, then every 2h after). The sidecar already
-      # rescans every 30s, so the latency is block PRODUCTION, not upload —
-      # a shorter scan interval would change nothing.
-      #
-      # What IS and ISN'T fixed here, precisely:
-      #
-      #   HARD requirement (thanos.io/tip/components/sidecar): min-block-
-      #   duration and max-block-duration must be EQUAL. That equality is
-      #   what disables Prometheus's internal compaction, "critical for data
-      #   consistency" — without it Prometheus rewrites blocks underneath
-      #   Thanos and the Compactor sees overlaps it cannot reconcile.
-      #
-      #   NOT fixed: the 2h value itself, which upstream only *recommends*.
-      #   min=max=10m would still satisfy the equality, so this is a cost
-      #   trade-off, not a prohibition.
-      #
-      # It is a bad trade at this scale. Each block carries a full index and
-      # meta.json regardless of how little data it holds, so 10m blocks mean
-      # ~12x the objects and ~12x the S3 PUTs for the same metrics, with a
-      # far worse index-to-data ratio, and Store Gateway memory grows with
-      # block COUNT because it holds an index header per block. It is also
-      # the exact opposite of the direction chosen for Loki's flush policy
-      # above, for the same reason: fewer, larger objects.
-      #
-      # If sub-2h durability is ever a hard requirement, the answer is Thanos
-      # Receive (Prometheus remote_write -> Receive, samples leave the pod in
-      # seconds and are replicated before any block exists), not shrinking
-      # blocks. That is a real component with its own StatefulSet, PVC and
-      # replication factor — deliberately not run here, because the 50Gi EBS
-      # PVC above already survives pod reschedule and node loss, which is the
-      # failure mode that actually occurs. Confirmed live: a restart replayed
-      # the full head from WAL with no gap.
-      thanos:
-        # Must match charts/thanos's own image tag below — Sidecar, Query,
-        # Store Gateway, and Compactor all speak the same gRPC StoreAPI, and
-        # mismatched versions across components risk protocol drift.
-        image: quay.io/thanos/thanos:v0.42.4
-        version: v0.42.4
-        objectStorageConfig:
-          # existingSecret, not secret — .secret would make this chart render
-          # its OWN separate objstore Secret from inline config; existingSecret
-          # instead points the sidecar at the one Secret charts/thanos already
-          # creates (thanos-objstore-secret), which Store Gateway and
-          # Compactor also mount — one objstore config, shared by all three.
-          existingSecret:
-            key: object-store.yaml
-            name: thanos-objstore-secret
-  # EKS runs etcd, the scheduler and the controller-manager off-cluster, and
-  # Cilium replaces kube-proxy: these four default scrapes have no targets
-  # here and would sit permanently down (and fire TargetDown). Scheduler and
-  # controller-manager metrics come through the EKS API instead
-  # (additionalScrapeConfigs above).
+        cluster: rke2-bigdata
+  # RKE2 control plane. Unlike EKS, etcd/scheduler/controller-manager run as
+  # static pods on the server nodes (labels component=<name>, namespace
+  # kube-system), so the chart's default scrapes work once RKE2 binds their
+  # metrics off localhost — rke2/scripts/install-rke2.sh sets
+  # etcd-expose-metrics and bind-address=0.0.0.0 for both, and
+  # kube-proxy-arg metrics-bind-address=0.0.0.0:10249. Scheduler and
+  # controller-manager serve HTTPS with a self-signed cert, hence
+  # insecureSkipVerify (auth is still Prometheus's ServiceAccount token).
   kubeEtcd:
-    enabled: false
+    enabled: true
+    service:
+      enabled: true
+      port: 2381
+      targetPort: 2381
+      selector:
+        component: etcd
+    serviceMonitor:
+      scheme: http
   kubeScheduler:
-    enabled: false
+    enabled: true
+    service:
+      enabled: true
+      port: 10259
+      targetPort: 10259
+      selector:
+        component: kube-scheduler
+    serviceMonitor:
+      https: true
+      insecureSkipVerify: true
   kubeControllerManager:
-    enabled: false
+    enabled: true
+    service:
+      enabled: true
+      port: 10257
+      targetPort: 10257
+      selector:
+        component: kube-controller-manager
+    serviceMonitor:
+      https: true
+      insecureSkipVerify: true
+  # RKE2 runs kube-proxy as a static pod (component=kube-proxy), not the
+  # k8s-app=kube-proxy DaemonSet the chart's default selector expects.
   kubeProxy:
-    enabled: false
+    enabled: true
+    service:
+      enabled: true
+      port: 10249
+      targetPort: 10249
+      selector:
+        component: kube-proxy
   prometheus-node-exporter:
     fullnameOverride: "node-exporter"
-    # The node-exporter DaemonSet still runs unchanged (same flags, ethtool included); only
-    # its scrape moved: Alloy scrapes it on each node and pushes (charts/monitoring/files/
-    # config.alloy, section 7), with the exact labels this ServiceMonitor produced, so a
-    # spark node's last samples survive Karpenter removing it. Off here so nothing is
-    # ingested twice. Note: nodeExporter.enabled must stay true -- it also gates the four
-    # node Grafana dashboards.
+    # Scraped by Prometheus directly (ServiceMonitor on). On main Alloy
+    # scraped and pushed it; Alloy is off here. main also ran
+    # --collector.ethtool on ens5|ens6 for the AWS ENA counters — dropped.
     prometheus:
       monitor:
-        enabled: false
-    # Exposes ENA/Nitro allowance-exceeded counters (node_ethtool_*) on both
-    # ENIs so bandwidth/pps/conntrack throttling can be correlated against
-    # Spark stall windows. See ISSUES.md ens5/ens6 notes.
-    #
-    # Was ens5-only — missed the ENI that actually matters most: cilium.tf's
-    # eni.nodeSpec.firstInterfaceIndex=1 means Cilium never hands out pod
-    # IPs from the primary ENI (ens5) at all, only from ens6 onward, so
-    # every Spark pod's actual shuffle/S3 traffic rides on ens6, not ens5.
-    # device-include is a regex (confirmed against node_exporter's actual
-    # ethtool_linux.go source, not assumed), so "ens5|ens6" matches both.
-    #
-    # Confirmed via `aws ec2 describe-instance-types` (not assumed) that
-    # every instance type this cluster runs supports 2+ ENIs, so both
-    # devices genuinely exist to be matched: m6g.xlarge/m6g.2xlarge
-    # (core-node/data-node) max 4 ENIs each; r7gd.12xlarge (spark-node) max
-    # 8 ENIs.
-    extraArgs:
-      - --collector.ethtool
-      - --collector.ethtool.device-include=ens5|ens6
+        enabled: true
     livenessProbe:
       timeoutSeconds: 10
       failureThreshold: 20
@@ -1535,8 +1206,6 @@ kube-prometheus-stack:
     # its pod, and through kube_pod_info to its IP and node.
     metricLabelsAllowlist:
       - pods=[spark-role,spark-app-selector,spark-exec-id,app,tier]
-    nodeSelector:
-      node-role.kubernetes.io/data-node: ""
     livenessProbe:
       timeoutSeconds: 10
       failureThreshold: 20
@@ -1558,20 +1227,20 @@ kube-prometheus-stack:
 # =============================================================================
 # One DaemonSet on every node. Pipelines live in charts/monitoring/files/config.alloy
 # (ConfigMap kube-system/alloy-config, rendered by charts/monitoring):
-#   pod logs, journal, Spark GC/diag files, Hubble drops -> Loki
-#   Hubble per-verdict counters, Comet OTLP metrics, Alloy's own metrics -> Prometheus
-# The S3 archives (hubble-flow-shipper, packet-capture-shipper, spark-node-log-shipper) are
-# unchanged and run alongside.
+#   pod logs, journal, Spark GC/diag files -> Loki
+#   node-exporter, OTLP metrics, Alloy's own metrics -> Prometheus
+# Everything ships continuously; system-node-critical + a 50 s grace keep Alloy alive
+# through a node shutdown long enough for the final flush.
 #
-# Karpenter teardown: a spark node is removed ~180 s after its last executor exits
-# (NodePool consolidateAfter). Everything here ships continuously, so the node's data is in
-# Loki/Prometheus long before that; system-node-critical + a 50 s grace keep Alloy alive
-# through kubelet's critical-pod shutdown phase (60 s) for the final flush.
+# OFF on this cluster (resource plan, rke2/README.md): no log shipping, no OTLP. Pod logs
+# stay readable with kubectl logs; node-exporter is scraped by Prometheus directly. To
+# turn it back on: alloy.enabled, monitoring.alloyConfig.enabled, loki-stack.enabled (and
+# node-exporter's ServiceMonitor off, or samples arrive twice).
 alloy:
-  enabled: true
+  enabled: false
   fullnameOverride: alloy
-  # kube-system: an ArgoCD AppProject destination already (terraform argocd.tf), and where
-  # the other node agents live.
+  # kube-system: an ArgoCD AppProject destination already (rke2/argocd/projects.yaml), and
+  # where the other node agents live.
   namespaceOverride: kube-system
   crds:
     create: false            # PodLogs CRD -- not used
@@ -1599,8 +1268,7 @@ alloy:
         valueFrom:
           fieldRef:
             fieldPath: status.hostIP
-    # OTLP for Comet (spark.comet.otel.endpoint) -- HTTP is what Comet speaks; gRPC is open
-    # for anything else.
+    # OTLP receivers (config.alloy section 5), HTTP and gRPC.
     extraPorts:
       - name: otlp-http
         port: 4318
@@ -1612,6 +1280,8 @@ alloy:
         protocol: TCP
     mounts:
       varlog: true           # /var/log -> /var/log/pods/*
+      # varlog above already covers the persistent journal (/var/log/journal);
+      # this adds the volatile one, for distros that keep it in /run.
       extra:
         - name: journal
           mountPath: /run/log/journal
@@ -1621,9 +1291,6 @@ alloy:
           readOnly: true
         - name: spark-nvme
           mountPath: /spark-nvme
-          readOnly: true
-        - name: hubble
-          mountPath: /var/run/cilium/hubble
           readOnly: true
         - name: alloy-data
           mountPath: /var/lib/alloy
@@ -1639,11 +1306,11 @@ alloy:
     dnsPolicy: ClusterFirstWithHostNet
     # Stopped in kubelet's critical-pod phase, after the workload, so the last lines of the
     # executors are already read. 50 s fits inside shutdownGracePeriodCriticalPods (60 s,
-    # terraform-aws-k8s-ha scripts/worker-eks-bootstrap.sh).
+    # rke2/scripts/install-rke2.sh kubelet-arg).
     priorityClassName: system-node-critical
     terminationGracePeriodSeconds: 50
     tolerations:
-      - operator: Exists     # every node, the spark-only taint included
+      - operator: Exists     # every node, control-plane and any future taint included
     volumes:
       extra:
         - name: journal
@@ -1653,15 +1320,10 @@ alloy:
           hostPath:
             path: /etc/machine-id
             type: File
-        # What Spark pods mount as /mnt/spark-nvme; empty on non-Spark nodes.
+        # What Spark pods mount as /mnt/spark-nvme.
         - name: spark-nvme
           hostPath:
             path: /mnt/spark-nvme/spark-shuffle
-            type: DirectoryOrCreate
-        # Cilium's flow export (terraform-aws-k8s-ha cilium.tf, export.static).
-        - name: hubble
-          hostPath:
-            path: /var/run/cilium/hubble
             type: DirectoryOrCreate
         - name: alloy-data
           hostPath:
@@ -1677,13 +1339,15 @@ alloy:
 # LOKI STACK (external dependency)
 # =============================================================================
 loki-stack:
-  enabled: true
+  # OFF with Alloy (nothing would ship logs to it). Its config below is kept
+  # for when it's turned back on.
+  enabled: false
   loki:
     fullnameOverride: "loki"
     # The chart's Grafana datasource (templates/datasources.yaml). uid is pinned because Tempo's
     # "logs for this span" link names it; dashboards select Loki through ${ds}. The derived
-    # field turns any trace id in a log line into a link to Tempo, matching both forms Comet
-    # writes: native stderr `trace_id=<hex>` and JVM JSON `"trace_id":"<hex>"`. A text match
+    # field turns any trace id in a log line into a link to Tempo, matching both common forms:
+    # `trace_id=<hex>` and JSON `"trace_id":"<hex>"`. A text match
     # rather than structured metadata, which Loki 2.9 here does not store.
     datasource:
       uid: loki
@@ -1694,32 +1358,22 @@ loki-stack:
             datasourceUid: tempo
             url: "$${__value.raw}"
     isDefault: false
-    nodeSelector:
-      node-role.kubernetes.io/core-node: ""
     image:
       repository: grafana/loki
       tag: 2.9.3
-    # IRSA — Loki's own dedicated IAM role + S3 bucket (terraform-aws-k8s-ha:
-    # observability-irsa.tf), not the shared node role. The chart
-    # auto-creates this ServiceAccount and wires it into the StatefulSet
-    # already; this annotation is the only thing needed for the EKS
-    # pod-identity webhook to inject AWS_ROLE_ARN/AWS_WEB_IDENTITY_TOKEN_FILE,
-    # which Loki's S3 client picks up automatically — no access/secret keys
-    # anywhere in storage_config below.
-    serviceAccount:
-      annotations:
-        # Literal, not .Values.global.lokiS3RoleArn — raw data handed to the
-        # subchart, not a Go template. Keep in sync with global.lokiS3RoleArn
-        # above by hand.
-        eks.amazonaws.com/role-arn: "arn:aws:iam::419772658418:role/k8s-ha-cluster-loki-s3-writer"
-    # Loki now ships chunks/index to S3 natively (storage_config below) —
-    # this PVC is WAL + not-yet-flushed in-memory chunks only (the ~10m
-    # ingester flush window below), not the long-term store. Before this it
-    # was emptyDir (no persistence block at all), so every pod reschedule
-    # silently dropped even that staging buffer with no error.
+    # SeaweedFS credentials as AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env:
+    # storage_config.aws below sets no keys, so Loki's S3 client takes them
+    # from the environment — nothing secret in this file or the rendered
+    # config Secret.
+    extraEnvFrom:
+      - secretRef:
+          name: lakehouse-s3
+    # Loki ships chunks/index to SeaweedFS (storage_config below) — this PVC
+    # is WAL + not-yet-flushed in-memory chunks only (the ~10m ingester
+    # flush window below), not the long-term store.
     persistence:
       enabled: true
-      storageClassName: "ebs-gp3"
+      storageClassName: "local-storage"
       size: 20Gi
     livenessProbe:
       httpGet:
@@ -1744,13 +1398,11 @@ loki-stack:
       # relief valve, and chunk cuts aligned so the flushes go out as a
       # batch instead of dribbling.
       #
-      # 10m, NOT the 15m an S3-cost argument alone would pick — this cluster
-      # is ephemeral. It is built to run a Spark benchmark and torn down
-      # ~10-20 min afterwards, and teardown deletes the PVC, so anything
-      # still sitting in the ingester and WAL at that moment is gone for
-      # good. The flush interval is therefore a DATA LOSS window, not a cost
-      # knob, and it has to be shorter than the gap between "benchmark ends"
-      # and "cluster dies".
+      # 10m, NOT the 15m an S3-cost argument alone would pick — on main the
+      # cluster was ephemeral (torn down ~10-20 min after a benchmark, PVC
+      # included), so the flush interval was a DATA LOSS window. On this
+      # persistent on-prem cluster the WAL survives restarts, but 10m also
+      # bounds what a lost node's local-storage PVC can take with it.
       #
       # For the record, the cost argument it overrides: measured over the
       # first hour of real traffic, 82 chunk objects, 702 KB total, average
@@ -1801,10 +1453,9 @@ loki-stack:
       # utilization floor above are for.
       #
       # Cost of the window is durability latency, not durability: unflushed
-      # chunks live in the ingester and in the WAL below, on the EBS PVC,
-      # replayed on restart (confirmed — a Prometheus-side restart earlier
-      # recovered its full head from WAL). Pod reschedule and node loss are
-      # covered; only losing the PVC itself would cost up to 15m of logs.
+      # chunks live in the ingester and in the WAL below, on the local-storage
+      # PVC, replayed on restart. A pod restart is covered; losing the node
+      # (and with it the PVC) costs up to 10m of logs.
       ingester:
         chunk_idle_period: 10m
         max_chunk_age: 10m
@@ -1824,10 +1475,8 @@ loki-stack:
           # with "field flush_on_shutdown not found in type ingester.Config",
           # which is a hard config-parse failure, not a warning.
           flush_on_shutdown: true
-      # v11/boltdb-shipper/filesystem replaced outright, not layered as a
-      # second schema period — this cluster is destroyed/rebuilt per
-      # benchmark run (see issues.md), so there's no historical data on the
-      # old schema worth preserving continuity for.
+      # v13/tsdb on S3 from the first day — a fresh cluster has no older
+      # schema period to keep.
       schema_config:
         configs:
           - from: 2024-01-01
@@ -1868,8 +1517,14 @@ loki-stack:
           #
           # Loki logs "uploading tables" every minute regardless, so this looks
           # healthy from the outside while the bucket stays completely empty.
-          bucketnames: k8s-ha-cluster-loki-logs-ap-south-1-419772658418
-          region: ap-south-1
+          #
+          # SeaweedFS: literal values (raw subchart data, not a template) —
+          # keep in sync with global.s3.{lokiBucket,endpointHost,region}.
+          bucketnames: loki
+          endpoint: seaweedfs-filer.storage.svc.cluster.local:8333
+          region: us-east-1
+          insecure: true
+          s3forcepathstyle: true
       # Loki's own internal compactor (retention/index compaction) is a
       # separate concept from Thanos's Compactor (charts/thanos) — this one
       # still defaulted to shared_store: filesystem, inconsistent with
@@ -1895,466 +1550,46 @@ loki-stack:
         max_entries_limit_per_query: 20000
         max_query_series: 5000
   promtail:
-    # Replaced by the `alloy` DaemonSet (top-level `alloy:` block), which runs the same
-    # pipelines -- same labels, same multiline rules, same journal and spark-node-files jobs --
-    # from charts/monitoring/files/config.alloy. Left configured so rollback is this one flag
-    # (and alloy.enabled: false). Do not run both: every line would reach Loki twice.
+    # Replaced by the `alloy` DaemonSet (top-level `alloy:` block). main keeps a full promtail
+    # pipeline here for rollback; it was EKS-specific (node names, Karpenter taints) and is not
+    # carried over. Do not run both: every line would reach Loki twice.
     enabled: false
-    fullnameOverride: "promtail"
-    # REQUIRED — do not delete. All actual Spark driver/executor pods run on
-    # Karpenter's spark-node pool, which carries a `spark-only=true:NoSchedule`
-    # taint (karpenter-k8s.tf) specifically so no OTHER workload lands there
-    # by accident — Spark pods get a matching toleration on their own template
-    # (examples/spark-jobs/*.yaml). promtail is a DaemonSet, and a DaemonSet
-    # pod needs that same toleration on ITS OWN pod spec to schedule onto a
-    # tainted node — what Spark's pod template tolerates doesn't extend to
-    # promtail's. The chart's default tolerations
-    # (node-role.kubernetes.io/master / control-plane) don't cover this,
-    # since neither exists on managed EKS. Without this override, promtail
-    # only ever runs on core-node/data-node, and every multiline/labeling
-    # rule added above for spark_role/spark_app_selector processes zero real
-    # lines — the DaemonSet was never on the node producing them.
-    #
-    # Tolerates EVERY taint, not a list of known ones: a log agent that
-    # misses a node misses every pod on it, and a new taint (Karpenter's
-    # disruption taints, node.cilium.io/agent-not-ready during bootstrap,
-    # NotReady/unreachable during an incident — when logs matter most) would
-    # otherwise evict or block it silently.
-    tolerations:
-      - operator: Exists
-    # Stopped in the last (critical) phase of kubelet graceful node shutdown
-    # (terraform-aws-k8s-ha scripts/worker-eks-bootstrap.sh), after the
-    # workload, so its final batch — the pod's last lines — is pushed to
-    # Loki before the node is gone, whether Karpenter removed it for being
-    # empty, underutilised, expired or reclaimed.
-    priorityClassName: system-node-critical
-    livenessProbe:
-      httpGet:
-        path: /ready
-        port: http-metrics
-      timeoutSeconds: 10
-      failureThreshold: 20
-      initialDelaySeconds: 30
-    readinessProbe:
-      httpGet:
-        path: /ready
-        port: http-metrics
-      timeoutSeconds: 10
-      failureThreshold: 20
-      initialDelaySeconds: 15
-    # promtail's own metrics: promtail_sent_entries_total,
-    # promtail_dropped_entries_total, promtail_request_duration_seconds by
-    # status — how to tell "no logs" from "logs dropped or rate-limited".
-    serviceMonitor:
-      enabled: true
-    # Node journal for the journal scrape below. machine-id is how the
-    # journal reader finds <journal dir>/<machine-id>/. The nodes' journald
-    # runs with volatile storage — /run/log/journal; checked live, the
-    # persistent /var/log/journal is empty — so that is the path to read.
-    # (promtail ships it continuously, so volatility costs nothing here.)
-    extraVolumes:
-      - name: journal
-        hostPath:
-          path: /run/log/journal
-      - name: machine-id
-        hostPath:
-          path: /etc/machine-id
-          type: File
-      # Spark's node-local log files (see the spark-node-files job below).
-      # The host path of what Spark pods mount as /mnt/spark-nvme; on nodes
-      # without Spark it is simply empty.
-      - name: spark-nvme
-        hostPath:
-          path: /mnt/spark-nvme/spark-shuffle
-          type: DirectoryOrCreate
-    extraVolumeMounts:
-      - name: journal
-        mountPath: /run/log/journal
-        readOnly: true
-      - name: machine-id
-        mountPath: /etc/machine-id
-        readOnly: true
-      - name: spark-nvme
-        mountPath: /spark-nvme
-        readOnly: true
-    config:
-      # REQUIRED — do not delete. loki-stack's own values.yaml hardcodes
-      #
-      #   - url: http://{{ .Release.Name }}:3100/loki/api/v1/push
-      #
-      # which resolves to "big-data-platform" (the umbrella release name).
-      # The Loki Service is called "loki", because loki.fullnameOverride
-      # above renames it. Nothing reconciles those two names, so the chart
-      # default points promtail at a host that does not exist:
-      #
-      #   dial tcp: lookup big-data-platform on 172.20.0.10:53: no such host
-      #
-      # Every promtail pod then retries forever and Loki receives NOTHING —
-      # loki_ingester_memory_chunks stays 0 and the S3 bucket stays empty
-      # even when the storage config is perfectly correct. Loki itself looks
-      # healthy (1/1 Running, "uploading tables" every minute), which is what
-      # makes this worth the comment.
-      clients:
-        - url: http://loki:3100/loki/api/v1/push
-          # Same cluster label Prometheus stamps (externalLabels), so Loki
-          # and Prometheus series join on it in one Grafana dashboard.
-          external_labels:
-            cluster: k8s-ha-cluster
-      snippets:
-        # Multi-line stack traces: promtail (via `cri: {}` above) still tails
-        # one *raw container log line* at a time, but a JVM/Python stack
-        # trace is many lines with no per-line timestamp of its own — each
-        # `at org.apache.spark...` frame lands as its own separate Loki
-        # entry, so a driver OOM reads as dozens of unrelated one-line
-        # events instead of one exception. `multiline` re-stitches everything
-        # between one line matching `firstline` and the next into a single
-        # entry. Scoped per-service via `match` because the timestamp shape
-        # differs per logger and a wrong regex silently stops stitching
-        # (worse: matches mid-trace and truncates it).
-        #
-        # spark-role/spark-app-selector aren't in promtail's default label
-        # set (only app/instance/component/namespace/pod/container are), so
-        # they're added via extraRelabelConfigs below. This is safe re:
-        # cardinality — unlike the Hubble-flow TODO (CHANGELOG.md) where a
-        # label per flow would explode the stream count, `pod` is already a
-        # label here (default relabeling), so every stream this touches
-        # already exists 1:1 per pod; these just add searchable dimensions
-        # to it (`{spark_role="driver"} |= "app-20260902..."` pulls one
-        # job's driver+executor logs together) rather than creating new ones.
-        pipelineStages:
-          - cri: {}
-          # Spark driver/executor (spark-role set by spark-submit itself).
-          # log4j default pattern layout is `%d{yy/MM/dd HH:mm:ss} ...`
-          # (verified against archive/misc/log4j.properties, the last known
-          # config before the image dropped a bundled log4j.properties) —
-          # e.g. "26/09/02 10:15:23 INFO ...".
-          #
-          # The SparkApplications log through log4j2 JsonLayout (compact,
-          # eventEol — examples/spark-jobs/tpch-sf1000*.yaml), so each event is
-          # one line starting with '{', stack trace included in the JSON. With
-          # only the date pattern, no JSON line ever matched firstline and the
-          # multiline stage merged every event into its predecessor: on the
-          # 22 Sep run, events spanning 12:11-12:42 UTC landed as ONE Loki
-          # entry stamped 12:08:58. firstline now accepts both shapes.
-          - match:
-              selector: '{spark_role=~"driver|executor"}'
-              stages:
-                - multiline:
-                    firstline: '^(\{|\d{2}/\d{2}/\d{2})'
-                    max_wait_time: 3s
-          # Spark History Server — same Spark distribution, same log4j
-          # pattern as above, but its own long-running Deployment (no
-          # spark-role label), so it needs its own match on app (set via
-          # `labels: {app: spark-history-server}` in
-          # charts/spark-history-server/templates/deployment.yaml).
-          - match:
-              selector: '{app="spark-history-server"}'
-              stages:
-                - multiline:
-                    firstline: '^\d{2}/\d{2}/\d{2}'
-                    max_wait_time: 3s
-          # Airflow (scheduler/webserver/worker/triggerer/dag-processor) —
-          # every role carries `tier: airflow` (checked against the actual
-          # chart template, charts/airflow's scheduler-deployment.yaml etc.;
-          # `component` differs per role but `tier` doesn't, so relabel that
-          # one). Default log format is Airflow's own
-          # `[%(asctime)s] {file:line} LEVEL - msg`, not overridden anywhere
-          # in this values.yaml — e.g. "[2026-09-02 10:15:23,456] {...} ...".
-          - match:
-              selector: '{tier="airflow"}'
-              stages:
-                - multiline:
-                    firstline: '^\[\d{4}-\d{2}-\d{2}'
-                    max_wait_time: 3s
-          # Gravitino — resolves to app=gravitino-helm (no nameOverride set
-          # below, so promtail's default app-label chain falls through to
-          # the chart's own name, confirmed via its _helpers.tpl). Regex
-          # assumes Apache Gravitino's documented default log4j2 pattern
-          # (`%d{yyyy-MM-dd HH:mm:ss.SSS} ...`) — unlike the two Spark rules
-          # above, this was NOT checked against the actual running image's
-          # bundled log4j2.properties, only against Gravitino's typical
-          # default. Verify with `kubectl logs` on the next deploy; if the
-          # timestamp shape differs, fix the regex, don't drop the rule.
-          - match:
-              selector: '{app="gravitino-helm"}'
-              stages:
-                - multiline:
-                    firstline: '^\d{4}-\d{2}-\d{2}'
-                    max_wait_time: 3s
-          # --- level: one normalised label across every log format ----------
-          # Values: trace | debug | info | warn | error | fatal, so a panel can
-          # be {level=~"warn|error|fatal"} over every pod. Each regex runs in
-          # turn and a later match overrides an earlier one, so they go from
-          # least to most reliable: bare "DATE TIME LEVEL", Airflow, log4j
-          # pattern, klog (kubelet-style I/W/E/F prefix), logfmt level=
-          # (cilium, karpenter, containerd), and last the JSON "level" key
-          # (Spark's log4j2 JsonLayout, most Go JSON loggers). A line with no
-          # recognisable level gets no label rather than a guessed one.
-          - regex:
-              expression: '^\S+[ T]\S+ +(?P<level>TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\b'
-          - regex:
-              expression: '^\[[^\]]+\] \{[^}]*\} (?P<level>[A-Z]+) - '
-          - regex:
-              expression: '^\d{2}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} (?P<level>[A-Z]+) '
-          - regex:
-              expression: '^(?P<level>[IWEF])\d{4} \d{2}:\d{2}:\d{2}'
-          # fluent-bit "[2026/09/29 06:26:33] [ info] ..." and structlog
-          # (Airflow 3) "2026-09-29T06:22:55Z [info     ] ...": both seen
-          # live without a level before these two were added.
-          - regex:
-              expression: '^\[\d{4}/\d{2}/\d{2} [\d:]+\] \[ *(?P<level>[a-z]+)\]'
-          - regex:
-              expression: '^\S+ \[(?P<level>[a-z]+) *\] '
-          - regex:
-              expression: '(?:^|\s)level=(?P<level>[A-Za-z]+)'
-          - regex:
-              expression: '"(?:level|severity|lvl|levelname)"\s*:\s*"(?P<level>[A-Za-z]+)"'
-          # Kubernetes events (k8s-event-exporter, charts/monitoring): the
-          # event type is the level (Warning -> warn, Normal -> info), and
-          # reason / kind / namespace of the involved object become labels —
-          # bounded sets (tens of reasons), unlike object names, which stay
-          # in the line.
-          - match:
-              selector: '{app="k8s-event-exporter"}'
-              stages:
-                - json:
-                    expressions:
-                      level: type
-                      event_reason: reason
-                      event_kind: involvedObject.kind
-                      event_namespace: involvedObject.namespace
-                - labels:
-                    event_reason:
-                    event_kind:
-                    event_namespace:
-          - replace:
-              source: level
-              expression: '(?i)^(t|trace)$'
-              replace: trace
-          - replace:
-              source: level
-              expression: '(?i)^(d|debug)$'
-              replace: debug
-          - replace:
-              source: level
-              expression: '(?i)^(i|info|information|notice|normal)$'
-              replace: info
-          - replace:
-              source: level
-              expression: '(?i)^(w|warn|warning)$'
-              replace: warn
-          - replace:
-              source: level
-              expression: '(?i)^(e|err|error)$'
-              replace: error
-          - replace:
-              source: level
-              expression: '(?i)^(f|fatal|crit|critical|panic|alert|emerg)$'
-              replace: fatal
-          - labels:
-              level:
-        extraRelabelConfigs:
-          - action: replace
-            source_labels: [__meta_kubernetes_pod_label_spark_role]
-            target_label: spark_role
-          - action: replace
-            source_labels: [__meta_kubernetes_pod_label_spark_app_selector]
-            target_label: spark_app_selector
-          - action: replace
-            source_labels: [__meta_kubernetes_pod_label_tier]
-            target_label: tier
-          # pod_ip / host_ip: the join keys to Hubble flows (IP), VPC Flow
-          # Logs (pkt-srcaddr = pod IP, srcaddr = node IP), the packet
-          # captures and kube_pod_info. Both are 1:1 with a pod / node, and
-          # pod and node_name are already labels, so this adds no streams.
-          - action: replace
-            source_labels: [__meta_kubernetes_pod_ip]
-            target_label: pod_ip
-          - action: replace
-            source_labels: [__meta_kubernetes_pod_host_ip]
-            target_label: host_ip
-        # Node journal: kubelet, containerd, the kernel (OOM kills, NIC
-        # resets), systemd-networkd and cloud-init — the layer the 22 Sep
-        # root cause lived in, and none of it is a pod log. node_name matches
-        # the Kubernetes node name, so it lines up with the pod streams;
-        # level is the journal priority, mapped to the same six values.
-        extraScrapeConfigs: |
-          - job_name: systemd-journal
-            journal:
-              path: /run/log/journal
-              max_age: 12h
-              labels:
-                job: systemd-journal
-            relabel_configs:
-              - source_labels: [__journal__hostname]
-                regex: (.+)
-                replacement: $1.{{ .Values.global.awsLakehouse.region }}.compute.internal
-                target_label: node_name
-              - source_labels: [__journal__systemd_unit]
-                target_label: unit
-              - source_labels: [__journal_syslog_identifier]
-                target_label: syslog_identifier
-              - source_labels: [__journal__transport]
-                target_label: transport
-              - source_labels: [__journal_priority_keyword]
-                target_label: level
-              - source_labels: [level]
-                regex: (emerg|alert|crit)
-                replacement: fatal
-                target_label: level
-              - source_labels: [level]
-                regex: err
-                replacement: error
-                target_label: level
-              - source_labels: [level]
-                regex: warning
-                replacement: warn
-                target_label: level
-              - source_labels: [level]
-                regex: notice
-                replacement: info
-                target_label: level
-          # Spark's own files on the node NVMe, which never reach stdout: the
-          # JVM GC/safepoint logs (-Xlog:gc*,safepoint:file=/mnt/spark-nvme/
-          # gc-*.log — the instrument for "was that stall a GC pause or
-          # below the JVM") and the diag*.log appender (DAGScheduler stage
-          # boundaries, file listing, planning — additivity=false in the job
-          # YAMLs, so file-only). Karpenter deletes spark nodes minutes after
-          # a job, so without this they were lost every run. A raw copy also
-          # goes to S3 (charts/monitoring spark-node-log-shipper).
-          #
-          # role: node + __host__ makes each promtail pick only its own node
-          # (promtail drops targets whose __host__ is not its HOSTNAME).
-          - job_name: spark-node-files
-            kubernetes_sd_configs:
-              - role: node
-            relabel_configs:
-              - source_labels: [__meta_kubernetes_node_name]
-                target_label: __host__
-              - source_labels: [__meta_kubernetes_node_name]
-                target_label: node_name
-              - source_labels: [__meta_kubernetes_node_address_InternalIP]
-                target_label: host_ip
-              - target_label: job
-                replacement: spark-node-files
-              - target_label: __path__
-                replacement: /spark-nvme/{gc-*.log*,diag*.log}
-            pipeline_stages:
-              # log_type from the file name: gc-*.log* or diag*.log
-              - regex:
-                  source: filename
-                  expression: '/(?P<log_type>gc|diag)[-.]'
-              # driver / executor where the name says so (gc-driver-*, gc-exec-*,
-              # gc-28x10-exec-*, gc-vanilla-driver-*, ...)
-              - regex:
-                  source: filename
-                  expression: '-(?P<spark_role>driver|exec)-'
-              - replace:
-                  source: spark_role
-                  expression: '^(exec)$'
-                  replace: executor
-              # level: JVM unified logging "[time][uptime][info][gc,...]", then
-              # the diag PatternLayout "<ISO8601> INFO  [thread] ..."
-              - regex:
-                  expression: '\]\[(?P<level>trace|debug|info|warning|error)\]\['
-              - regex:
-                  expression: '^\S+ (?P<level>TRACE|DEBUG|INFO|WARN|ERROR|FATAL) '
-              - replace:
-                  source: level
-                  expression: '(?i)^(warn|warning)$'
-                  replace: warn
-              - replace:
-                  source: level
-                  expression: '(?i)^(error)$'
-                  replace: error
-              - replace:
-                  source: level
-                  expression: '(?i)^(info)$'
-                  replace: info
-              - replace:
-                  source: level
-                  expression: '(?i)^(debug)$'
-                  replace: debug
-              - replace:
-                  source: level
-                  expression: '(?i)^(trace)$'
-                  replace: trace
-              - replace:
-                  source: level
-                  expression: '(?i)^(fatal)$'
-                  replace: fatal
-              - labels:
-                  log_type:
-                  spark_role:
-                  level:
-
-# =============================================================================
-# CLOUDFLARED (local sub-chart) — spread across GP nodes for tunnel HA
-# =============================================================================
-cloudflared:
-  enabled: true
-  replicas: 3
-  image: "cloudflare/cloudflared:2025.1.0"
-  resources:
-    requests:
-      cpu: "100m"
-      memory: "64Mi"
-    limits:
-      cpu: "200m"
-      memory: "128Mi"
-
-# =============================================================================
-# HEADLAMP (local sub-chart) — GP node
-# =============================================================================
-headlamp:
-  enabled: true
-  replicas: 1
-  image: "ghcr.io/headlamp-k8s/headlamp:latest"
-  resources:
-    requests:
-      cpu: "100m"
-      memory: "128Mi"
-    limits:
-      cpu: "300m"
-      memory: "256Mi"
 
 # =============================================================================
 # MONITORING EXTRAS (local sub-chart)
 # =============================================================================
 monitoring:
   enabled: true
+  # Dashboards (dashboards/*.json) not deployed: loki-logs needs Loki, which is off.
+  disabledDashboards:
+    - loki-logs.json
   # ConfigMap kube-system/alloy-config from files/config.alloy, for the `alloy` subchart.
+  # Off with alloy.enabled.
   alloyConfig:
-    enabled: true
-  # cilium-agent and hubble ServiceMonitors (templates/cilium-service-monitors.yaml): off,
-  # because Alloy scrapes both on each node and pushes (config.alloy section 7). The
-  # cilium-operator monitor is unaffected. Set true to go back to Prometheus scraping them.
-  ciliumServiceMonitors:
-    agentAndHubble: false
+    enabled: false
   # Kubernetes events -> stdout -> alloy -> Loki
   # (charts/monitoring/templates/k8s-event-exporter.yaml).
+  # Off: its only consumer was Loki (via Alloy). Events: kubectl get events -A.
   eventExporter:
-    enabled: true
-  # Spark GC/diag files on the node NVMe -> s3://<lakehouse>/spark-node-logs/
-  # (charts/monitoring/templates/spark-node-log-shipper.yaml); alloy also
-  # tails them into Loki (spark-node-files pipeline).
+    enabled: false
+  # Spark GC/diag files on the node disk -> s3://lakehouse/spark-node-logs/
+  # (charts/monitoring/templates/spark-node-log-shipper.yaml). Off by default: on main it
+  # existed because Karpenter deleted spark nodes minutes after a job; here nodes are
+  # permanent and Alloy already tails the same files into Loki (spark-node-files pipeline).
   sparkNodeLogs:
-    enabled: true
-    # 30 s, not 60: Karpenter removes the node ~180 s after the job ends, and the last
-    # files must be in S3 well before -- the SIGTERM sweep is only the backstop.
-    intervalSeconds: 30
-  # Tempo (charts/monitoring/templates/tempo.yaml): Comet's per-operator spans, via the Alloy
-  # on each node (config.alloy section 5). S3 under s3://<lakehouse>/tempo/ through IRSA
-  # (global.tempoS3RoleArn). Limits are sized for SF1000 at sampleRatio 1.0 -- one query's
-  # trace is tens of MB, and Tempo's 5 MB default per trace would truncate it.
+    enabled: false
+    intervalSeconds: 60
+  # Tempo (charts/monitoring/templates/tempo.yaml): OTLP traces via the Alloy on each node
+  # (config.alloy section 5). Blocks in s3://lakehouse/tempo/ (SeaweedFS). Limits are generous
+  # (large Spark traces); Tempo's 5 MB default per trace truncates them.
+  # Off: traces reached it only through Alloy's OTLP receiver.
   tempo:
-    enabled: true
+    enabled: false
     image: "grafana/tempo:2.5.0"
     retention: "168h"
-    storageClassName: "ebs-gp3"
+    storageClassName: "local-storage"
     storageSize: "20Gi"   # WAL + blocks not yet flushed to S3
-    nodeSelector:
-      node-role.kubernetes.io/data-node: ""
+    nodeSelector: {}
     limits:
       ingestionRateBytes: 104857600    # 100 MiB/s
       ingestionBurstBytes: 209715200   # 200 MiB
@@ -2363,23 +1598,16 @@ monitoring:
     resources:
       requests: { cpu: "500m", memory: "2Gi" }
       limits: { cpu: "2", memory: "8Gi" }
-  # S3 handshake capture per node -> s3://<lakehouse>/network-logs/packet-capture/
-  # (charts/monitoring/templates/packet-capture-shipper.yaml). Headers of
-  # SYN/SYN-ACK/RST on :443 only, plus a 60 s ip addr/rule/route snapshot.
-  packetCapture:
-    enabled: true
-    # 30 s rotation: the final capture file is closed and uploaded inside the ~180 s
-    # post-job window instead of waiting for SIGTERM.
-    rotateSeconds: 30
-    maxLocalFiles: 400
-    localSizeLimit: "2Gi"
 
 # =============================================================================
-# THANOS (local sub-chart) — S3 long-term storage for Prometheus, see
-# charts/thanos for the full explanation of why this exists.
+# THANOS (local sub-chart) — long-term Prometheus storage in SeaweedFS
+# (s3://lakehouse/thanos/), see charts/thanos.
 # =============================================================================
 thanos:
-  enabled: true
+  # OFF: single Prometheus with 7-day local retention (kube-prometheus-stack
+  # block). Re-enabling also needs prometheusSpec.thanos and the sidecar's
+  # lakehouse-s3 envFrom back (see main / git history).
+  enabled: false
   # Must match kube-prometheus-stack.prometheus.prometheusSpec.thanos.image
   # above — Sidecar/Query/Store Gateway/Compactor all speak the same gRPC
   # StoreAPI.
@@ -2407,7 +1635,144 @@ thanos:
       limits: { cpu: "1000m", memory: "2Gi" }
 
 # =============================================================================
-# NETWORKING EXTRAS (local sub-chart)
+# NETWORKING EXTRAS (local sub-chart) — Traefik IngressRoutes (ArgoCD, Traefik
+# dashboard) and the optional `default` namespace NetworkPolicy
 # =============================================================================
 networking-extras:
   enabled: true
+  # Canal (Calico policy engine) enforces standard NetworkPolicy. Off by
+  # default: on a single-tenant 4-node cluster the boundary bought little and
+  # main's version needed Cilium-only exceptions (apiserver -> webhooks,
+  # hostNetwork Alloy -> Loki/Prometheus). With plain NetworkPolicy those
+  # sources are node IPs, so turning this on requires nodeCIDRs (the nodes'
+  # LAN subnet) and podCIDR (RKE2 default 10.42.0.0/16, whose per-node
+  # .0 addresses are the flannel VXLAN source IPs for host traffic).
+  networkPolicy:
+    enabled: false
+    nodeCIDRs: []
+    podCIDR: "10.42.0.0/16"
+
+# =============================================================================
+# STRIMZI KAFKA OPERATOR (external dependency) — runs the Kafka cluster that
+# charts/iiot declares (Kafka / KafkaNodePool / KafkaTopic CRs). Watches only
+# its own (release) namespace. CRDs: rke2/scripts/apply-crds.sh.
+# =============================================================================
+strimzi-kafka-operator:
+  enabled: true
+  fullnameOverride: strimzi-cluster-operator
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 384Mi
+
+# =============================================================================
+# IIOT (local sub-chart) — DCS -> MQTT -> Telegraf -> Kafka + VictoriaMetrics
+# =============================================================================
+# DCS ──MQTT bridge──▶ Mosquitto ──▶ telegraf-kafka ──▶ Kafka dcs.raw ──▶ Spark
+#                                └─▶ telegraf-vm ────▶ VictoriaMetrics (7 d) ──▶ Grafana
+# See charts/iiot/README.md. Credentials: Secret mosquitto-credentials
+# (rke2/bootstrap-platform.sh); optional outbound-bridge password: Secret
+# mosquitto-bridge (key remote-password), created by you.
+iiot:
+  enabled: true
+
+  mosquitto:
+    enabled: true
+    image: "eclipse-mosquitto:2.0.21"
+    # mqtt://<ingress-node-ip>:1883 through Traefik's `mqtt` TCP entrypoint.
+    expose: true
+    users:
+      dcs: dcs           # what the DCS side's bridge/gateway logs in as
+      telegraf: telegraf # both Telegraf pipelines (read-only)
+    # Topic patterns the dcs user may publish and telegraf may read.
+    topics:
+      - "dcs/#"
+    # Per persistent session (each Telegraf): queue depth before the broker
+    # drops the oldest messages while that consumer is down.
+    maxQueuedMessages: 200000
+    messageSizeLimit: 1048576
+    storageSize: 5Gi
+    # Outbound bridge: THIS broker connects to the DCS broker and pulls topics
+    # in. Leave off if the DCS side bridges into this broker instead.
+    bridge:
+      enabled: false
+      address: "dcs-broker.plant.local:1883"
+      clientId: rke2-bigdata-bridge
+      remoteUsername: ""           # password: Secret mosquitto-bridge, key remote-password
+      # mosquitto `topic` lines: <pattern> <in|out|both> <qos> [local-prefix remote-prefix]
+      topics:
+        - "# in 1 dcs/ \"\""
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits: { memory: 256Mi }
+
+  telegraf:
+    enabled: true
+    image: "telegraf:1.36.1"
+    topics:
+      - "dcs/#"
+    # Measurement name: series become <measurement>_<field> in VictoriaMetrics.
+    measurement: dcs
+    # Parser for the MQTT payload (raw Telegraf TOML, input-plugin level).
+    # Default: each topic carries one number (e.g. dcs/unit1/TI101 -> 23.4);
+    # the topic is kept as the `topic` tag. For JSON payloads, e.g.
+    #   data_format = "json_v2"
+    #   [[inputs.mqtt_consumer.json_v2]]
+    #     [[inputs.mqtt_consumer.json_v2.field]]
+    #       path = "value"
+    #       type = "float"
+    #     [[inputs.mqtt_consumer.json_v2.tag]]
+    #       path = "tag"
+    #     [[inputs.mqtt_consumer.json_v2.timestamp]] ...
+    parser: |
+      data_format = "value"
+      data_type = "float"
+    pipelines:
+      kafka:
+        enabled: true
+        flushInterval: 1s
+        batchSize: 5000
+        bufferLimit: 500000
+        resources:
+          requests: { cpu: 100m, memory: 128Mi }
+          limits: { memory: 512Mi }
+      vm:
+        enabled: true
+        flushInterval: 5s
+        batchSize: 5000
+        bufferLimit: 500000
+        resources:
+          requests: { cpu: 100m, memory: 128Mi }
+          limits: { memory: 512Mi }
+
+  kafka:
+    enabled: true
+    clusterName: iiot
+    version: "4.1.0"
+    # One combined controller+broker per node, on 3 of the 4 nodes (the
+    # StarRocks node is tainted). RF 3 / min ISR 2.
+    replicas: 3
+    heap: 1g
+    resources:
+      requests: { cpu: 500m, memory: 1536Mi }
+      limits: { cpu: "2", memory: 2Gi }
+    storageSize: 50Gi
+    defaultRetentionHours: 72
+    topic:
+      name: dcs.raw
+      partitions: 6
+      # Kafka is the buffer between the plant and Spark, not the archive:
+      # 3 days of replay for Spark jobs; history lives in the lakehouse.
+      retentionHours: 72
+
+  victoriametrics:
+    enabled: true
+    image: "victoriametrics/victoria-metrics:v1.122.0"
+    retentionPeriod: 7d
+    storageSize: 50Gi
+    extraArgs: []
+    resources:
+      requests: { cpu: 250m, memory: 512Mi }
+      limits: { cpu: "2", memory: 2Gi }

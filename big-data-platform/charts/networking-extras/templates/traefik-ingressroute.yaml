@@ -10,7 +10,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`traefik.dailyblogstudio.com`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    - match: Host(`traefik.{{ .Values.global.domain }}`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
       kind: Rule
       services:
         - name: api@internal

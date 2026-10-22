@@ -13,7 +13,7 @@ Provides a web interface to view the status and execution details of completed S
 - **IngressRoute**: Exposed via Traefik (e.g., `spark-history.domain.com`).
 
 ## 💾 Storage
-Reads event logs from MinIO (`s3a://spark-data/event-logs/`).
+Reads event logs from SeaweedFS (`s3a://lakehouse/spark-events/`), credentials from the `lakehouse-s3` Secret.
 
 ## 🛠 Configuration
 ```yaml

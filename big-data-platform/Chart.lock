@@ -8,18 +8,12 @@ dependencies:
 - name: spark-operator
   repository: https://kubeflow.github.io/spark-operator
   version: 2.4.0
-- name: superset
-  repository: https://apache.github.io/superset
-  version: 0.12.0
 - name: kube-starrocks
   repository: https://starrocks.github.io/starrocks-kubernetes-operator
   version: 1.9.8
 - name: airflow
   repository: https://airflow.apache.org
   version: 1.21.0
-- name: metrics-server
-  repository: https://kubernetes-sigs.github.io/metrics-server/
-  version: 3.12.1
 - name: kube-prometheus-stack
   repository: https://prometheus-community.github.io/helm-charts
   version: 56.6.2
@@ -29,12 +23,6 @@ dependencies:
 - name: alloy
   repository: https://grafana.github.io/helm-charts
   version: 1.13.0
-- name: cloudflared
-  repository: file://./charts/cloudflared
-  version: 1.0.0
-- name: headlamp
-  repository: file://./charts/headlamp
-  version: 1.0.0
 - name: monitoring
   repository: file://./charts/monitoring
   version: 1.0.5
@@ -68,8 +56,11 @@ dependencies:
 - name: ingress
   repository: file://./charts/ingress
   version: 1.0.0
-- name: airflow-git-sync
-  repository: file://./charts/airflow-git-sync
+- name: strimzi-kafka-operator
+  repository: oci://quay.io/strimzi-helm
+  version: 0.48.0
+- name: iiot
+  repository: file://./charts/iiot
   version: 1.0.0
-digest: sha256:10fa5450561d7aa4ded0a99b8cd8b951be14424ca18854ec8b1883c8216006f5
-generated: "2026-10-03T22:01:54.785709778+05:30"
+digest: sha256:9eadf191a4836afdd7bbc652a86b204ebb30d13e63496575855c26d361a24754
+generated: "2026-10-22T17:22:20.226074575+05:30"

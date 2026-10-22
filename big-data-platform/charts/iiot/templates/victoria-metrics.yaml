@@ -1,0 +1,108 @@
+{{- if and .Values.enabled .Values.victoriametrics.enabled }}
+{{- $v := .Values.victoriametrics }}
+# ------------------------------------------------------------------------------
+# IIoT - VictoriaMetrics single-node: live DCS time series, 7-day retention
+# ------------------------------------------------------------------------------
+# Written by telegraf-vm (Influx line protocol, /write); read by Grafana
+# (Prometheus-compatible API, datasource "VictoriaMetrics") and the built-in UI
+# at victoriametrics.<domain>/vmui. Data older than retentionPeriod is dropped
+# by VictoriaMetrics itself; the long-term copy is Kafka -> Spark -> lakehouse.
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: victoria-metrics
+  labels:
+    app: victoria-metrics
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    app: victoria-metrics
+  ports:
+    - name: http
+      port: 8428
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: victoria-metrics
+  labels:
+    app: victoria-metrics
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  serviceName: victoria-metrics
+  replicas: 1
+  selector:
+    matchLabels:
+      app: victoria-metrics
+  template:
+    metadata:
+      labels:
+        app: victoria-metrics
+    spec:
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
+      containers:
+        - name: victoria-metrics
+          image: {{ $v.image | quote }}
+          args:
+            - -retentionPeriod={{ $v.retentionPeriod }}
+            - -storageDataPath=/storage
+            - -httpListenAddr=:8428
+            # Cache sizing follows the container limit, not the node's RAM.
+            - -memory.allowedPercent=60
+            {{- range $v.extraArgs }}
+            - {{ . }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8428
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            {{- toYaml $v.resources | nindent 12 }}
+          volumeMounts:
+            - name: storage
+              mountPath: /storage
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.global.storageClassName }}
+        resources:
+          requests:
+            storage: {{ $v.storageSize }}
+---
+# Self-metrics into Prometheus (ingestion rate, disk, slow inserts).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: victoria-metrics
+  labels:
+    release: kube-prometheus-stack
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    matchLabels:
+      app: victoria-metrics
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+{{- end }}

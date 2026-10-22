@@ -1,0 +1,107 @@
+{{- if and .Values.enabled .Values.kafka.enabled }}
+{{- $k := .Values.kafka }}
+# ------------------------------------------------------------------------------
+# IIoT - Kafka (Strimzi operator, KRaft — no ZooKeeper)
+# ------------------------------------------------------------------------------
+# One node pool of {{ $k.replicas }} combined controller+broker nodes, one per node (required
+# anti-affinity), each with a local-storage volume that also holds the KRaft
+# metadata log. Replication factor 3 / min ISR 2: one broker (node) can be
+# lost with no data loss and producers (acks=all) keep writing.
+#
+# Listener: plain 9092, cluster-internal only (no auth) — clients are
+# Telegraf and Spark inside the cluster. Bootstrap:
+#   {{ $k.clusterName }}-kafka-bootstrap.{{ .Release.Namespace }}.svc.cluster.local:9092
+#
+# Requires the strimzi-kafka-operator subchart (wave 0) and its CRDs
+# (rke2/scripts/apply-crds.sh). Argo CD has built-in health checks for these
+# kinds, so wave 2 (telegraf-kafka) waits for a Ready cluster.
+#
+# Managed via ArgoCD Sync Wave: 1
+# ------------------------------------------------------------------------------
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: dual-role
+  labels:
+    strimzi.io/cluster: {{ $k.clusterName }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: {{ $k.replicas }}
+  roles:
+    - controller
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: {{ $k.storageSize }}
+        class: {{ .Values.global.storageClassName }}
+        deleteClaim: false
+        kraftMetadata: shared
+  resources:
+    {{- toYaml $k.resources | nindent 4 }}
+  jvmOptions:
+    -Xms: {{ $k.heap }}
+    -Xmx: {{ $k.heap }}
+  template:
+    pod:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  strimzi.io/cluster: {{ $k.clusterName }}
+                  strimzi.io/pool-name: dual-role
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: {{ $k.clusterName }}
+  annotations:
+    strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  kafka:
+    version: {{ $k.version }}
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+    config:
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      # Topics are declared as KafkaTopic resources (below), not created by
+      # whichever producer typos a name first.
+      auto.create.topics.enable: false
+      log.retention.hours: {{ $k.defaultRetentionHours }}
+  entityOperator:
+    topicOperator:
+      resources:
+        requests: { cpu: 50m, memory: 256Mi }
+        limits: { memory: 512Mi }
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: {{ $k.topic.name | replace "." "-" }}
+  labels:
+    strimzi.io/cluster: {{ $k.clusterName }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  topicName: {{ $k.topic.name }}
+  partitions: {{ $k.topic.partitions }}
+  replicas: 3
+  config:
+    retention.ms: {{ mul $k.topic.retentionHours 3600000 | int64 | quote }}
+    min.insync.replicas: 2
+    compression.type: producer
+{{- end }}

@@ -7,7 +7,7 @@ Comprehensive observability stack for metrics, logs, and network flows.
 - **Sync Wave**: `0` (Application Layer).
 
 ## 📊 Features
-- **ServiceMonitors**: Automated scraping for Spark, Airflow, and Cloudflared.
+- **ServiceMonitors**: Spark and platform components. Node metrics, logs and OTLP go through the Alloy DaemonSet (files/config.alloy); traces to Tempo; event exporter to Loki.
 - **Dashboards**: Pre-configured Grafana boards for cluster health.
 - **Loki Stack**: Centralized log aggregation for all pods.
 

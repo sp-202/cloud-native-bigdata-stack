@@ -1,33 +1,30 @@
 # ------------------------------------------------------------------------------
-# NetworkPolicy - default namespace boundary
+# NetworkPolicy - default namespace boundary (opt-in)
 # ------------------------------------------------------------------------------
 # Part of the Cloud-Native Big Data Platform (Umbrella Chart)
 #
-# Namespace layout this platform actually uses today:
-#   default               — almost everything (Airflow, Superset, Spark,
-#                            Gravitino, Postgres, StarRocks, kube-prometheus-
-#                            stack, JupyterHub, etc. — the whole umbrella
-#                            chart deploys into one release namespace)
-#   kube-system           — Traefik (ingress), Cilium, CoreDNS, CSI drivers
-#   cloudflare            — cloudflared (already has its own NetworkPolicy,
-#                            see charts/cloudflared)
-#   cert-manager          — cert-manager (issues certs, no runtime traffic
-#                            to/from default needed)
-#   kubernetes-dashboard  — standalone, no relationship to this platform
+# Coarse ingress boundary for `default` (where the whole umbrella release
+# lives): allows traffic from pods in `default`, from kube-system (Traefik,
+# Alloy's Service traffic, CoreDNS), and from the nodes themselves. Blocks
+# other namespaces. NOT a default-deny-all — intra-namespace traffic stays
+# unrestricted.
 #
-# This is a coarse, deliberately conservative boundary — NOT a full
-# default-deny-all. It blocks unrelated/future namespaces (kubernetes-
-# dashboard, cert-manager, or anything added later) from reaching directly
-# into this platform's core services, while leaving all intra-namespace
-# traffic within `default` unrestricted. A fully granular per-service policy
-# (Airflow→Postgres only, Superset→Redis only, etc.) would need every real
-# connection enumerated correctly on the first try with no live cluster to
-# verify against — the risk of silently breaking real traffic outweighs the
-# benefit of that extra precision right now.
+# Off by default (networking-extras.networkPolicy.enabled). Enforced by Canal's
+# Calico policy engine. The node rule is what main needed Cilium entities
+# for: the kube-apiserver (calling CNPG/prometheus-operator/cert-manager
+# webhooks, metrics-server's APIService) and hostNetwork Alloy (pushing to
+# Loki/Prometheus) are not pods in any namespace — their packets come from a
+# node IP on the local node, or from the remote node's flannel VXLAN address
+# (the .0 of that node's pod CIDR slice) across nodes. So both the nodes' LAN
+# subnet(s) and the pod CIDR's per-node tunnel addresses must be allowed, or
+# webhooks time out and ArgoCD syncs stall.
 #
 # Managed via ArgoCD Sync Wave: 0
 # ------------------------------------------------------------------------------
-{{- if .Values.enabled }}
+{{- if and .Values.enabled (.Values.networkPolicy).enabled }}
+{{- if not .Values.networkPolicy.nodeCIDRs }}
+{{- fail "networking-extras.networkPolicy.nodeCIDRs must list the nodes' subnet(s) when networkPolicy.enabled is true" }}
+{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -40,27 +37,27 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    # Unrestricted from anything else already in `default` — this is where
-    # almost all of this platform's real inter-service traffic lives
-    # (Airflow↔Postgres, Superset↔Redis/Postgres, Spark↔Gravitino, etc.)
-    # and enumerating it all correctly without live testing isn't safe.
+    # Everything already in `default` (Airflow<->Postgres, Spark<->Gravitino, ...).
     - from:
         - podSelector: {}
-    # Traefik (kube-system) proxying user requests to services in default —
-    # per charts/ingress's centralized Ingress, this is the actual traffic
-    # source for every *.{{ .Values.global.domain }} route.
+    # Traefik and the other kube-system agents.
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
-    # cloudflared (cloudflare namespace) reaches Spark Connect directly on
-    # 15002 — matches its own existing egress rule in
-    # charts/cloudflared/templates/cloudflared-networkpolicy.yaml.
+    # Nodes: kube-apiserver, kubelet probes, hostNetwork Alloy.
     - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: cloudflare
-      ports:
-        - protocol: TCP
-          port: 15002
+        {{- range .Values.networkPolicy.nodeCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+        # flannel.1 addresses (<pod-cidr-slice>.0/32 per node), the source of
+        # host-originated traffic arriving over VXLAN. A /16 of pod IPs would
+        # also admit every pod in every namespace, so only the .0 of each /24
+        # slice is listed (RKE2 default node-cidr-mask-size 24).
+        {{- $parts := splitList "." (index (splitList "/" .Values.networkPolicy.podCIDR) 0) }}
+        {{- range $i := until 256 }}
+        - ipBlock:
+            cidr: {{ index $parts 0 }}.{{ index $parts 1 }}.{{ $i }}.0/32
+        {{- end }}
 {{- end }}

@@ -53,3 +53,8 @@ generated-manifests.yaml
 big-data-platform/graphify-out/
 # Upstream charts pulled locally for schema reference (not deployed from here)
 vendor-charts/
+
+# RKE2 bootstrap: local cluster settings and generated kubeconfig (rke2/README.md)
+rke2/cluster.env
+rke2/kubeconfig*
+rke2/cluster-*.env

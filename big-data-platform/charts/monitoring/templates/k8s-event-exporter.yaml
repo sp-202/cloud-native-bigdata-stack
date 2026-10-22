@@ -3,10 +3,10 @@
 # Monitoring - Kubernetes event exporter (events -> stdout -> promtail -> Loki)
 # ------------------------------------------------------------------------------
 # Kubernetes events — OOMKilled, BackOff, FailedScheduling, Evicted,
-# FailedMount, Karpenter's Nominated/Disrupting, Unhealthy probes — live in
+# FailedMount, Unhealthy probes — live in
 # etcd for one hour and were collected nowhere, so after a run the reason a
 # pod died or waited was gone. This writes every event, as one JSON line, to
-# stdout; promtail picks it up like any pod log and (values.yaml, the
+# stdout; Alloy picks it up like any pod log and (files/config.alloy, the
 # app="k8s-event-exporter" match) turns type into level (Warning -> warn,
 # Normal -> info) and reason / involvedObject kind / namespace into labels.
 #
@@ -118,8 +118,6 @@ spec:
         app.kubernetes.io/name: k8s-event-exporter
     spec:
       serviceAccountName: k8s-event-exporter
-      nodeSelector:
-        node-role.kubernetes.io/core-node: ""
       containers:
         - name: event-exporter
           image: ghcr.io/resmoio/kubernetes-event-exporter:v1.7

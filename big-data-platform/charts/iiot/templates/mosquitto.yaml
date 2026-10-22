@@ -1,0 +1,208 @@
+{{- if and .Values.enabled .Values.mosquitto.enabled }}
+{{- $m := .Values.mosquitto }}
+# ------------------------------------------------------------------------------
+# IIoT - Mosquitto MQTT broker (entry point for DCS data)
+# ------------------------------------------------------------------------------
+# The DCS side bridges its MQTT into this broker (inbound bridge, as user
+# `dcs`), or — with mosquitto.bridge.enabled — this broker dials out to the
+# DCS broker and pulls the topics in. Telegraf (charts/iiot telegraf.yaml)
+# subscribes with persistent QoS 1 sessions, so messages queue here
+# (max_queued_messages) while a Telegraf pod restarts.
+#
+# Credentials: Secret mosquitto-credentials (bootstrap-platform.sh), hashed
+# into a password file by the init container at every start. The outbound
+# bridge password, if used, comes from Secret mosquitto-bridge (create it
+# yourself: key remote-password). Nothing secret in this chart or git.
+#
+# Exposed outside the cluster on :1883 of the ingress nodes via Traefik's
+# `mqtt` TCP entrypoint (mqtt-ingressroutetcp.yaml).
+#
+# Managed via ArgoCD Sync Wave: 0
+# ------------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosquitto-config
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  mosquitto.conf.tpl: |
+    per_listener_settings false
+    persistence true
+    persistence_location /mosquitto/data/
+    autosave_interval 60
+    log_dest stdout
+    log_type error
+    log_type warning
+    log_type notice
+    log_timestamp_format %Y-%m-%dT%H:%M:%S
+
+    listener 1883 0.0.0.0
+    allow_anonymous false
+    password_file /auth/passwd
+    acl_file /mosquitto/config/acl
+
+    # Per persistent session: how much Telegraf may fall behind before the
+    # broker starts dropping its oldest QoS 1 messages.
+    max_queued_messages {{ $m.maxQueuedMessages | int }}
+    max_inflight_messages 100
+    message_size_limit {{ $m.messageSizeLimit | int }}
+    {{- if $m.bridge.enabled }}
+
+    # Outbound bridge: this broker connects to the DCS broker and pulls topics.
+    connection dcs-bridge
+    address {{ $m.bridge.address }}
+    remote_clientid {{ $m.bridge.clientId }}
+    {{- if $m.bridge.remoteUsername }}
+    remote_username {{ $m.bridge.remoteUsername }}
+    remote_password __BRIDGE_PASSWORD__
+    {{- end }}
+    bridge_protocol_version mqttv311
+    cleansession false
+    start_type automatic
+    restart_timeout 5 30
+    try_private true
+    notifications false
+    {{- range $m.bridge.topics }}
+    topic {{ . }}
+    {{- end }}
+    {{- end }}
+  acl: |
+    # dcs: the DCS-side bridge/gateway publishing in.
+    user {{ $m.users.dcs }}
+    {{- range $m.topics }}
+    topic readwrite {{ . }}
+    {{- end }}
+
+    # telegraf: both Telegraf pipelines, read-only.
+    user {{ $m.users.telegraf }}
+    {{- range $m.topics }}
+    topic read {{ . }}
+    {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosquitto
+  labels:
+    app: mosquitto
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    app: mosquitto
+  ports:
+    - name: mqtt
+      port: 1883
+      targetPort: mqtt
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mosquitto
+  labels:
+    app: mosquitto
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  serviceName: mosquitto
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mosquitto
+  template:
+    metadata:
+      labels:
+        app: mosquitto
+      annotations:
+        checksum/config: {{ $m | toJson | sha256sum }}
+    spec:
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
+      initContainers:
+        # Hash the passwords from the Secret into a password file and render
+        # the bridge password into mosquitto.conf — both into an emptyDir, so
+        # nothing plaintext touches the ConfigMap or the PVC.
+        - name: auth
+          image: {{ $m.image | quote }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              mosquitto_passwd -c -b /auth/passwd "$DCS_USERNAME" "$DCS_PASSWORD"
+              mosquitto_passwd -b /auth/passwd "$TELEGRAF_USERNAME" "$TELEGRAF_PASSWORD"
+              sed "s|__BRIDGE_PASSWORD__|${BRIDGE_PASSWORD:-}|" /mosquitto/config/mosquitto.conf.tpl > /auth/mosquitto.conf
+              chown -R 1883:1883 /auth /mosquitto/data
+              chmod 0700 /auth/passwd
+          env:
+            - name: DCS_USERNAME
+              value: {{ $m.users.dcs | quote }}
+            - name: DCS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-credentials
+                  key: dcs-password
+            - name: TELEGRAF_USERNAME
+              value: {{ $m.users.telegraf | quote }}
+            - name: TELEGRAF_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-credentials
+                  key: telegraf-password
+            - name: BRIDGE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-bridge
+                  key: remote-password
+                  optional: true
+          volumeMounts:
+            - name: config
+              mountPath: /mosquitto/config
+            - name: auth
+              mountPath: /auth
+            - name: data
+              mountPath: /mosquitto/data
+      containers:
+        - name: mosquitto
+          image: {{ $m.image | quote }}
+          command: ["mosquitto", "-c", "/auth/mosquitto.conf"]
+          ports:
+            - name: mqtt
+              containerPort: 1883
+          readinessProbe:
+            tcpSocket:
+              port: mqtt
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: mqtt
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml $m.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /mosquitto/config
+            - name: auth
+              mountPath: /auth
+            - name: data
+              mountPath: /mosquitto/data
+      volumes:
+        - name: config
+          configMap:
+            name: mosquitto-config
+        - name: auth
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.global.storageClassName }}
+        resources:
+          requests:
+            storage: {{ $m.storageSize }}
+{{- end }}

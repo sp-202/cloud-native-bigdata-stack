@@ -1,0 +1,50 @@
+# =============================================================================
+# 2-node TEST profile — overlay on values.yaml (values.yaml stays the 4-node
+# production config). Selected with PLATFORM_PROFILE="2node" in the cluster's
+# env file; rke2/bootstrap-platform.sh then gives the Argo CD Application
+#   valueFiles: [values.yaml, values-2node.yaml]
+# Helm deep-merges maps and replaces lists, so only what differs is here.
+#
+# Nodes: node-01 (RKE2 server) + node-02 (agent), 16 GB / 20 cores each.
+# Two etcd members would be WORSE than one (quorum 2/2: either node down =
+# cluster read-only), so it is 1 server + 1 agent.
+#
+# ON  (what to test + what it can't run without)
+#   Gravitino, Airflow, Postgres (CNPG), Prometheus + Grafana, Spark Operator
+#   (no SparkApplications submitted), plus their dependencies: CNPG operator,
+#   cert-manager (Prometheus operator webhook certs), SeaweedFS S3 (Gravitino's
+#   Iceberg warehouse, Airflow remote logs — rke2/argocd/seaweedfs-2node.yaml),
+#   OpenEBS, Traefik, Argo CD.
+# OFF StarRocks, IIoT (Mosquitto/Telegraf/Kafka/VictoriaMetrics), Strimzi,
+#   Spark History Server (no Spark runs to show). Already off in values.yaml:
+#   Alloy, Loki, Tempo, Thanos, Redis, Superset, JupyterHub, Spark Connect.
+#
+# Expected footprint: ~10 GiB requested of ~25 GiB allocatable after the
+# control plane — see rke2/README.md "2-node test profile".
+# =============================================================================
+
+starrocks:
+  enabled: false
+
+iiot:
+  enabled: false
+
+strimzi-kafka-operator:
+  enabled: false
+
+spark-history-server:
+  enabled: false
+
+ingress:
+  starrocks:
+    enabled: false
+  victoriametrics:
+    enabled: false
+  spark-history-server:
+    enabled: false
+
+kube-prometheus-stack:
+  grafana:
+    # No VictoriaMetrics in this profile; a datasource pointing nowhere
+    # would just error in Grafana.
+    additionalDataSources: []

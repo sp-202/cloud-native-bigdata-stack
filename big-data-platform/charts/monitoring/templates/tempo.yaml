@@ -1,13 +1,11 @@
 {{- if and .Values.enabled (.Values.tempo).enabled }}
-# Grafana Tempo, single binary -- the trace backend for Comet's per-operator spans
-# (datafusion-tracing, spark.comet.otel.traces.endpoint). Executors send OTLP to the Alloy on
-# their own node (config.alloy section 5), which forwards traces here and derives span metrics
-# for Prometheus.
+# Grafana Tempo, single binary -- the trace backend for anything that speaks OTLP. Pods send
+# OTLP to the Alloy on their own node (config.alloy section 5), which forwards traces here and
+# derives span metrics for Prometheus.
 #
-# Blocks go to the lakehouse bucket under tempo/, through IRSA: terraform-aws-k8s-ha
-# observability-irsa.tf, role <cluster>-tempo-s3-writer, trusted for
-# system:serviceaccount:default:tempo only -- rename the ServiceAccount and STS silently
-# rejects it, the SDK falls back to the node role, and every flush is Access Denied.
+# Blocks go to the SeaweedFS lakehouse bucket under tempo/. No keys in the config: Tempo's S3
+# client (minio-go) reads AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY from the environment, which
+# the pod gets from the lakehouse-s3 Secret.
 #
 # Sizing is for SF1000 at sampleRatio 1.0: one query is ~50-100k spans (one per operator per
 # task, ~80 metric attributes each), i.e. tens of MB per trace arriving in a burst at stage
@@ -18,8 +16,6 @@ kind: ServiceAccount
 metadata:
   name: tempo
   namespace: {{ .Release.Namespace }}
-  annotations:
-    eks.amazonaws.com/role-arn: {{ .Values.global.tempoS3RoleArn | quote }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -47,17 +43,19 @@ data:
 
     compactor:
       compaction:
-        # Tempo deletes expired blocks itself (the IAM policy grants DeleteObject on tempo/*).
+        # Tempo deletes expired blocks itself.
         block_retention: {{ .Values.tempo.retention }}
 
     storage:
       trace:
         backend: s3
         s3:
-          bucket: {{ .Values.global.awsLakehouse.bucket }}
+          bucket: {{ .Values.global.s3.bucket }}
           prefix: tempo
-          endpoint: s3.{{ .Values.global.awsLakehouse.region }}.amazonaws.com
-          region: {{ .Values.global.awsLakehouse.region }}
+          endpoint: {{ .Values.global.s3.endpointHost }}
+          region: {{ .Values.global.s3.region }}
+          insecure: true
+          forcepathstyle: true
         wal:
           path: /var/tempo/wal
         local:
@@ -120,6 +118,9 @@ spec:
         - name: tempo
           image: {{ .Values.tempo.image | quote }}
           args: ["-config.file=/etc/tempo/tempo.yaml"]
+          envFrom:
+            - secretRef:
+                name: {{ .Values.global.s3.secretName }}
           ports:
             - name: http
               containerPort: 3200
@@ -146,7 +147,7 @@ spec:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
-        storageClassName: {{ .Values.tempo.storageClassName | quote }}
+        storageClassName: {{ .Values.tempo.storageClassName | default .Values.global.storageClassName | quote }}
         resources:
           requests:
             storage: {{ .Values.tempo.storageSize | quote }}

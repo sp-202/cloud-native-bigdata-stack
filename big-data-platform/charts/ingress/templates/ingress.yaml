@@ -103,6 +103,9 @@ spec:
             name: grafana
             port:
               name: http-web
+  {{- $sparkHistory := index .Values "spark-history-server" | default dict }}
+  {{- /* `default true` would turn an explicit false into true — check the key instead. */}}
+  {{- if or (not (hasKey $sparkHistory "enabled")) $sparkHistory.enabled }}
   # Spark History
   - host: spark-history.{{ .Values.global.domain }}
     http:
@@ -114,6 +117,33 @@ spec:
             name: spark-history-server
             port:
               number: 18080
+  {{- end }}
+  {{- if and .Values.victoriametrics .Values.victoriametrics.enabled }}
+  # VictoriaMetrics (charts/iiot) — query API + /vmui
+  - host: victoriametrics.{{ .Values.global.domain }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: victoria-metrics
+            port:
+              name: http
+  {{- end }}
+  {{- if and .Values.starrocks .Values.starrocks.enabled }}
+  # StarRocks FE web UI (8030). SQL clients use NodePort 30930 instead.
+  - host: starrocks.{{ .Values.global.domain }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: starrocks-cluster-fe-service
+            port:
+              number: 8030
+  {{- end }}
   {{- if and .Values.gravitino .Values.gravitino.enabled }}
   # Gravitino — Web UI v2 + Main REST API (port 8090)
   # The Iceberg REST port (9001) is internal-only; Spark uses it in-cluster.

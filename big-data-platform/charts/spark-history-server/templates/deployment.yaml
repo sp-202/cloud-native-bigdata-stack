@@ -27,18 +27,12 @@ spec:
       labels:
         app: spark-history-server
     spec:
-      # data-node, not spark-node — this is just a log viewer reading
-      # completed job history from S3, it doesn't need Karpenter's
-      # scale-from-zero Spark capacity. Pinning it there meant just opening
-      # the UI would cold-start an expensive Spark instance for no reason.
       nodeSelector:
         {{- toYaml .Values.global.nodeSelector.data | nindent 8 }}
       containers:
         - name: spark-history-server
           image: {{ .Values.global.sparkImage }}
-          # Always while the spark image is rebuilt under an unchanged tag: the golden AMI
-          # pre-pulls spark-bigdata (terraform-aws-k8s-ha packer/images/spark.txt), and with
-          # IfNotPresent every node ran that baked copy instead of the rebuilt one.
+          # Always while the spark image is rebuilt under an unchanged tag.
           imagePullPolicy: {{ .Values.global.sparkImagePullPolicy | default "Always" }}
           command:
             [
@@ -47,20 +41,22 @@ spec:
             ]
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          # AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY for S3A's default
+          # credential chain (EnvironmentVariableCredentialsProvider), plus
+          # `bucket` for the logDirectory fallback below.
+          envFrom:
+            - secretRef:
+                name: {{ .Values.global.s3.secretName }}
           env:
             - name: SPARK_DAEMON_MEMORY
               value: {{ .Values.daemonMemory | quote }}
-            # No AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/s3a.endpoint — the
-            # node's IAM role provides S3 credentials via the default chain.
-            - name: LAKEHOUSE_BUCKET
-              valueFrom:
-                secretKeyRef:
-                  name: lakehouse-s3
-                  key: bucket
             - name: SPARK_HISTORY_OPTS
               value: >-
-                -Dspark.history.fs.logDirectory={{ .Values.logDirectory | default "s3a://$(LAKEHOUSE_BUCKET)/spark-events/" }}
+                -Dspark.history.fs.logDirectory={{ .Values.logDirectory | default "s3a://$(bucket)/spark-events/" }}
+                -Dspark.hadoop.fs.s3a.endpoint={{ .Values.global.s3.endpoint }}
+                -Dspark.hadoop.fs.s3a.endpoint.region={{ .Values.global.s3.region }}
                 -Dspark.hadoop.fs.s3a.path.style.access={{ .Values.global.s3.pathStyleAccess }}
+                -Dspark.hadoop.fs.s3a.connection.ssl.enabled={{ .Values.global.s3.sslEnabled }}
                 -Dspark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
                 -Dspark.history.fs.cleaner.enabled=false
                 -Dspark.history.retainedApplications={{ .Values.retainedApplications | default 2000 }}

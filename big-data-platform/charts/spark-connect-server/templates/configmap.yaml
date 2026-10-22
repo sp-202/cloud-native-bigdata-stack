@@ -68,11 +68,7 @@ data:
 
     # --- Executor & Driver Resources ---
     # Executor: 2 vCPU / 4g memory — small footprint so more executors can
-    # run in parallel on Karpenter's spark-node pool. Note this pool
-    # scale-to-zero's when idle (consolidateAfter: 300s) — unlike the old
-    # always-on spark-critical baseline, there's a cold-start delay
-    # (new-node provisioning time) for the first job after an idle period,
-    # not permanently-warm executors.
+    # run in parallel.
     spark.executor.cores             2
     spark.executor.memory            4g
     spark.executor.memoryOverhead    1g
@@ -107,7 +103,7 @@ data:
     spark.sql.gravitino.enableIcebergSupport true
     # warehouse.dir is set via --conf on the spark-submit command in
     # deployment.yaml instead of here — the real bucket name is only known
-    # after `terraform apply`, injected there via the lakehouse-s3 Secret.
+    # at runtime, injected there via the lakehouse-s3 Secret.
     # Add this to ConfigMap to make it feel "instant"
     spark.sql.gravitino.metadata.refresh.interval 5000
 
@@ -116,10 +112,11 @@ data:
     spark.hadoop.fs.s3.impl                  org.apache.hadoop.fs.s3a.S3AFileSystem
     spark.hadoop.fs.s3a.path.style.access    {{ .Values.global.s3.pathStyleAccess }}
     spark.hadoop.fs.s3a.connection.ssl.enabled {{ .Values.global.s3.sslEnabled }}
-    # No aws.credentials.provider override — Hadoop-aws's own default chain
-    # already includes IAM instance profile support. Forcing
-    # SimpleAWSCredentialsProvider (the old MinIO-era setting) requires
-    # static keys and errors without them.
+    spark.hadoop.fs.s3a.endpoint             {{ .Values.global.s3.endpoint }}
+    # No aws.credentials.provider override — Hadoop-aws's default chain
+    # includes EnvironmentVariableCredentialsProvider, which reads the
+    # AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY the driver and executors get
+    # from the lakehouse-s3 Secret.
     spark.hadoop.fs.s3a.fast.upload          true
 
     # --- Networking & UI ---
@@ -127,12 +124,9 @@ data:
     spark.ui.port                            4040
     spark.driver.bindAddress                 0.0.0.0
 
-    # --- Local NVMe Shuffle Storage ---
-    # Executors land on Karpenter's spark-node pool, which has NVMe at
-    # /mnt/spark-nvme (auto-detected/RAID0'd by common-runtime.sh at node
-    # boot, same script every node group here uses). The EC2NodeClass
-    # userData additionally creates /mnt/spark-nvme/spark-shuffle on top.
-    # hostPath volume in executor-pod-template mounts it into the container.
+    # --- Local Shuffle Storage ---
+    # /mnt/spark-nvme/spark-shuffle on every node (rke2/scripts/prep-node.sh),
+    # mounted by the hostPath volume in executor-pod-template.
     spark.local.dir                          {{ .Values.executor.localDir }}
 
     # --- Performance Tuning ---
@@ -142,7 +136,7 @@ data:
     # --- Event Logging (Spark History Server reads from the real lakehouse bucket) ---
     # eventLog.dir is set via --conf on the spark-submit command in
     # deployment.yaml instead of here, same reason as spark.sql.warehouse.dir
-    # above — the real bucket name is only known after `terraform apply`.
+    # above — the bucket name comes from the lakehouse-s3 Secret.
     # Was hardcoded here to a nonexistent "spark-logs" bucket that doesn't
     # match spark-history-server's actual read path — event logs would have
     # silently gone nowhere History Server could ever find them. Confirmed

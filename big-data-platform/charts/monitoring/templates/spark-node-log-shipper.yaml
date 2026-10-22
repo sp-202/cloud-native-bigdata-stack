@@ -1,36 +1,33 @@
 {{- if and .Values.enabled (.Values.sparkNodeLogs).enabled }}
 # ------------------------------------------------------------------------------
-# Monitoring - Spark node log shipper (GC / diag files on the NVMe -> S3)
+# Monitoring - Spark node log shipper (GC / diag files on the node disk -> S3)
 # ------------------------------------------------------------------------------
 # Part of the Cloud-Native Big Data Platform (Umbrella Chart)
 #
 # The SparkApplications write two kinds of logs only to the node's NVMe, never
 # to stdout: the JVM GC/safepoint logs (-Xlog:gc*,safepoint:file=/mnt/
 # spark-nvme/gc-*.log) and the diag*.log appender (DAGScheduler, file listing,
-# planning; additivity=false in examples/spark-jobs/*.yaml). Karpenter deletes
-# spark nodes a few minutes after a job, so these were lost after every run.
+# planning; additivity=false in examples/spark-jobs/*.yaml).
 #
-# Two copies, on purpose:
-#   * Loki — promtail's spark-node-files job (values.yaml) tails them live,
-#     labelled node_name / host_ip / log_type / spark_role / level;
+# Optional second copy (monitoring.sparkNodeLogs.enabled, off by default):
+#   * Loki — Alloy's spark-node-files pipeline (files/config.alloy) always
+#     tails them live, labelled node_name / host_ip / log_type / spark_role;
 #   * S3 — this DaemonSet uploads the raw files, so GC logs stay usable by GC
 #     tools (GCViewer, GCEasy) and survive a Loki problem.
 #
-#   s3://<lakehouse>/spark-node-logs/<YYYY-MM-DD>/<node>/<file>
+#   s3://lakehouse/spark-node-logs/<YYYY-MM-DD>/<node>/<file>
 #   object metadata: node, host-ip
 #
 # Only the top-level gc-* / diag* files are read, by glob — never a recursive
 # walk: the same directory holds the range cache and shuffle files, tens of
 # thousands of them. A file is re-uploaded only when its size or mtime changed,
-# every INTERVAL seconds (60), and everything once more on SIGTERM. Karpenter
-# removes an empty spark node 180 s after its last Spark pod exits, so at
-# least two cycles run after the last write even without graceful shutdown. The date in the
-# key is the upload day (UTC), so a file still growing past midnight lands
-# under both days.
+# every INTERVAL seconds (60), and everything once more on SIGTERM. The date
+# in the key is the upload day (UTC), so a file still growing past midnight
+# lands under both days.
 #
-# Same credentials as the other shippers: node IMDS role on the lakehouse
-# bucket, no new IAM. Spark nodes only (nodeSelector + the spark-only
-# toleration). Read-only hostPath.
+# Credentials and endpoint from the lakehouse-s3 Secret (in kube-system too,
+# rke2/bootstrap-platform.sh) — aws-cli v2 honours AWS_ENDPOINT_URL. Every
+# node (Spark can run anywhere). Read-only hostPath.
 #
 # Managed via ArgoCD Sync Wave: 0
 # ------------------------------------------------------------------------------
@@ -86,13 +83,8 @@ spec:
       labels:
         app: spark-node-log-shipper
     spec:
-      nodeSelector:
-        node-role.kubernetes.io/spark-node: ""
       tolerations:
-        - key: spark-only
-          operator: Equal
-          value: "true"
-          effect: NoSchedule
+        - operator: Exists
       # Stopped in the critical phase of kubelet graceful node shutdown (the
       # last 60 s, after the Spark pods), so the final upload runs.
       priorityClassName: system-node-critical
@@ -101,7 +93,7 @@ spec:
       terminationGracePeriodSeconds: 55
       containers:
         - name: shipper
-          # Pinned, verified on Docker Hub's tags API (arm64 present).
+          # Pinned, multi-arch (amd64 + arm64) on Docker Hub.
           image: amazon/aws-cli:2.37.4
           command: ["/bin/bash", "/scripts/ship.sh"]
           env:
@@ -114,11 +106,12 @@ spec:
                 fieldRef:
                   fieldPath: status.hostIP
             - name: BUCKET
-              value: {{ .Values.global.awsLakehouse.bucket | quote }}
-            - name: AWS_REGION
-              value: {{ .Values.global.awsLakehouse.region | quote }}
+              value: {{ .Values.global.s3.bucket | quote }}
             - name: INTERVAL
               value: {{ (.Values.sparkNodeLogs).intervalSeconds | default 60 | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.global.s3.secretName }}
           resources:
             requests:
               cpu: 10m
