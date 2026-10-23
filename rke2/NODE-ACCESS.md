@@ -67,8 +67,8 @@ sudoers file can lock you out of sudo entirely.
 To do both nodes **from the laptop in one go** instead (`-t` gives sudo a terminal for that last
 password prompt):
 ```bash
-for ip in 192.168.1.21 192.168.1.22; do
-  ssh -t ubuntu@$ip 'U=$(whoami); echo "$U ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/90-$U-nopasswd >/dev/null && sudo chmod 0440 /etc/sudoers.d/90-$U-nopasswd && sudo visudo -cf /etc/sudoers.d/90-$U-nopasswd'
+for ip in 172.30.30.102 172.30.30.229; do
+  ssh -t dcs-admin@$ip 'U=$(whoami); echo "$U ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/90-$U-nopasswd >/dev/null && sudo chmod 0440 /etc/sudoers.d/90-$U-nopasswd && sudo visudo -cf /etc/sudoers.d/90-$U-nopasswd'
 done
 ```
 
@@ -76,8 +76,8 @@ done
 
 Both lines must print `ok` **without any password prompt**:
 ```bash
-for ip in 192.168.1.21 192.168.1.22; do
-  ssh -o BatchMode=yes ubuntu@$ip 'sudo -n true && echo "$(hostname) ok"'
+for ip in 172.30.30.102 172.30.30.229; do
+  ssh -o BatchMode=yes dcs-admin@$ip 'sudo -n true && echo "$(hostname) ok"'
 done
 ```
 
@@ -89,13 +89,13 @@ connect. If this passes, `rke2/install-cluster.sh` can reach the nodes.
 So you can type `ssh node-01`:
 ```bash
 cat >> ~/.ssh/config <<'EOF'
-Host node-01
-  HostName 192.168.1.21
-  User ubuntu
+Host node-03
+  HostName 172.30.30.102
+  User dcs-admin
   IdentityFile ~/.ssh/id_ed25519
 Host node-02
-  HostName 192.168.1.22
-  User ubuntu
+  HostName 172.30.30.229
+  User dcs-admin
   IdentityFile ~/.ssh/id_ed25519
 EOF
 chmod 600 ~/.ssh/config
