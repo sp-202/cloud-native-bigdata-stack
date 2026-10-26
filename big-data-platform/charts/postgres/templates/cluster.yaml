@@ -44,8 +44,13 @@ spec:
     size: {{ .Values.persistence.size | default "10Gi" | quote }}
 
   affinity:
+    # Only when non-empty: CNPG compares `nodeSelector: {}` with the pod's
+    # (absent) nodeSelector, sees a difference and recreates the primary every
+    # ~15s forever ("original and target PodSpec differ in node-selector").
+    {{- with .Values.global.nodeSelector.data }}
     nodeSelector:
-      {{- toYaml .Values.global.nodeSelector.data | nindent 6 }}
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
     # Only matters with instances > 1: spread replicas across nodes (with
     # local volumes a co-located pair would stay co-located forever).
     podAntiAffinityType: preferred

@@ -28,7 +28,9 @@ metadata:
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 3
-  activeDeadlineSeconds: 300
+  # Counts from Job start, image pulls included: on a ~150 KB/s uplink the
+  # first pull of postgres:15-alpine + the Airflow image takes far over 5 min.
+  activeDeadlineSeconds: 7200
   template:
     spec:
       restartPolicy: OnFailure
