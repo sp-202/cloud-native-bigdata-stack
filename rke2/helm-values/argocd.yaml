@@ -1,4 +1,4 @@
-# Argo CD (chart argo/argo-cd 7.8.23, same as main) — ported from
+# Argo CD (chart argo/argo-cd 10.2.2 = v3.4.6; main is on 7.8.23) — ported from
 # terraform-aws-k8s-ha argocd.tf. Single replicas (main ran 2 of each across
 # core nodes) to keep the footprint small on 4 nodes; Argo CD being briefly
 # down only pauses syncs, it never touches running workloads.
@@ -12,6 +12,16 @@ server:
 configs:
   params:
     server.insecure: true
+    # Chart maps this onto the repo-server's ARGOCD_GIT_REQUEST_TIMEOUT; setting
+    # that env var directly too is a duplicate key the API server rejects.
+    reposerver.git.request.timeout: 60s
+    # The first clone of GIT_REPO (~125 MB, full history — Argo CD has no
+    # shallow clone) takes 10-20 min on a ~150 KB/s office WiFi uplink. The
+    # controller/server give the repo-server only 60s per manifest request by
+    # default, so the clone was killed and restarted forever. Later fetches are
+    # incremental (the clone is kept in the repo-server's /tmp).
+    controller.repo.server.timeout.seconds: "2400"
+    server.repo.server.timeout.seconds: "2400"
   cm:
     kustomize.buildOptions: --enable-helm
     resource.customizations.health.networking.k8s.io_Ingress: |
@@ -91,9 +101,12 @@ repoServer:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
   # git ls-remote/fetch to GitHub hit the 15s default HTTP timeout with no
-  # retry on main; same knobs here (home/office uplinks are no faster).
+  # retry on main; same knobs here (home/office uplinks are no faster). The
+  # timeout itself is configs.params reposerver.git.request.timeout above.
   env:
-    - name: ARGOCD_GIT_REQUEST_TIMEOUT
-      value: 60s
     - name: ARGOCD_GIT_ATTEMPTS_COUNT
       value: "3"
+    # Kill switch for git/helm/kustomize commands (default 90s: `git fetch`
+    # of the first clone died at 1m30s). Not chart-mapped, so no duplicate.
+    - name: ARGOCD_EXEC_TIMEOUT
+      value: 40m

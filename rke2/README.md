@@ -204,7 +204,7 @@ are idempotent, so re-run them after any failure or config change.
    would run that hook on every sync.
 2. **Traefik** (helm) as a DaemonSet with hostPorts 80/443. RKE2's ingress-nginx is disabled in
    `install-rke2.sh`.
-3. **Argo CD** (helm, chart 7.8.23, same config as `main`'s `argocd.tf`: CNPG health checks,
+3. **Argo CD** (helm, chart 10.2.2 = Argo CD v3.4.6, same config as `main`'s `argocd.tf`: CNPG health checks,
    CRD exclusion, git timeouts).
 4. **Secrets**, generated once and never rotated on re-run. This is the only place credentials
    exist: `postgres-superuser`, `{airflow,superset,gravitino}-db-role`,

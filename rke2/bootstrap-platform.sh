@@ -29,7 +29,9 @@ use_kubeconfig
 
 OPENEBS_VERSION="4.3.3"
 TRAEFIK_VERSION="26.1.0"
-ARGOCD_VERSION="7.8.23"
+# Argo CD v3.4.6. 3.x is needed for its bundled Helm >= 3.17 (fromToml, used
+# by the seaweedfs chart); 2.14 ships Helm 3.16.
+ARGOCD_VERSION="10.2.2"
 NS=default
 S3_ENDPOINT="http://seaweedfs-filer.storage.svc.cluster.local:8333"
 S3_ENDPOINT_HOST="seaweedfs-filer.storage.svc.cluster.local:8333"
