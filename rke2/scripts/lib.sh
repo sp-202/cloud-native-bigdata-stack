@@ -26,19 +26,19 @@ load_env() {
 node_name() { echo "${1%%:*}"; }
 node_ip()   { echo "${1##*:}"; }
 
-ssh_common_opts() {  # options shared by ssh and scp (they differ only in the port flag)
-  local o=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new)
-  [ -n "${SSH_KEY:-}" ] && o+=(-i "$SSH_KEY")
-  printf '%s\n' "${o[@]}"
+ssh_common_opts() {  # sets SSH_OPTS: options shared by ssh and scp (they differ only in the port flag)
+  # Fills a global array instead of printing + mapfile, which macOS's bash 3.2 lacks.
+  SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new)
+  if [ -n "${SSH_KEY:-}" ]; then SSH_OPTS+=(-i "$SSH_KEY"); fi
 }
 node_ssh() {  # node_ssh <ip> <command...>
   local ip="$1"; shift
-  local opts; mapfile -t opts < <(ssh_common_opts)
-  ssh "${opts[@]}" -p "$SSH_PORT" "${SSH_USER}@${ip}" "$@"
+  ssh_common_opts
+  ssh "${SSH_OPTS[@]}" -p "$SSH_PORT" "${SSH_USER}@${ip}" "$@"
 }
 node_scp() {  # node_scp <ip> <local> <remote>
-  local opts; mapfile -t opts < <(ssh_common_opts)
-  scp -q "${opts[@]}" -P "$SSH_PORT" "$2" "${SSH_USER}@${1}:$3"
+  ssh_common_opts
+  scp -q "${SSH_OPTS[@]}" -P "$SSH_PORT" "$2" "${SSH_USER}@${1}:$3"
 }
 
 need_cmd() { for c in "$@"; do command -v "$c" >/dev/null || die "'$c' is required on this machine"; done; }
