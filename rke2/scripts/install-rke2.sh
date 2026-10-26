@@ -43,15 +43,13 @@ NEW_CFG=$(mktemp)
     echo "token: \"$RKE2_TOKEN\""
   fi
   # Reservations: what kubelet keeps away from pods for the OS and itself
-  # (allocatable = capacity - system - kube - eviction). Graceful node
-  # shutdown: workloads get 30s, then system-node-critical pods the last 60s.
+  # (allocatable = capacity - system - kube - eviction). Graceful shutdown is
+  # config-file only (no CLI flag) — see the kubelet.conf.d drop-in below.
   cat <<KUBELET
 kubelet-arg:
   - "system-reserved=${SYSTEM_RESERVED:-cpu=1,memory=1Gi}"
   - "kube-reserved=${KUBE_RESERVED:-cpu=500m,memory=768Mi}"
   - "eviction-hard=${EVICTION_HARD:-memory.available<256Mi,nodefs.available<10%,imagefs.available<15%}"
-  - "shutdown-grace-period=90s"
-  - "shutdown-grace-period-critical-pods=60s"
 # kube-proxy metrics for Prometheus (values.yaml kubeProxy).
 kube-proxy-arg:
   - "metrics-bind-address=0.0.0.0:10249"
@@ -99,6 +97,23 @@ spec:
       iface: "${CANAL_IFACE}"
 CANAL
 fi
+
+# Graceful node shutdown: workloads get 30s, then system-node-critical pods the
+# last 60s. RKE2 runs kubelet with --config-dir=<this dir> and only writes its
+# own 00-rke2-defaults.conf there, so this drop-in survives restarts.
+KUBELET_DROPIN_DIR=/var/lib/rancher/rke2/agent/etc/kubelet.conf.d
+mkdir -p "$KUBELET_DROPIN_DIR"
+NEW_DROPIN=$(mktemp)
+cat > "$NEW_DROPIN" <<'DROPIN'
+# Managed by rke2/scripts/install-rke2.sh — edits are overwritten.
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+shutdownGracePeriod: 90s
+shutdownGracePeriodCriticalPods: 60s
+DROPIN
+if ! cmp -s "$NEW_DROPIN" "$KUBELET_DROPIN_DIR/50-graceful-shutdown.conf"; then CHANGED=1; fi
+install -m 0600 "$NEW_DROPIN" "$KUBELET_DROPIN_DIR/50-graceful-shutdown.conf"
+rm -f "$NEW_DROPIN"
 
 UNIT="rke2-$TYPE"
 if ! command -v rke2 >/dev/null && [ ! -x /usr/local/bin/rke2 ] && [ ! -x /opt/rke2/bin/rke2 ]; then
