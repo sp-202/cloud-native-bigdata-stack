@@ -81,14 +81,7 @@ helm template spark-operator spark-operator/spark-operator \
   --set webhook.enable=true \
   > k8s-platform-v2/03-apps/charts/gen/spark-operator.yaml
 
-# 2. Superset
-helm repo add superset https://apache.github.io/superset
-helm repo update superset
-helm template superset superset/superset \
-  --namespace default \
-  --version 0.12.0 \
-  -f k8s-platform-v2/03-apps/superset-values.yaml \
-  > k8s-platform-v2/03-apps/charts/gen/superset.yaml
+# 2. Superset: deployed by the Superset operator (k8s-platform-v2/03-apps/deploy-superset.sh, below)
 
 # 3. Monitoring Stack
 echo "Generating Monitoring manifests..."
@@ -176,6 +169,12 @@ kubectl kustomize --enable-helm ./k8s-platform-v2 | \
   sed "s|\$(AWS_SECRET_ACCESS_KEY)|$MINIO_ROOT_PASSWORD|g" | \
   sed "s/$STATIC_DOMAIN_TO_REPLACE/$INGRESS_DOMAIN/g" | \
   kubectl apply --server-side --force-conflicts -f -
+
+# StarRocks (Helm + Operator, namespace "starrocks")
+bash k8s-platform-v2/03-apps/deploy-starrocks.sh
+
+# Superset (Superset Operator, namespace "superset")
+bash k8s-platform-v2/03-apps/deploy-superset.sh
 
 echo "[4/4] Post-Deployment Verification & Info"
 

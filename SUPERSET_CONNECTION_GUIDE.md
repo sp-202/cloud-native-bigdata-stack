@@ -66,9 +66,11 @@ StarRocks provides high-performance real-time analytics. It is MySQL-compatible.
 2.  Select **StarRocks** (It is supported).
 3.  **Enter the SQLAlchemy URI**:
     ```
-    starrocks://root:@starrocks-fe.default.svc.cluster.local:9030/demo
+    starrocks://root:<PASSWORD>@kube-starrocks-fe-service.starrocks.svc.cluster.local:9030/demo
     ```
     *(Note: We created a `demo` database for you, as `default` does not exist)*.
+    Get the root password with:
+    `kubectl -n starrocks get secret starrocks-root-password -o jsonpath='{.data.password}' | base64 -d`
 
 4.  Test and Connect.
 

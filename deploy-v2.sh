@@ -52,14 +52,7 @@ helm template spark-operator spark-operator/spark-operator \
   --set webhook.enable=true \
   > k8s-platform-v2/03-apps/charts/gen/spark-operator.yaml
 
-# 2.2 Superset
-helm repo add superset https://apache.github.io/superset
-helm repo update superset
-helm template superset superset/superset \
-  --namespace default \
-  --version 0.12.0 \
-  -f k8s-platform-v2/03-apps/superset-values.yaml \
-  > k8s-platform-v2/03-apps/charts/gen/superset.yaml
+# 2.2 Superset: deployed by the Superset operator (k8s-platform-v2/03-apps/deploy-superset.sh, step 5)
 
 # 2.3 Monitoring Stack
 mkdir -p k8s-platform-v2/05-monitoring/charts/gen
@@ -171,7 +164,6 @@ kubectl kustomize --enable-helm ./k8s-platform-v2 | \
 
 # Pre-cleanup to avoid immutable field errors
 echo "Pre-cleaning immutable resources..."
-kubectl delete job superset-init-db -n default --ignore-not-found=true
 # Fix for "Forbidden: may not be specified when strategy type is Recreate"
 kubectl delete deployment postgres -n default --ignore-not-found=true
 
@@ -196,30 +188,12 @@ echo "Spark: http://spark.$INGRESS_DOMAIN"
 echo "Spark-History: http://spark-history.$INGRESS_DOMAIN"
 
 # ---------------------------------------------------
-# 4. StarRocks Production Fix (Post-Deploy)
+# 4. StarRocks (Helm + Operator, namespace "starrocks")
 # ---------------------------------------------------
-echo "---------------------------------------------------"
-echo "Running StarRocks Production Fixer..."
-echo "---------------------------------------------------"
+# Operator registers FE/BE by DNS name, so the old BE-IP fixer is no longer needed.
+bash k8s-platform-v2/03-apps/deploy-starrocks.sh
 
-# Wait for pods to be ready
-echo "Waiting for StarRocks pods..."
-kubectl wait --for=condition=ready pod starrocks-fe-0 -n default --timeout=300s || echo "FE wait timed out"
-kubectl wait --for=condition=ready pod starrocks-be-0 -n default --timeout=300s || echo "BE wait timed out"
-
-# Get BE IP (External/Host view is reliable)
-BE_IP=$(kubectl get pod starrocks-be-0 -n default -o jsonpath='{.status.podIP}')
-echo "Detected StarRocks BE IP: $BE_IP"
-
-if [ -n "$BE_IP" ]; then
-    echo "Force-Registering Backend..."
-    kubectl exec -n default starrocks-fe-0 -- mysql -h 127.0.0.1 -P 9030 -u root -e "ALTER SYSTEM ADD BACKEND '${BE_IP}:9050';" 2>/dev/null || echo "Backend might already exist (warning ignored)."
-    
-    echo "Ensuring 'demo' Database..."
-    kubectl exec -n default starrocks-fe-0 -- mysql -h 127.0.0.1 -P 9030 -u root -e "CREATE DATABASE IF NOT EXISTS demo;" || echo "Failed to create demo DB"
-    
-    echo "StarRocks Fix Complete."
-else
-    echo "ERROR: Could not detect StarRocks BE IP. Skipping fix."
-fi
-echo "---------------------------------------------------"
+# ---------------------------------------------------
+# 5. Superset (Superset Operator, namespace "superset")
+# ---------------------------------------------------
+bash k8s-platform-v2/03-apps/deploy-superset.sh

@@ -41,17 +41,7 @@ spec:
             name: minio
             port:
               name: api
-  # Superset
-  - host: superset.$(INGRESS_DOMAIN)
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: superset
-            port:
-              name: http
+  # Superset: served by the operator-managed Ingress in namespace "superset" (03-apps/superset/superset.yaml)
   # JupyterHub
   - host: jupyterhub.$(INGRESS_DOMAIN)
     http:

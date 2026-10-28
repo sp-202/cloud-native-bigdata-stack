@@ -26,3 +26,6 @@ helm
 *.tar.gz
 linux-amd64/
 logs-from-spark*
+
+# Database dumps (contain password hashes / encrypted credentials)
+backups/**/*.dump

@@ -1,0 +1,19 @@
+# StarRocks FE web UI; applied by deploy-starrocks.sh ($(INGRESS_DOMAIN) substituted there)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: starrocks-fe-ingress
+  namespace: starrocks
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: starrocks.$(INGRESS_DOMAIN)
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kube-starrocks-fe-service
+                port:
+                  number: 8030

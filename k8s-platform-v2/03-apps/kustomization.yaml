@@ -13,10 +13,10 @@ resources:
 
   - spark-ui-service.yaml
   - spark-connect-server.yaml
-  - starrocks.yaml
+  # StarRocks is deployed by Helm + operator (deploy-starrocks.sh)
   # Generated Helm Charts
   - charts/gen/spark-operator.yaml
-  - charts/gen/superset.yaml
+  # Superset is deployed by the Superset operator (deploy-superset.sh)
 
 configMapGenerator:
   - name: spark-config

@@ -97,9 +97,9 @@ read_df.show(3)
 # 3. Choose **StarRocks** (or MySQL if StarRocks isn't listed - they are compatible).
 # 4. **SQLAlchemy URI**:
 #    ```
-#    mysql+mysqldb://root:@starrocks-fe:9030/default
+#    mysql+mysqldb://root:<PASSWORD>@kube-starrocks-fe-service.starrocks.svc.cluster.local:9030/demo
 #    ```
-#    *(Note: The host is `starrocks-fe` (internal K8s service name). Empty password.)*
+#    *(Note: StarRocks runs in namespace `starrocks`. Root password is in secret `starrocks-root-password`.)*
 # 5. Click **Test Connection** -> **Connect**.
 #
 # ### Step B: Create a Dataset

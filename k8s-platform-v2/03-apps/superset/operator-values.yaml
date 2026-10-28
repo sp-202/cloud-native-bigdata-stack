@@ -1,0 +1,11 @@
+# Apache Superset Kubernetes Operator (chart superset-operator, OCI)
+#   helm upgrade --install superset-operator \
+#     oci://ghcr.io/apache/superset-kubernetes-operator/charts/superset-operator \
+#     --version 0.3.0 -n superset-operator-system --create-namespace \
+#     -f k8s-platform-v2/03-apps/superset/operator-values.yaml
+
+# Only reconcile Superset CRs in the "superset" namespace (must exist before install).
+watch:
+  scope: namespaces
+  namespaces:
+    - superset

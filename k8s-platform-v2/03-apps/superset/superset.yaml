@@ -1,0 +1,147 @@
+# Superset 6.1.0 managed by the Superset Kubernetes Operator (superset.apache.org/v1alpha1), Production mode.
+# Applied by deploy-superset.sh, which substitutes $(INGRESS_DOMAIN).
+#
+# Secrets (namespace "superset", created by deploy-superset.sh; never inline in Production):
+#   superset-secret    secret-key                                   (must equal the old SECRET_KEY: it decrypts saved DB passwords)
+#   superset-db        host, port, dbname, username, password       (metastore)
+#   valkey-connection  endpoint, port, password                     (Redis in valkey.yaml)
+apiVersion: superset.apache.org/v1alpha1
+kind: Superset
+metadata:
+  name: superset
+  namespace: superset
+spec:
+  environment: Production
+
+  # Official image straight from Docker Hub (the docs' telemetry opt-out vs. the scarf.sh default)
+  image:
+    repository: apache/superset
+    tag: "6.1.0"
+
+  # Drivers installed at startup, as in the Superset 6.1 Kubernetes docs ("Dependencies"):
+  # `uv pip install .[extra]` takes versions from Superset's pyproject.toml.
+  # Hive: Superset's .[hive] extra pulls `sasl` (needs a C compiler) on Python < 3.11 and the
+  # 6.1.0 image is Python 3.10, so its pure-sasl variant is installed with the extra's own ranges.
+  # Sourced before web server, celery worker and lifecycle (migrate/init) commands.
+  bootstrapScript: |
+    #!/bin/bash
+    (cd /app && uv pip install -q .[postgres] .[starrocks] .[fastmcp] \
+      "pyhive[hive_pure_sasl]>=0.7.0" "thrift>=0.14.1,<1.0.0" "thrift_sasl>=0.4.3,<1.0.0")
+
+  secretKeyFrom:
+    name: superset-secret
+    key: secret-key
+
+  metastore:
+    type: PostgreSQL
+    hostFrom:
+      name: superset-db
+      key: host
+    portFrom:
+      name: superset-db
+      key: port
+    databaseFrom:
+      name: superset-db
+      key: dbname
+    usernameFrom:
+      name: superset-db
+      key: username
+    passwordFrom:
+      name: superset-db
+      key: password
+
+  valkey:
+    hostFrom:
+      name: valkey-connection
+      key: endpoint
+    portFrom:
+      name: valkey-connection
+      key: port
+    passwordFrom:
+      name: valkey-connection
+      key: password
+
+  featureFlags:
+    ENABLE_TEMPLATE_PROCESSING: true
+
+  config: |
+    # StarRocksEngineSpec extends MySQLEngineSpec, whose get_datatype() does `import MySQLdb`
+    # (mysqlclient) to read MySQLdb.constants.FIELD_TYPE for every result set. mysqlclient ships
+    # no Linux wheels (needs gcc + MySQL headers, absent from the image), while StarRocks itself
+    # connects through PyMySQL. PyMySQL's own shim provides the same protocol type-code table.
+    import pymysql
+    pymysql.install_as_MySQLdb()
+
+    from flask_appbuilder.security.manager import AUTH_DB
+    AUTH_TYPE = AUTH_DB
+    CSV_EXTENSIONS = {"csv", "tsv", "txt"}
+    # 6.x: List Roles view moved to the frontend and needs the security API
+    FAB_ADD_SECURITY_API = True
+
+    # The operator's CeleryConfig carries connectivity only; restore Superset 6.1.0's app defaults
+    CeleryConfig.imports = (
+        "superset.sql_lab",
+        "superset.tasks.scheduler",
+        "superset.tasks.thumbnails",
+        "superset.tasks.cache",
+        "superset.tasks.slack",
+    )
+    CeleryConfig.worker_prefetch_multiplier = 1
+    CeleryConfig.task_acks_late = False
+    CeleryConfig.task_annotations = {
+        "sql_lab.get_sql_results": {
+            "rate_limit": "100/s",
+        },
+    }
+
+  deploymentTemplate:
+    revisionHistoryLimit: 3
+
+  podTemplate:
+    # Root is required to install packages into the root-owned /app/.venv at startup (see docs)
+    podSecurityContext:
+      runAsUser: 0
+      seccompProfile:
+        type: RuntimeDefault
+    container:
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        readOnlyRootFilesystem: false # Superset needs /tmp and /app writes
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: "2"
+          memory: 3Gi
+
+  webServer:
+    replicas: 1
+    service:
+      type: ClusterIP
+    podTemplate:
+      container:
+        # Startup includes the bootstrapScript driver install (~30s) before gunicorn boots;
+        # the operator default (15s + 3x10s) killed the first start. Liveness/readiness stay default.
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8088
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+
+  celeryWorker:
+    replicas: 1
+
+  lifecycle:
+    # Image changes (e.g. 6.1 -> 7.x) wait for explicit approval before `superset db upgrade` runs
+    upgradeMode: Supervised
+
+  networking:
+    ingress:
+      className: traefik
+      host: superset.$(INGRESS_DOMAIN)
