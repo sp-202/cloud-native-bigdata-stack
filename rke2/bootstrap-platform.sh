@@ -203,9 +203,21 @@ metadata:
   namespace: argocd
 spec:
   description: Cloud-Native Big Data Platform on RKE2 (scoped project, not 'default')
+  # Argo CD 3.x also checks the Helm dependency repositories of the umbrella
+  # chart (big-data-platform/Chart.yaml) against this list ("helm repos ...
+  # are not permitted in project"). Keep in sync with Chart.yaml dependencies.
   sourceRepos:
     - ${GIT_REPO}
     - https://seaweedfs.github.io/seaweedfs/helm
+    - https://cloudnative-pg.github.io/charts
+    - https://charts.jetstack.io
+    - https://kubeflow.github.io/spark-operator
+    - https://starrocks.github.io/starrocks-kubernetes-operator
+    - https://airflow.apache.org
+    - https://prometheus-community.github.io/helm-charts
+    - https://grafana.github.io/helm-charts
+    - registry-1.docker.io/apache
+    - quay.io/strimzi-helm
   destinations:
     - { server: https://kubernetes.default.svc, namespace: default }
     - { server: https://kubernetes.default.svc, namespace: kube-system }

@@ -52,10 +52,13 @@ spec:
             - name: data1
               type: persistentVolumeClaim
               storageClass: local-storage
-              size: 200Gi
-              # 0 = derive from free space on the volume (hostpath backend
-              # does not enforce the PVC size; LVM does).
-              maxVolumes: 0
+              size: 150Gi
+              # The real cap: hostpath does not enforce the PVC size (LVM
+              # does), and 0 would let SeaweedFS fill the whole filesystem.
+              # 150 volumes x master volumeSizeLimitMB 1000 = 150 GB per
+              # volume server; with replication 001 (2 copies) the 3 servers
+              # hold ~225 GB of objects.
+              maxVolumes: 150
           resources:
             requests: { cpu: 100m, memory: 256Mi }
             limits: { memory: 2Gi }
