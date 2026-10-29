@@ -33,10 +33,24 @@ k8s-platform-v2/03-apps/charts/
 k8s-platform-v2/05-monitoring/charts/
 
 # Helm dependency tarballs — never commit these.
-# ArgoCD runs `helm dependency update` from source at sync time.
-# Committing .tgz files means ArgoCD uses stale bundled charts and ignores
-# any changes made to sub-chart source under charts/*/
+# Local sub-charts (file:// deps, source under charts/*/) must never be
+# committed packaged: a stale .tgz would shadow changes to their source.
 big-data-platform/charts/*.tgz
+# EXCEPT the remote dependencies (Chart.yaml repository: https/oci), vendored
+# at their pinned versions. Argo CD runs `helm dependency build` only when a
+# dependency is missing, and that build downloads all 10 charts — on a slow
+# uplink one failed download fails the whole render (ComparisonError). With
+# them in git the render needs no network. Bump = replace the .tgz here too.
+!big-data-platform/charts/cloudnative-pg-0.29.0.tgz
+!big-data-platform/charts/cert-manager-v1.16.2.tgz
+!big-data-platform/charts/spark-operator-2.4.0.tgz
+!big-data-platform/charts/kube-starrocks-1.9.8.tgz
+!big-data-platform/charts/airflow-1.21.0.tgz
+!big-data-platform/charts/kube-prometheus-stack-56.6.2.tgz
+!big-data-platform/charts/loki-stack-2.10.2.tgz
+!big-data-platform/charts/alloy-1.13.0.tgz
+!big-data-platform/charts/gravitino-helm-1.3.11.tgz
+!big-data-platform/charts/strimzi-kafka-operator-0.48.0.tgz
 
 # Binaries and Archives
 helm
@@ -58,6 +72,7 @@ vendor-charts/
 rke2/cluster.env
 rke2/kubeconfig*
 rke2/cluster-*.env
+rke2/*.log
 
 # Local notes with real credentials/addresses (never committed)
 *.local.md
