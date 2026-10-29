@@ -6,9 +6,16 @@
 # there. Idempotent — safe to re-run (e.g. after adding an agent).
 #
 #   1. prep every node        (swap, sysctls, modules, firewall, dirs, LVM VG)
-#   2. first server           (cluster-init: etcd + control plane)
-#   3. other servers, one by one (join etcd), then agents
-#   4. kubeconfig -> $KUBECONFIG_OUT, pointed at server 1
+#   2. RKE2_VERSION's binary + system images: downloaded ONCE, on server 1
+#      (resumable; keeps running if this machine disconnects), then copied
+#      to every other node over the LAN in parallel  (scripts/stage-artifacts.sh)
+#   3. first server           (cluster-init: etcd + control plane)
+#   4. agents join in parallel; other servers one by one (concurrent etcd
+#      joins can fail the learner promotion) — fast, nothing to download
+#   5. kubeconfig -> $KUBECONFIG_OUT, pointed at server 1
+#
+# Env: ARTIFACT_PORT (default 8899) — server 1 shares the staged files on it
+# during the install only.
 #
 # Next: rke2/bootstrap-platform.sh
 # -----------------------------------------------------------------------------
@@ -66,6 +73,70 @@ for spec in "${SERVERS[@]}" "${AGENTS[@]}"; do
   run_on_node "$spec" prep-node.sh
 done
 
+# ---------------------------------------------------------------- artifacts
+# Pinned versions only: a channel resolves to whatever is newest at install
+# time, so the nodes could end up on different builds.
+if [ -n "${RKE2_VERSION:-}" ]; then
+  ART=/opt/rke2-artifacts
+  PORT="${ARTIFACT_PORT:-8899}"
+  FIRST_NAME=$(node_name "${SERVERS[0]}")
+  install_stager() {  # copy stage-artifacts.sh to a stable path on the node
+    node_scp "$1" "$RKE2_DIR/scripts/stage-artifacts.sh" /tmp/stage-artifacts.sh
+    node_ssh "$1" "sudo install -D -m 0755 /tmp/stage-artifacts.sh $ART/stage-artifacts.sh && rm -f /tmp/stage-artifacts.sh"
+  }
+  staged() { node_ssh "$1" "test -f '$ART/$RKE2_VERSION/.complete'"; }
+
+  install_stager "$FIRST_IP"
+  if staged "$FIRST_IP"; then
+    log "RKE2 $RKE2_VERSION already staged on $FIRST_NAME — nothing to download"
+  else
+    # A transient systemd unit, not this SSH session: the download (~800 MB)
+    # takes long on a slow uplink and survives this machine sleeping or
+    # leaving. Re-running install-cluster.sh just waits for it again.
+    log "downloading RKE2 $RKE2_VERSION once, on $FIRST_NAME (log: /var/log/rke2-artifacts.log there)"
+    node_ssh "$FIRST_IP" "systemctl is-active --quiet rke2-artifacts-fetch || { sudo systemctl reset-failed rke2-artifacts-fetch 2>/dev/null; \
+      sudo systemd-run --unit=rke2-artifacts-fetch --description='stage RKE2 $RKE2_VERSION' \
+        -p StandardOutput=append:/var/log/rke2-artifacts.log -p StandardError=append:/var/log/rke2-artifacts.log \
+        bash $ART/stage-artifacts.sh fetch '$RKE2_VERSION' >/dev/null; }"
+    until staged "$FIRST_IP"; do
+      if ! node_ssh "$FIRST_IP" "systemctl is-active --quiet rke2-artifacts-fetch"; then
+        staged "$FIRST_IP" && break
+        node_ssh "$FIRST_IP" "sudo tail -n 15 /var/log/rke2-artifacts.log" >&2 || true
+        die "download on $FIRST_NAME failed — fix and re-run (finished files are kept, partial ones resume)"
+      fi
+      echo "  $(node_ssh "$FIRST_IP" "sudo du -sh $ART/$RKE2_VERSION 2>/dev/null | cut -f1") of ~810 MB on $FIRST_NAME"
+      sleep 60
+    done
+    log "staged on $FIRST_NAME"
+  fi
+
+  # Share server 1's copy over the LAN while the others pull it (in parallel).
+  OTHERS=("${SERVERS[@]:1}" "${AGENTS[@]}")
+  need=()
+  for spec in "${OTHERS[@]}"; do
+    [ -n "$spec" ] || continue
+    install_stager "$(node_ip "$spec")"
+    staged "$(node_ip "$spec")" || need+=("$spec")
+  done
+  if [ "${#need[@]}" -gt 0 ]; then
+    log "copying RKE2 $RKE2_VERSION from $FIRST_NAME to:$(for s in "${need[@]}"; do printf ' %s' "$(node_name "$s")"; done) (parallel)"
+    node_ssh "$FIRST_IP" "sudo systemctl stop rke2-artifacts-http 2>/dev/null; sudo systemctl reset-failed rke2-artifacts-http 2>/dev/null; \
+      sudo systemd-run --unit=rke2-artifacts-http -p RuntimeMaxSec=3h \
+        python3 -m http.server $PORT --bind $FIRST_IP --directory $ART >/dev/null"
+    trap 'node_ssh "$FIRST_IP" "sudo systemctl stop rke2-artifacts-http" 2>/dev/null || true' EXIT
+    pids=()
+    for spec in "${need[@]}"; do
+      node_ssh "$(node_ip "$spec")" "sudo bash $ART/stage-artifacts.sh pull '$RKE2_VERSION' http://$FIRST_IP:$PORT" &
+      pids+=($!)
+    done
+    failed=""
+    for i in "${!pids[@]}"; do wait "${pids[$i]}" || failed+=" $(node_name "${need[$i]}")"; done
+    node_ssh "$FIRST_IP" "sudo systemctl stop rke2-artifacts-http" || true
+    trap - EXIT
+    [ -z "$failed" ] || die "copy failed on:$failed — re-run (finished files are kept)"
+  fi
+fi
+
 log "server 1: $(node_name "${SERVERS[0]}") ($FIRST_IP) — cluster-init"
 run_on_node "${SERVERS[0]}" install-rke2.sh server-init
 for _ in $(seq 1 60); do
@@ -76,18 +147,26 @@ done
 [ -n "${RKE2_TOKEN:-}" ] || die "no node-token on $FIRST_IP after 5 min — check journalctl -u rke2-server"
 wait_server_ready "${SERVERS[0]}"
 
-# One at a time: concurrent etcd member joins can fail the learner promotion.
+# Agents don't touch etcd: all of them join in the background right away.
+agent_pids=(); agent_specs=()
+for spec in "${AGENTS[@]}"; do
+  [ -n "$spec" ] || continue
+  log "agent: $(node_name "$spec") ($(node_ip "$spec")) — join (background)"
+  run_on_node "$spec" install-rke2.sh agent &
+  agent_pids+=($!); agent_specs+=("$spec")
+done
+# Servers one at a time: concurrent etcd member joins can fail the learner promotion.
 for spec in "${SERVERS[@]:1}"; do
   log "server: $(node_name "$spec") ($(node_ip "$spec")) — join"
   run_on_node "$spec" install-rke2.sh server
   wait_server_ready "$spec"
 done
-for spec in "${AGENTS[@]}"; do
-  [ -n "$spec" ] || continue
-  log "agent: $(node_name "$spec") ($(node_ip "$spec")) — join"
-  run_on_node "$spec" install-rke2.sh agent
-  wait_server_ready "$spec"
-done
+if [ "${#agent_pids[@]}" -gt 0 ]; then  # bash 3.2 (macOS): empty "${arr[@]}" trips set -u
+  for i in "${!agent_pids[@]}"; do
+    wait "${agent_pids[$i]}" || die "install on agent $(node_name "${agent_specs[$i]}") failed"
+    wait_server_ready "${agent_specs[$i]}"
+  done
+fi
 
 log "writing kubeconfig to $KUBECONFIG_OUT"
 mkdir -p "$(dirname "$KUBECONFIG_OUT")"

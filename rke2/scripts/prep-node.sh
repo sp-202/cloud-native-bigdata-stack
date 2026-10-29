@@ -64,7 +64,51 @@ fs.inotify.max_user_instances = 8192
 fs.inotify.max_user_watches = 1048576
 vm.max_map_count = 262144
 SYSCTL
+
+# --- IPv4 only ----------------------------------------------------------------
+# The cluster is single-stack IPv4 (pod/service CIDRs, node IPs). A network that
+# hands out IPv6 without routing it (seen on office/guest WiFi) makes image
+# pulls dial registries' AAAA addresses first and fail with "network is
+# unreachable". IPv6 off on every interface; lo keeps ::1 for local listeners.
+cat > /etc/sysctl.d/91-rke2-ipv4-only.conf <<'IPV4'
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 0
+IPV4
 sysctl --system >/dev/null
+
+# NetworkManager re-enables IPv6 on an interface when it (re)activates a
+# connection with ipv6.method=auto. Disabled per connection; takes effect on
+# its next activation (no reconnect now — that would drop this SSH session).
+if systemctl is-active --quiet NetworkManager && command -v nmcli >/dev/null; then
+  nmcli -t -f NAME,TYPE connection show 2>/dev/null \
+    | awk -F: '$NF ~ /^802-(11-wireless|3-ethernet)$/ {NF--; print}' OFS=: \
+    | while IFS= read -r con; do
+        [ "$(nmcli -g ipv6.method connection show "$con" 2>/dev/null)" = disabled ] && continue
+        log "NetworkManager: ipv6.method=disabled for '$con'"
+        nmcli connection modify "$con" ipv6.method disabled || log "WARNING: could not modify '$con'"
+      done
+fi
+
+# --- host DNS: public resolvers next to the network's own ----------------------
+# Image pulls resolve registries through systemd-resolved (127.0.0.53). A
+# hotspot/guest DNS that drops the odd query stalls a pull for 20s and fails
+# it ("lookup auth.docker.io ... i/o timeout"). Global servers are queried
+# alongside the link's, first answer wins; works on any network.
+mkdir -p /etc/systemd/resolved.conf.d
+NEW_RESOLVED=$(mktemp)
+cat > "$NEW_RESOLVED" <<'RESOLVED'
+# Managed by rke2/scripts/prep-node.sh
+[Resolve]
+DNS=1.1.1.1 8.8.8.8
+FallbackDNS=9.9.9.9 1.0.0.1
+RESOLVED
+if ! cmp -s "$NEW_RESOLVED" /etc/systemd/resolved.conf.d/90-rke2-dns.conf; then
+  install -m 0644 "$NEW_RESOLVED" /etc/systemd/resolved.conf.d/90-rke2-dns.conf
+  systemctl restart systemd-resolved
+  log "systemd-resolved: global DNS 1.1.1.1 8.8.8.8 next to the network's"
+fi
+rm -f "$NEW_RESOLVED"
 
 # --- NetworkManager must not manage Canal's interfaces ----------------------
 # Otherwise NM can strip routes from cali*/flannel* links (RKE2 known issue).
