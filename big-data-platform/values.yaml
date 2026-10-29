@@ -305,6 +305,15 @@ airflow:
       rev: HEAD
       subPath: "dags"
       period: 60s
+      # Chart default 0 = the container exits on the FIRST failed fetch; on a
+      # flaky uplink that is a CrashLoopBackOff. Keep serving the last good
+      # checkout and retry: 10 consecutive failures (~10 min at period 60s).
+      maxFailures: 10
+      # git's HTTP/2 to GitHub breaks mid-fetch on lossy links ("curl 16 Error
+      # in the HTTP2 framing layer"); HTTP/1.1 is plenty for a DAG repo.
+      env:
+        - name: GITSYNC_GIT_CONFIG
+          value: "http.version:HTTP/1.1"
       resources:
         requests:
           cpu: "50m"
