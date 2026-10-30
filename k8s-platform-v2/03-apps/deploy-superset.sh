@@ -11,6 +11,16 @@
 #   superset-secret    key "secret-key"  - MUST be the existing SECRET_KEY, never generated here:
 #                      a different key makes every saved database password undecryptable
 #   superset-db        keys host, port, dbname, username, password
+#   superset-mcp-jwt   HS256 signing key for MCP bearer tokens, created here if missing
+#
+# MCP (http://superset.<domain>/mcp) runs every request as Superset user "claude-mcp"
+# (Alpha + sql_lab). Mint a 90-day token into secret superset-mcp-token:
+#   kubectl -n superset exec deploy/superset-mcp-server -- python -c "import os,time,jwt,sys; n=int(time.time()); \
+#     sys.stdout.write(jwt.encode({'iss':'superset-k8s','aud':'superset-mcp','sub':'claude-mcp','iat':n,'exp':n+90*86400}, \
+#     os.environ['MCP_JWT_SECRET'], algorithm='HS256'))" | kubectl -n superset create secret generic superset-mcp-token \
+#     --from-file=token=/dev/stdin --dry-run=client -o yaml | kubectl apply -f -
+# The same user also logs in to the REST API (/api/v1/security/login, provider "db") for what MCP
+# can't do (dashboard layout, native filters); its password is in secret superset-claude-mcp-login.
 #
 # Safe to re-run. With lifecycle.upgradeMode=Supervised an image change waits for approval:
 #   TOKEN=$(kubectl -n superset get superset superset -o jsonpath='{.status.lifecycle.upgrade.approvalToken}')
@@ -55,6 +65,12 @@ if ! kubectl -n "$NAMESPACE" get secret valkey-connection >/dev/null 2>&1; then
         --from-literal=endpoint="superset-valkey.$NAMESPACE.svc.cluster.local" \
         --from-literal=port=6379 \
         --from-literal=password="$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 32)"
+fi
+
+if ! kubectl -n "$NAMESPACE" get secret superset-mcp-jwt >/dev/null 2>&1; then
+    echo "🔑 Creating MCP JWT signing key..."
+    kubectl -n "$NAMESPACE" create secret generic superset-mcp-jwt \
+        --from-literal=secret="$(openssl rand -base64 64 | tr -dc 'A-Za-z0-9' | head -c 64)"
 fi
 
 echo "📦 helm upgrade --install superset-operator ($OPERATOR_VERSION)..."

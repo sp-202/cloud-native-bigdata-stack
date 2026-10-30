@@ -137,6 +137,37 @@ spec:
   celeryWorker:
     replicas: 1
 
+  # MCP server (FastMCP, streamable HTTP), routed by the operator at /mcp on the Superset host.
+  # In 6.1.0 the JWT only gates access: every request runs as MCP_DEV_USERNAME (no claim -> user
+  # mapping exists yet), so that user (claude-mcp: Alpha + sql_lab, no user/role admin) defines
+  # what a token holder can do. Signing key: secret superset-mcp-jwt (key: secret).
+  mcpServer:
+    replicas: 1
+    podTemplate:
+      container:
+        env:
+          - name: MCP_JWT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: superset-mcp-jwt
+                key: secret
+        # Same reason as the web server: bootstrapScript install runs before the server binds
+        startupProbe:
+          tcpSocket:
+            port: 8088
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+    config: |
+      import os
+      MCP_AUTH_ENABLED = True
+      MCP_JWT_ALGORITHM = "HS256"
+      MCP_JWT_SECRET = os.environ["MCP_JWT_SECRET"]
+      MCP_JWT_ISSUER = "superset-k8s"
+      MCP_JWT_AUDIENCE = "superset-mcp"
+      MCP_DEV_USERNAME = "claude-mcp"
+
   lifecycle:
     # Image changes (e.g. 6.1 -> 7.x) wait for explicit approval before `superset db upgrade` runs
     upgradeMode: Supervised
